@@ -8,6 +8,8 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://jianxun.pages.dev' }}
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -16,17 +18,16 @@ jobs:
       - name: Analyze unprocessed articles
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          # Fetch unanalyzed articles
-          PIPELINE="https://jianxun.pages.dev"
-
           for i in 1 2 3; do
             echo "=== Batch $i ==="
             # Get unanalyzed articles
-            ITEMS=$(curl -s "$PIPELINE/api/news?pageSize=20")
+            ITEMS=$(curl -s "$SITE_URL/api/news?pageSize=20")
             echo "$ITEMS" | node -e "
-            const fetch = require('node-fetch');
+            // Node 20+ global fetch — no node-fetch / checkout needed
             const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+            const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
             async function main() {
               const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
@@ -56,21 +57,28 @@ jobs:
                 });
                 const raw = await res.json();
                 const text = raw.choices?.[0]?.message?.content || '';
-                const json = text.replace(/json\\n?/g,'').replace(/\\n?/g,'').trim();
+                const cleaned = text.replace(/\x60\x60\x60json\n?/g, '').replace(/\x60\x60\x60\n?/g, '').trim();
                 try {
-                  const parsed = JSON.parse(json);
+                  const parsed = JSON.parse(cleaned);
+                  // API expects entities as string[] and sentiment as positive|neutral|negative
+                  const entities = (parsed.entities || []).map(e => typeof e === 'string' ? e : e && e.name).filter(Boolean);
+                  const label = typeof parsed.sentiment === 'string' ? parsed.sentiment : parsed.sentiment && parsed.sentiment.label;
+                  const sentiment = ['positive', 'neutral', 'negative'].includes(label) ? label : undefined;
                   // POST result back to Worker
-                  await fetch('$PIPELINE/api/news/' + article.id + '/detail', {
+                  const save = await fetch('$SITE_URL/api/news/' + article.id + '/detail', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer ' + ADMIN_TOKEN,
+                    },
                     body: JSON.stringify({
                       summary: parsed.summary || '',
                       category: parsed.category || '',
-                      entities: parsed.entities || [],
-                      sentiment: parsed.sentiment || {},
+                      entities,
+                      sentiment,
                     }),
                   });
-                  console.log('  ✅ Saved');
+                  console.log('  ✅ Saved', save.status);
                 } catch(e) { console.log('  ❌ Parse error:', e.message); }
               }
             }

@@ -35,3 +35,6 @@ jobs:
 
       - name: Set DeepSeek API Key
         run: echo "${{ secrets.DEEPSEEK_API_KEY }}" | npx wrangler pages secret put DEEPSEEK_API_KEY
+
+      - name: Set Admin Token
+        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN

@@ -41,6 +41,12 @@ function decodeEntities(s: string): string {
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
 }
 
+// Some feeds carry unparseable dates; fall back to now instead of throwing
+function toIsoDate(value: string): string {
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+}
+
 export async function parseRSS(url: string): Promise<RssFeed> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 NewsBot/1.0' },
@@ -78,10 +84,10 @@ export async function parseRSS(url: string): Promise<RssFeed> {
 
     // Dates
     const pubDate = extractField(block, 'pubDate')
-    if (pubDate) item.isoDate = new Date(pubDate).toISOString()
+    if (pubDate) item.isoDate = toIsoDate(pubDate)
 
     const updated = extractField(block, 'updated')
-    if (updated && !item.isoDate) item.isoDate = new Date(updated).toISOString()
+    if (updated && !item.isoDate) item.isoDate = toIsoDate(updated)
 
     // Media content
     const mc = block.match(/<media:content[^>]*url="([^"]+)"/i)

@@ -55,6 +55,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
     const res = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         model: 'deepseek-v4-flash',
         messages: [

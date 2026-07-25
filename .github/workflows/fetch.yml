@@ -1,18 +1,18 @@
-name: Daily Image Fix
+name: Fetch RSS
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # 每天 6:00 UTC = 14:00 CST
+    - cron: '17 */3 * * *'
   workflow_dispatch:
 
 jobs:
-  fix-images:
+  fetch:
     runs-on: ubuntu-latest
     env:
       SITE_URL: ${{ vars.SITE_URL || 'https://jianxun.pages.dev' }}
     steps:
-      - name: Trigger image fix
+      - name: Trigger RSS fetch
         run: |
-          curl -s --max-time 180 -X POST \
+          curl -s --max-time 300 -X POST \
             -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
-            "$SITE_URL/api/news/fix-images"
+            "$SITE_URL/api/news/fetch"

@@ -1,8 +1,18 @@
-import type { D1Database, KVNamespace } from '@cloudflare/workers-types'
+import type { D1Database, KVNamespace, ExecutionContext } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
 import { extractContent, analyzeWithDeepSeek, titleSimilarity } from './analysis.js'
 
-type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string }
+type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
+
+// Write endpoints require `Authorization: Bearer <ADMIN_TOKEN>`.
+// When ADMIN_TOKEN is not configured, all write endpoints stay closed.
+export function requireAdmin(request: Request, env: Env): Response | null {
+  const auth = request.headers.get('Authorization')
+  if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) {
+    return json({ error: 'Unauthorized' }, 401)
+  }
+  return null
+}
 
 // Map snake_case DB fields to camelCase for frontend
 function mapNews(row: any) {
@@ -37,13 +47,13 @@ function tokenize(text: string): string[] {
 
 export async function listNews(env: Env, url: URL) {
   const category = url.searchParams.get('category')
-  const page = parseInt(url.searchParams.get('page') || '1')
-  const pageSize = parseInt(url.searchParams.get('pageSize') || '50')
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1') || 1)
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '50') || 50))
   const offset = (page - 1) * pageSize
-  const cacheKey = category && category !== '全部' ? 'list:' + category : 'list:all'
+  const cacheKey = `list:${category && category !== '全部' ? category : 'all'}:${page}:${pageSize}`
 
   // Try KV cache
-  if (env.KV && page === 1 && pageSize <= 50) {
+  if (env.KV) {
     const cached = await cacheGet<any>(env.KV, cacheKey)
     if (cached) return cached
   }
@@ -66,13 +76,14 @@ export async function listNews(env: Env, url: URL) {
     env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
   ])
   const result = { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
-  if (env.KV && page === 1) cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
+  if (env.KV) cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
   return result
 }
 
 export async function trending(env: Env) {
   if (env.KV) { const cached = await cacheGet<any>(env.KV, 'trending'); if (cached) return cached }
-  const items = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 30').all()
+  // Only articles from the last 3 days, so old high-score items don't stick forever
+  const items = await env.DB.prepare("SELECT * FROM news WHERE published_at >= datetime('now', '-3 days') ORDER BY score DESC LIMIT 30").all()
   const result = { items: (items.results as any[]).map(mapNews) }
   if (env.KV) cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
   return result
@@ -97,16 +108,22 @@ export async function stats(env: Env) {
   return data
 }
 
-export async function fetchNews(env: Env) {
+export async function fetchNews(env: Env, ctx: ExecutionContext) {
   const articles = await fetchAllRSS(env.DB)
-  const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY)
-  // Invalidate caches
+  const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY, ctx)
+  // Invalidate caches: all `list:` pages plus derived endpoints
   if (env.KV && saved > 0) {
-    env.KV.delete('list:all').catch(() => {})
-    env.KV.delete('trending').catch(() => {})
-    env.KV.delete('topics').catch(() => {})
-    env.KV.delete('stats').catch(() => {})
-    env.KV.delete('categories').catch(() => {})
+    try {
+      const deletions: Promise<unknown>[] = []
+      let cursor: string | undefined
+      do {
+        const page = await env.KV.list({ prefix: 'list:', cursor })
+        for (const key of page.keys) deletions.push(env.KV.delete(key.name))
+        cursor = page.list_complete ? undefined : page.cursor
+      } while (cursor)
+      for (const key of ['trending', 'topics', 'stats', 'categories']) deletions.push(env.KV.delete(key))
+      await Promise.allSettled(deletions)
+    } catch {}
   }
   return { fetched: saved }
 }
@@ -121,7 +138,7 @@ export async function detail(env: Env, id: number) {
   let sentiment: any = null
 
   // Parse cached AI analysis
-  if (row.entities && row.sentiment && row.analyzed_at && row.analyzed_at !== 'failed') {
+  if (row.entities && row.sentiment && row.analyzed_at) {
     try { entities = JSON.parse(row.entities) } catch {}
     try { sentiment = JSON.parse(row.sentiment) } catch {}
     if (row.summary) summary = row.summary
@@ -138,13 +155,19 @@ export async function detail(env: Env, id: number) {
     related.forEach((r: any) => delete r.sim)
   }
 
-  return { ...news, analysis: { summary, entities, sentiment, content: null }, related }
+  return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related }
 }
 export async function briefing(env: Env) {
   // Select top 7 articles: diverse sources, recent, high-scoring
-  const items = await env.DB.prepare(
-    "SELECT * FROM news ORDER BY score DESC, published_at DESC LIMIT 50"
+  // Prefer the last 48 hours; fall back to all-time if too few fresh articles
+  let items = await env.DB.prepare(
+    "SELECT * FROM news WHERE published_at >= datetime('now', '-48 hours') ORDER BY score DESC, published_at DESC LIMIT 50"
   ).all()
+  if ((items.results?.length || 0) < 3) {
+    items = await env.DB.prepare(
+      "SELECT * FROM news ORDER BY score DESC, published_at DESC LIMIT 50"
+    ).all()
+  }
 
   // Dedup by source: pick best article from each source, then fill remaining slots
   const bySource: Record<string, any[]> = {}
@@ -277,8 +300,22 @@ export async function search(env: Env, q: string) {
 }
 
 export async function entitySearch(env: Env, name: string) {
-  const items = await env.DB.prepare("SELECT * FROM news WHERE title LIKE ? OR description LIKE ? ORDER BY score DESC LIMIT 30").bind(`%${name}%`, `%${name}%`).all()
+  const like = `%${name}%`
+  const items = await env.DB.prepare(
+    "SELECT * FROM news WHERE title LIKE ? OR description LIKE ? OR entities LIKE ? ORDER BY score DESC LIMIT 30"
+  ).bind(like, like, like).all()
   return { items: (items.results as any[]).map(mapNews), entity: name }
+}
+
+// Validate the body of POST /api/news/:id/detail. Returns an error message or null.
+export function validateAnalysisBody(body: any): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body must be an object'
+  const { summary, entities, sentiment, category } = body
+  if (summary !== undefined && typeof summary !== 'string') return 'summary must be a string'
+  if (entities !== undefined && (!Array.isArray(entities) || entities.some(e => typeof e !== 'string'))) return 'entities must be a string array'
+  if (sentiment !== undefined && !['positive', 'neutral', 'negative'].includes(sentiment)) return 'sentiment must be positive|neutral|negative'
+  if (category !== undefined && typeof category !== 'string') return 'category must be a string'
+  return null
 }
 
 export async function saveAnalysis(env: Env, id: number, body: any) {
@@ -305,18 +342,21 @@ export async function fixImages(env: Env) {
       } catch {}
     })
   )
-  // AI analysis (up to 3 articles)
-  const aiRows = await env.DB.prepare("SELECT id, title, description FROM news WHERE analyzed_at IS NULL ORDER BY RANDOM() LIMIT 3").all()
+  // AI analysis (up to 3 articles, skip ones that already failed 3 times)
+  const aiRows = await env.DB.prepare("SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 ORDER BY RANDOM() LIMIT 3").all()
   let aiDone = 0
   const apiKey = env.DEEPSEEK_API_KEY
   if (apiKey && aiRows.results.length > 0) {
     for (const row of (aiRows.results as any[])) {
+      // Count every attempt so unanalyzable articles don't get retried forever
+      await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
       try {
-        const content = (row.description || row.title).slice(0, 2000)
+        const { content: extracted } = await extractContent(row.url)
+        const content = (extracted || row.description || row.title).slice(0, 2000)
         const result = await analyzeWithDeepSeek(row.title, content, apiKey)
         if (result) {
-          await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
-            .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', row.id).run()
+          await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?, content), analyzed_at=datetime('now') WHERE id=?")
+            .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', extracted, row.id).run()
           aiDone++
         }
       } catch (e: any) {

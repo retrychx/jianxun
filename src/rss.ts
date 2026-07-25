@@ -1,8 +1,8 @@
 import { RSS_SOURCES, type RssSource } from './sources.js'
 import { keywordClassify } from './classifier.js'
 import { parseRSS, type RssItem } from './parse-rss.js'
-import { extractContent, analyzeWithDeepSeek } from './analysis.js'
-import type { D1Database } from '@cloudflare/workers-types'
+import { extractContent } from './analysis.js'
+import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 
 const DEFAULT_MAX = 20
 
@@ -34,22 +34,21 @@ async function fetchOne(source: RssSource, DB: D1Database) {
   if (!feed.items.length) return []
 
   const maxItems = source.limit || DEFAULT_MAX
-  const results: any[] = []
+  const candidates: any[] = []
+  const seen = new Set<string>()
 
   for (const item of feed.items) {
-    if (results.length >= maxItems) break
+    if (candidates.length >= maxItems) break
     const title = item.title?.trim()
     const link = item.link?.trim()
-    if (!title || !link) continue
-
-    const existing = await DB.prepare('SELECT id FROM news WHERE url = ?').bind(link).first()
-    if (existing) continue
+    if (!title || !link || seen.has(link)) continue
+    seen.add(link)
 
     const rawDesc = (item.contentSnippet || item.content || '').slice(0, 2000)
     const desc = rawDesc.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     const { category, score } = keywordClassify(title, desc, source.lang)
 
-    results.push({
+    candidates.push({
       title,
       url: link,
       image: extractImage(item),
@@ -62,42 +61,51 @@ async function fetchOne(source: RssSource, DB: D1Database) {
     })
   }
 
-  return results
+  // Batch dedup: one IN query per chunk (D1 allows at most 100 bound params)
+  const existing = new Set<string>()
+  for (let i = 0; i < candidates.length; i += 100) {
+    const urls = candidates.slice(i, i + 100).map(c => c.url)
+    const rows = await DB.prepare(
+      `SELECT url FROM news WHERE url IN (${urls.map(() => '?').join(',')})`
+    ).bind(...urls).all()
+    for (const row of rows.results as any[]) existing.add(row.url)
+  }
+
+  return candidates.filter(c => !existing.has(c.url))
 }
 
-export async function saveArticles(DB: D1Database, articles: any[], apiKey?: string) {
+export async function saveArticles(DB: D1Database, articles: any[], apiKey: string | undefined, ctx: ExecutionContext) {
   if (!articles.length) return 0
   let saved = 0
   const noImgUrls: string[] = []
   const aiBatch: any[] = []
-  for (const a of articles) {
-    try {
-      await DB.prepare(
-        'INSERT INTO news (title, url, image, source, lang, description, published_at, category, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(
-        a.title, a.url, a.image, a.source, a.lang, a.description,
-        a.publishedAt?.toISOString() || null, a.category, a.score
-      ).run()
+  // Chunked batch inserts (INSERT OR IGNORE survives duplicate URLs)
+  for (let i = 0; i < articles.length; i += 100) {
+    const chunk = articles.slice(i, i + 100)
+    const results = await DB.batch(chunk.map(a => DB.prepare(
+      'INSERT OR IGNORE INTO news (title, url, image, source, lang, description, published_at, category, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      a.title, a.url, a.image, a.source, a.lang, a.description,
+      a.publishedAt?.toISOString() || null, a.category, a.score
+    )))
+    for (let j = 0; j < results.length; j++) {
+      if (!results[j].meta?.changes) continue
       saved++
+      const a = chunk[j]
       if (!a.image) noImgUrls.push(a.url)
       // Collect low-confidence articles for AI refinement (score=50 = default guess)
       if (a.score === 50) aiBatch.push(a)
-    } catch (e) {
-      // duplicate URL
     }
   }
-  // Background: fetch OG images
-  if (noImgUrls.length > 0) {
-    fetchMissingImages(DB, noImgUrls).catch(() => {})
-  }
-  // Background: AI refine low-confidence articles (max 40)
-  if (aiBatch.length > 0) {
-    refineCategories(DB, aiBatch.slice(0, 40)).catch(() => {})
-  }
+  // Background tasks must outlive the response, so attach them to the context
+  const background: Promise<unknown>[] = []
+  if (noImgUrls.length > 0) background.push(fetchMissingImages(DB, noImgUrls))
+  if (apiKey && aiBatch.length > 0) background.push(refineCategories(DB, aiBatch.slice(0, 40), apiKey))
+  if (background.length > 0) ctx.waitUntil(Promise.allSettled(background))
   return saved
 }
 
-async function refineCategories(DB: D1Database, articles: any[]) {
+async function refineCategories(DB: D1Database, articles: any[], apiKey: string) {
   const batchSize = 10
   for (let i = 0; i < articles.length; i += batchSize) {
     const batch = articles.slice(i, i + batchSize)
