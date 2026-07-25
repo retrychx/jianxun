@@ -1,11 +1,7 @@
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null }> {
   try {
-    // Fetch only first 30KB to stay under Worker CPU limits
     const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Range': 'bytes=0-30000'
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(5_000),
     })
     if (!res.ok) return { content: null, image: null }
@@ -15,12 +11,12 @@ export async function extractContent(url: string): Promise<{ content: string | n
     const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/)
     const image = imgMatch?.[1] || null
 
-    // Fast text extraction: strip HTML tags
-    const text = html
+    // Simple text extraction
+    let text = html
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/&(?:lt|gt|amp|quot|nbsp|#\d+);/g, ' ')
+      .replace(/&#?[a-z0-9]+;/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 5_000)
@@ -30,6 +26,7 @@ export async function extractContent(url: string): Promise<{ content: string | n
     return { content: null, image: null }
   }
 }
+
 
 interface DeepSeekResult {
   summary: string
@@ -64,8 +61,8 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
           { role: 'system', content: prompt },
           { role: 'user', content: `标题: ${title}\n\n正文:\n${content.slice(0, 8000)}` },
         ],
-        temperature: 0.1,
-        max_tokens: 2048,
+        temperature: 0.01,
+        max_tokens: 1024,
       }),
     })
     if (!res.ok) return null

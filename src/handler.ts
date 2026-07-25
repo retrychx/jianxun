@@ -122,41 +122,31 @@ export async function detail(env: Env, id: number) {
   let content: string | null = null
 
   // Parse cached AI analysis
-  if (row.analyzed_at && row.analyzed_at !== 'pending' && row.analyzed_at !== 'failed') {
+  if (row.entities && row.sentiment && row.analyzed_at && row.analyzed_at !== 'failed') {
     try { entities = JSON.parse(row.entities) } catch {}
     try { sentiment = JSON.parse(row.sentiment) } catch {}
     if (row.summary) summary = row.summary
   }
 
-  // Step 1: fetch content + image (only first time)
-  if (!row.content) {
-    const result = await extractContent(news.url).catch(() => ({ content: null, image: null }))
+  // Try to fetch content + DeepSeek (run best-effort, non-blocking)
+  // If it fails, the article will be analyzed on next cron run or next visit
+  try {
+    const result = await extractContent(news.url)
     content = result.content
     if (result.image && !news.image) {
-      env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
+      await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
     }
-    if (result.content) {
-      env.DB.prepare("UPDATE news SET content = ? WHERE id = ?").bind(result.content.slice(0, 8000), id).run()
+    if (result.content && env.DEEPSEEK_API_KEY) {
+      const ai = await analyzeWithDeepSeek(news.title, result.content.slice(0, 3000), env.DEEPSEEK_API_KEY)
+      if (ai) {
+        summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
+        await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, image=COALESCE(?,image), analyzed_at=datetime('now') WHERE id=?")
+          .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category || news.category, result.image, id).run()
+        if (ai.category && ai.category !== news.category) news.category = ai.category
+      }
     }
-  } else {
-    content = row.content
-  }
+  } catch {}  // Fail silently — analysis is optional, article still renders
 
-  // Step 2: run DeepSeek analysis (only on second visit, when content is cached)
-  if (env.DEEPSEEK_API_KEY && content && !row.analyzed_at) {
-    const ai = await analyzeWithDeepSeek(news.title, content.slice(0, 3000), env.DEEPSEEK_API_KEY).catch(() => null)
-    if (ai) {
-      summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
-      env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
-        .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category || news.category, id).run()
-      if (ai.category && ai.category !== news.category) news.category = ai.category
-    } else {
-      // Mark as failed so we don't retry on every visit
-      env.DB.prepare("UPDATE news SET analyzed_at = 'failed' WHERE id = ?").bind(id).run()
-    }
-  }
-
-  // Related articles (same as before)
   const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
