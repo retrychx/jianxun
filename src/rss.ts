@@ -3,7 +3,7 @@ import { keywordClassify } from './classifier.js'
 import { parseRSS, type RssItem } from './parse-rss.js'
 import type { D1Database } from '@cloudflare/workers-types'
 
-const MAX_PER_SOURCE = 20
+const DEFAULT_MAX = 20
 
 function extractImage(item: RssItem): string | null {
   if (item.mediaContent) return item.mediaContent
@@ -32,10 +32,11 @@ async function fetchOne(source: RssSource, DB: D1Database) {
   const feed = await parseRSS(source.url)
   if (!feed.items.length) return []
 
+  const maxItems = source.limit || DEFAULT_MAX
   const results: any[] = []
 
   for (const item of feed.items) {
-    if (results.length >= MAX_PER_SOURCE) break
+    if (results.length >= maxItems) break
     const title = item.title?.trim()
     const link = item.link?.trim()
     if (!title || !link) continue

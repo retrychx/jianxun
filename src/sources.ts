@@ -2,10 +2,14 @@ export interface RssSource {
   name: string
   url: string
   lang: 'zh' | 'en'
+  /** Max articles per fetch. Defaults to 20 if not set. */
+  limit?: number
 }
 
 export const RSS_SOURCES: RssSource[] = [
-  { name: '36氪',        url: 'https://36kr.com/feed',                  lang: 'zh' },
+  // ==================== 中文源 ====================
+  // 36氪 — 不限量
+  { name: '36氪',        url: 'https://36kr.com/feed',                  lang: 'zh', limit: 80 },
   { name: '少数派',      url: 'https://sspai.com/feed',                 lang: 'zh' },
   { name: '爱范儿',      url: 'https://www.ifanr.com/feed',             lang: 'zh' },
   { name: '量子位',      url: 'https://www.qbitai.com/feed',            lang: 'zh' },
@@ -18,7 +22,7 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '投资界',      url: 'https://www.pedaily.cn/feed/',           lang: 'zh' },
   { name: '中国新闻网',  url: 'https://www.chinanews.com.cn/rss',       lang: 'zh' },
   { name: '美团技术',    url: 'https://tech.meituan.com/feed/',         lang: 'zh' },
-  // English
+  // ==================== 英文源 ====================
   { name: 'Hacker News',     url: 'https://hnrss.org/frontpage',                 lang: 'en' },
   { name: 'GitHub Trending', url: 'https://github.com/trending/rss?since=daily',  lang: 'en' },
   { name: 'TechCrunch',      url: 'https://techcrunch.com/feed/',                 lang: 'en' },
@@ -31,5 +35,4 @@ export const RSS_SOURCES: RssSource[] = [
   { name: 'New Scientist',   url: 'https://www.newscientist.com/feed/home',       lang: 'en' },
   { name: 'ScienceDaily',    url: 'https://www.sciencedaily.com/rss/all.xml',     lang: 'en' },
   { name: 'Space.com',       url: 'https://www.space.com/feeds/all',              lang: 'en' },
-  { name: 'NPR',             url: 'https://feeds.npr.org/1001/rss.xml',           lang: 'en' },
 ]
