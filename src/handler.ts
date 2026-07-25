@@ -139,7 +139,74 @@ export async function detail(env: Env, id: number) {
   }
 
   return { ...news, analysis: { summary, entities, sentiment, content: null }, related }
+}}
+export async function briefing(env: Env) {
+  // Select top 7 articles: diverse sources, recent, high-scoring
+  const items = await env.DB.prepare(
+    "SELECT * FROM news ORDER BY score DESC, published_at DESC LIMIT 50"
+  ).all()
+
+  // Dedup by source: pick best article from each source, then fill remaining slots
+  const bySource: Record<string, any[]> = {}
+  for (const row of (items.results as any[])) {
+    const s = row.source
+    if (!bySource[s]) bySource[s] = []
+    bySource[s].push(row)
+  }
+
+  const selected: any[] = []
+  const usedSources = new Set<string>()
+  const sources = Object.keys(bySource)
+
+  // Round-robin: pick best from each source
+  while (selected.length < 7 && usedSources.size < sources.length) {
+    for (const s of sources) {
+      if (usedSources.has(s)) continue
+      const pool = bySource[s]
+      if (!pool.length) { usedSources.add(s); continue }
+      const article = pool.shift()!
+      if (selected.length >= 7) break
+      selected.push(mapNews(article))
+      usedSources.add(s)
+    }
+  }
+
+  // Fill remaining from any source
+  if (selected.length < 7) {
+    for (const s of sources) {
+      for (const article of bySource[s] || []) {
+        if (selected.length >= 7) break
+        if (!selected.find(n => n.id === article.id)) {
+          selected.push(mapNews(article))
+        }
+      }
+    }
+  }
+
+  // Generate reasons
+  const topics = await env.DB.prepare(
+    "SELECT category, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC"
+  ).all()
+  const topCats = (topics.results as any[]).slice(0, 3).map((r: any) => r.category)
+
+  const result = selected.slice(0, 7).map((item, i) => {
+    let reason = ''
+    const isTrending = item.score >= 65
+    const isHotCat = topCats.includes(item.category)
+
+    if (i === 0) reason = '今日头条 · ' + (isHotCat ? `${item.category}领域最受关注` : '多源报道')
+    else if (isTrending && isHotCat) reason = `${item.category}热点 · 同类报道较多`
+    else if (item.score >= 70) reason = '高关注度 · 读者广泛讨论'
+    else if (item.category === 'AI') reason = 'AI 赛道 · 持续受关注'
+    else if (item.score >= 60) reason = `${item.category} · 值得关注`
+    else reason = `${item.category}领域 · 信息增量`
+
+    return { ...item, reason }
+  })
+
+  return { items: result }
 }
+
 export async function topics(env: Env) {
   if (env.KV) { const cached = await cacheGet<any>(env.KV, 'topics'); if (cached) return cached }
   const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()

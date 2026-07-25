@@ -3,10 +3,11 @@ import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel } from './components/TrendingPanel'
 import { DetailPanel } from './components/DetailPanel'
+import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
 import { FetchMascot } from './components/FetchMascot'
-import type { NewsItem, CategoryCount, TopicCluster } from './api'
-import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics } from './api'
+import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
+import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics, getBriefing } from './api'
 import './App.css'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function App() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [trending, setTrending] = useState<NewsItem[]>([])
   const [topics, setTopics] = useState<TopicCluster[]>([])
+  const [briefingItems, setBriefingItems] = useState<BriefingItem[]>([])
   const [categories, setCategories] = useState<CategoryCount[]>([])
   const [activeCat, setActiveCat] = useState('全部')
   const [stats, setStats] = useState({ total: 0, today: 0 })
@@ -51,7 +53,7 @@ export default function App() {
   const [fetching, setFetching] = useState(false)
   const [msg, setMsg] = useState('')
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
-  const [view, setView] = useState<'feed' | 'topics'>('topics')
+  const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
 
@@ -148,8 +150,9 @@ export default function App() {
         </div>
         <div className="header-right">
           <div className="view-toggle">
-            <button className={`view-btn ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
+            <button className={`view-btn ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
             <button className={`view-btn ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题簇</button>
+            <button className={`view-btn ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
           </div>
           <span className="stat-badge">{stats.total} 条</span>
           <span className="stat-badge today">今日 {stats.today} 条</span>
@@ -193,7 +196,9 @@ export default function App() {
 
       <div className="main-layout">
         <div className="news-feed">
-          {view === 'feed' ? (
+          {view === 'briefing' ? (
+            <BriefingView items={briefingItems} onNewsClick={(id) => setSelectedNewsId(id)} />
+          ) : view === 'feed' ? (
             loading ? (
               <>
                 <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />

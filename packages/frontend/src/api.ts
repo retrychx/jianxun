@@ -97,6 +97,14 @@ export function getTopics(): Promise<{ topics: TopicCluster[] }> {
   return fetchJson(`${BASE}/news/topics`)
 }
 
+export interface BriefingItem extends NewsItem {
+  reason: string
+}
+
+export function getBriefing(): Promise<{ items: BriefingItem[] }> {
+  return fetchJson(`${BASE}/news/briefing`)
+}
+
 export function getDetail(id: number): Promise<NewsDetail> {
   return fetchJson(`${BASE}/news/${id}/detail`)
 }
