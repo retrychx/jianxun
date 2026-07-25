@@ -1,6 +1,3 @@
-import { parseHTML } from 'linkedom'
-import { Readability } from '@mozilla/readability'
-
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null }> {
   try {
     const res = await fetch(url, {
@@ -8,23 +5,29 @@ export async function extractContent(url: string): Promise<{ content: string | n
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'text/html',
       },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(5_000),
     })
     if (!res.ok) return { content: null, image: null }
     const html = await res.text()
 
-    // Extract image from og:tag
+    // Extract OG image
     let image: string | null = null
     const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/)
     if (imgMatch) image = imgMatch[1]
 
-    // Extract content using linkedom + readability
-    const dom = parseHTML(html)
-    const reader = new Readability(dom.window.document)
-    const article = reader.parse()
-    const content = article?.textContent?.trim()?.slice(0, 5_000) || null
+    // Simple text extraction (no linkedom/readability — too heavy for Workers)
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    const body = bodyMatch ? bodyMatch[1] : html
+    const text = body
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      .replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(parseInt(n)))
+      .replace(/\s+/g, ' ').trim()
+      .slice(0, 5_000)
 
-    return { content, image }
+    return { content: text || null, image }
   } catch {
     return { content: null, image: null }
   }
