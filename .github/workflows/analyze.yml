@@ -1,0 +1,78 @@
+name: AI Analysis
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # 每 2 小时
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Analyze unprocessed articles
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          # Fetch unanalyzed articles from Worker API
+          curl -s "https://jianxun.pages.dev/api/news?pageSize=10" | node -e "
+          const https = require('https');
+
+          async function main() {
+            // Get articles needing analysis
+            const listRes = await fetch('https://jianxun.pages.dev/api/news?pageSize=50');
+            const { items } = await listRes.json();
+
+            // Filter only unanalyzed (summary is fallback of ~200 chars + '...')
+            const pending = items.filter(i => i.summary && i.summary.endsWith('...'));
+            console.log('Pending analysis:', pending.length);
+
+            // Analyze up to 5 per run
+            for (const article of pending.slice(0, 5)) {
+              console.log('Analyzing:', article.title.slice(0, 60));
+              const content = article.description || article.title;
+
+              const res = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + process.env.DEEPSEEK_API_KEY,
+                },
+                body: JSON.stringify({
+                  model: 'deepseek-v4-flash',
+                  messages: [
+                    { role: 'system', content: '你是新闻分析助手。为每篇新闻生成摘要、分类、实体列表。返回 JSON： {  \"summary\": \"2-3句中文摘要\", \"category\": \"AI|科技|财经|国际|政治|健康|体育|娱乐|游戏|教育|社会\", \"entities\": [{\"name\":\"实体\",\"type\":\"company|person|product|technology|concept\"}], \"sentiment\": {\"label\":\"positive|negative|neutral|mixed\", \"perspective\":\"角度描述\"} }' },
+                    { role: 'user', content: '标题：' + article.title + '\\n正文：' + (content || '').slice(0, 2000) },
+                  ],
+                  temperature: 0.01,
+                  max_tokens: 1024,
+                }),
+              });
+              const data = await res.json();
+              const raw = data.choices?.[0]?.message?.content;
+              if (!raw) { console.log('  API error'); continue; }
+
+              const json = raw.replace(/json\\n?/g, '').replace(/\\n?/g, '').trim();
+              const parsed = JSON.parse(json);
+              const analysis = {
+                summary: parsed.summary || '',
+                category: parsed.category || '科技',
+                entities: JSON.stringify(parsed.entities || []),
+                sentiment: JSON.stringify(parsed.sentiment || {}),
+              };
+
+              // Write back via Worker API
+              await fetch('https://jianxun.pages.dev/api/news/' + article.id + '/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(analysis),
+              });
+              console.log('  ✅ Saved');
+            }
+          }
+          main().catch(e => console.error(e));
+          "

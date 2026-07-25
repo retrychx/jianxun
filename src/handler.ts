@@ -127,49 +127,19 @@ export async function detail(env: Env, id: number) {
     if (row.summary) summary = row.summary
   }
 
-  // Content & AI analysis happen via fix-images cron endpoint
-  // This keeps detail endpoint fast and reliable
-const words = tokenize(news.title)
-  let related: any[] = []
-  if (words.length) {
-    const clauses = words.map((_: string, i: number) => `title LIKE ?`)
-    const params = words.map((w: string) => `%\${w}%`)
-    const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
-    related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
-    related.forEach((r: any) => delete r.sim)
-  }
-
-  return { ...news, analysis: { summary, entities, sentiment, content: content?.slice(0, 3000) || null }, related }
-}
-
-  let summary = news.description?.slice(0, 200) + '...'
-  let entities: any[] = []
-  let sentiment: any = null
-
-  if (env.DEEPSEEK_API_KEY && content) {
-    const result = await analyzeWithDeepSeek(news.title, content, env.DEEPSEEK_API_KEY)
-    if (result) {
-      summary = result.summary; entities = result.entities; sentiment = result.sentiment
-      if (result.category && result.category !== news.category) {
-        news.category = result.category
-        env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(result.category, id).run()
-      }
-    }
-  }
-
+  // Related articles
   const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
-    const clauses = words.map((_: string, i: number) => `title LIKE ?`)
-    const params = words.map((w: string) => `%${w}%`)
-    const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
+    const clauses = words.map((_: string, i: number) => \`title LIKE ?\`)
+    const params = words.map((w: string) => \`%\${w}%\`)
+    const candidates = await env.DB.prepare(\`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10\`).bind(id, ...params).all()
     related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
     related.forEach((r: any) => delete r.sim)
   }
 
-  return { ...news, analysis: { summary, entities, sentiment, content: content?.slice(0, 3000) || null }, related }
+  return { ...news, analysis: { summary, entities, sentiment, content: null }, related }
 }
-
 export async function topics(env: Env) {
   if (env.KV) { const cached = await cacheGet<any>(env.KV, 'topics'); if (cached) return cached }
   const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
@@ -202,29 +172,50 @@ export async function entitySearch(env: Env, name: string) {
 }
 
 export async function fixImages(env: Env) {
-  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY RANDOM() LIMIT 30").all()
+  // Fetch missing images (max 3)
+  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL LIMIT 3").all()
   let imgFixed = 0
   await Promise.allSettled(
     (imgRows.results as any[]).map(async (row: any) => {
-      const { image } = await extractContent(row.url)
-      if (image) { await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run(); imgFixed++ }
+      try {
+        const { image } = await extractContent(row.url)
+        if (image) { await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run(); imgFixed++ }
+      } catch {}
     })
   )
-  // AI analysis limited to 2 articles per run to avoid timeout
-  const aiRows = await env.DB.prepare("SELECT id, title FROM news WHERE analyzed_at IS NULL ORDER BY RANDOM() LIMIT 2").all()
+  // AI analysis (up to 3 articles)
+  const aiRows = await env.DB.prepare("SELECT id, title, description FROM news WHERE analyzed_at IS NULL ORDER BY RANDOM() LIMIT 3").all()
+  let aiDone = 0
   const apiKey = env.DEEPSEEK_API_KEY
-  if (apiKey) {
+  if (apiKey && aiRows.results.length > 0) {
     for (const row of (aiRows.results as any[])) {
       try {
-        const result = await analyzeWithDeepSeek(row.title, 'Summary not available', apiKey)
+        const content = (row.description || row.title).slice(0, 2000)
+        const result = await analyzeWithDeepSeek(row.title, content, apiKey)
         if (result) {
           await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
             .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', row.id).run()
+          aiDone++
         }
-      } catch {}
+      } catch (e: any) {
+        console.error('AI analysis failed:', e.message)
+      }
     }
   }
-  return { imgFixed, aiAnalyzed: (aiRows.results as any[]).length }
+  return { imgFixed, aiDone }
+}
+
+// KV cache helpers
+const CACHE_TTL = {
+  list: 60, trending: 120, stats: 300, categories: 300, topics: 600, detail: 3600,
+}
+
+async function cacheGet<T>(kv: KVNamespace, key: string): Promise<T | null> {
+  try { const val = await kv.get(key); return val ? JSON.parse(val) : null } catch { return null }
+}
+
+async function cacheSet(kv: KVNamespace, key: string, data: any, ttl: number) {
+  try { await kv.put(key, JSON.stringify(data), { expirationTtl: ttl }) } catch {}
 }
 
 export { cacheGet, cacheSet, CACHE_TTL }
