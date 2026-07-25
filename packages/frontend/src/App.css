@@ -99,11 +99,18 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .app { max-width: 1200px; margin: 0 auto; padding: 0 20px }
 
 /* ===== Header ===== */
-.header { padding-top: 10px; margin-bottom: 6px }
-.header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px }
-.logo { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1 }
+.header { padding-top: 10px; margin-bottom: 20px }
+.header-top { display: flex; align-items: center; gap: 4px; margin-bottom: 4px }
+.back-btn {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
+  transition: all .15s; flex-shrink: 0; margin-right: 2px;
+}
+.back-btn:hover { background: var(--card-hover); color: var(--text) }
+.logo { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex: 1 }
 
-.header-actions { display: flex; align-items: center; gap: 2px }
+.header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0 }
 .ha-btn {
   width: 32px; height: 32px; border-radius: var(--radius-sm);
   border: none; background: transparent; cursor: pointer;
@@ -126,21 +133,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   outline: none;
 }
 .hs-input-wide:focus { border-color: var(--accent) }
-.hs-close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--text-tertiary); padding: 0 4px }
-
-.header-nav { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px }
-.hn-link {
-  padding: 0 0 10px 0; margin-right: 20px;
-  border: none; background: none; cursor: pointer; font-family: inherit;
-  font-size: 14px; font-weight: 450; color: var(--text-tertiary);
-  position: relative; transition: color .15s;
-}
-.hn-link:hover { color: var(--text-secondary) }
-.hn-link.active { color: var(--text); font-weight: 600 }
-.hn-link.active::after {
-  content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
-  height: 2px; background: var(--accent); border-radius: 1px;
-}/* ===== Theme Toggle ===== */
+.hs-close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--text-tertiary); padding: 0 4px }/* ===== Theme Toggle ===== */
 .theme-btn {
   width: 32px; height: 32px; border-radius: var(--radius-sm);
   border: 1px solid var(--border); background: var(--surface);
@@ -843,6 +836,28 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   animation: printOut .55s cubic-bezier(.22,.8,.3,1.05);
 }
 [data-theme="retro"] .sheet-panel.closing { animation: rollUp .35s cubic-bezier(.5,0,.8,.2) forwards; }
+/* ===== Explore More ===== */
+.bf-explore { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-light) }
+.bf-explore-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px }
+.bf-explore-grid { display: flex; flex-direction: column; gap: 6px }
+.bf-explore-card {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); cursor: pointer; font-family: inherit;
+  transition: all .15s; text-align: left; width: 100%;
+}
+.bf-explore-card:hover { border-color: var(--scrollbar); box-shadow: var(--shadow) }
+.bf-explore-card.feed { border-style: dashed; background: transparent }
+.bf-explore-num {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--accent-light); color: var(--accent);
+  font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.bf-explore-card.feed .bf-explore-num { background: var(--bg); color: var(--text-tertiary) }
+.bf-explore-info { display: flex; flex-direction: column; gap: 1px; min-width: 0 }
+.bf-explore-keyword { font-size: 14px; font-weight: 500; color: var(--text) }
+.bf-explore-sources { font-size: 11px; color: var(--text-tertiary) }
 
 @keyframes printOut {
   0% { transform: translateY(100%); opacity: 0 }

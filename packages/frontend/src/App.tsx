@@ -162,7 +162,12 @@ const [theme, setTheme] = useState<Theme>(getTheme)
 
       <header className="header">
         <div className="header-top">
-          <h1 className="logo">简讯</h1>
+          {view !== 'briefing' && (
+            <button className="back-btn" onClick={() => setView('briefing')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+          )}
+          <h1 className="logo">{view === 'briefing' ? '简讯' : view === 'topics' ? '话题' : '时间线'}</h1>
           <div className="header-actions">
             <button className="ha-btn" onClick={() => handleSearch(searchQuery || ' ')} title="搜索">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -182,11 +187,7 @@ const [theme, setTheme] = useState<Theme>(getTheme)
             <button className="hs-close" onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults(null) }}>&times;</button>
           </div>
         )}
-        <nav className="header-nav">
-          <button className={`hn-link ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
-          <button className={`hn-link ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
-          <button className={`hn-link ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
-        </nav>
+
       </header>
       {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
@@ -222,7 +223,7 @@ const [theme, setTheme] = useState<Theme>(getTheme)
           {searchResults !== null ? (
             <SearchView results={searchResults} query={searchQuery} onClear={() => handleSearch('')} onNewsClick={(id) => setSelectedNewsId(id)} />
           ) : view === 'briefing' ? (
-            <BriefingView items={briefingItems} onNewsClick={(id) => setSelectedNewsId(id)} />
+            <BriefingView items={briefingItems} topics={topics} onNewsClick={(id) => setSelectedNewsId(id)} onViewTopics={() => setView('topics')} onViewFeed={() => setView('feed')} />
           ) : view === 'feed' ? (
             loading ? (
               <>
