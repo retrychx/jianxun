@@ -169,7 +169,7 @@ const [theme, setTheme] = useState<Theme>(getTheme)
           )}
           <h1 className="logo">{view === 'briefing' ? '简讯' : view === 'topics' ? '话题' : '时间线'}</h1>
           <div className="header-actions">
-            <button className="ha-btn" onClick={() => handleSearch(searchQuery || ' ')} title="搜索">
+            <button className="ha-btn" onClick={() => setSearchOpen(true)} title="搜索">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </button>
             <button className="ha-btn" onClick={cycleTheme} title={theme}>
