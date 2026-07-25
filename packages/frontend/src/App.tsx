@@ -5,6 +5,7 @@ import { TrendingPanel } from './components/TrendingPanel'
 import { DetailPanel } from './components/DetailPanel'
 import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
+import { SearchView } from './components/SearchView'
 import { FetchMascot } from './components/FetchMascot'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics, getBriefing, searchNews } from './api'
@@ -164,6 +165,19 @@ const [theme, setTheme] = useState<Theme>(getTheme)
           <span className="header-divider" />
           <span className="subtitle">AI 智能分类</span>
         </div>
+        <div className="header-search">
+          <input
+            className="hs-input"
+            placeholder="搜索新闻..."
+            value={searchQuery}
+            onChange={e => handleSearch(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="hs-clear" onClick={() => handleSearch("")}>
+              &times;
+            </button>
+          )}
+        </div>
         <div className="header-right">
           <div className="view-toggle">
             <button className={`view-btn ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
@@ -212,7 +226,9 @@ const [theme, setTheme] = useState<Theme>(getTheme)
 
       <div className="main-layout">
         <div className="news-feed">
-          {view === 'briefing' ? (
+          {searchResults !== null ? (
+            <SearchView results={searchResults} query={searchQuery} onClear={() => handleSearch('')} onNewsClick={(id) => setSelectedNewsId(id)} />
+          ) : view === 'briefing' ? (
             <BriefingView items={briefingItems} onNewsClick={(id) => setSelectedNewsId(id)} />
           ) : view === 'feed' ? (
             loading ? (
