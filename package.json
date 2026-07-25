@@ -1,0 +1,29 @@
+{
+  "name": "ts7-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "build": "pnpm --filter @ts7/frontend build",
+    "deploy": "pnpm build && wrangler pages deploy",
+    "db:migrate": "wrangler d1 migrations apply jianxun",
+    "lint": "pnpm -r run lint"
+  },
+  "engines": {
+    "node": ">=16.20.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "better-sqlite3"
+    ]
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "hono": "^4.12.32",
+    "linkedom": "^0.18.13",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260724.1"
+  }
+}

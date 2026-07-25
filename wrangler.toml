@@ -1,0 +1,12 @@
+name = "jianxun"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "packages/frontend/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jianxun"
+database_id = ""
+
+[env.production]
+vars = { DEEPSEEK_API_KEY = "" }
