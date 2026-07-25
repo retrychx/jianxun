@@ -51,7 +51,7 @@ export default function App() {
   const [fetching, setFetching] = useState(false)
   const [msg, setMsg] = useState('')
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
-  const [view, setView] = useState<'feed' | 'topics'>('feed')
+  const [view, setView] = useState<'feed' | 'topics'>('topics')
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
 
