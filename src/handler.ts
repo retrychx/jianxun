@@ -202,65 +202,29 @@ export async function entitySearch(env: Env, name: string) {
 }
 
 export async function fixImages(env: Env) {
-  // Step 1: Fix missing images
-  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY id DESC LIMIT 50").all()
+  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY RANDOM() LIMIT 30").all()
   let imgFixed = 0
   await Promise.allSettled(
     (imgRows.results as any[]).map(async (row: any) => {
       const { image } = await extractContent(row.url)
-      if (image) {
-        await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run()
-        imgFixed++
-      }
+      if (image) { await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run(); imgFixed++ }
     })
   )
-
-  // Step 2: AI analysis for unanalyzed articles
-  const aiRows = await env.DB.prepare("SELECT id, title FROM news WHERE analyzed_at IS NULL AND summary IS NULL ORDER BY id DESC LIMIT 10").all()
-  let aiDone = 0
+  // AI analysis limited to 2 articles per run to avoid timeout
+  const aiRows = await env.DB.prepare("SELECT id, title FROM news WHERE analyzed_at IS NULL ORDER BY RANDOM() LIMIT 2").all()
   const apiKey = env.DEEPSEEK_API_KEY
   if (apiKey) {
-    await Promise.allSettled(
-      (aiRows.results as any[]).map(async (row: any) => {
-        try {
-          const content = 'No content available - visit article for details.'
-          const result = await analyzeWithDeepSeek(row.title, content, apiKey)
-          if (result) {
-            await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
-              .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', row.id).run()
-            aiDone++
-          }
-        } catch {}
-      })
-    )
+    for (const row of (aiRows.results as any[])) {
+      try {
+        const result = await analyzeWithDeepSeek(row.title, 'Summary not available', apiKey)
+        if (result) {
+          await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
+            .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', row.id).run()
+        }
+      } catch {}
+    }
   }
-
-  return { imgFixed, aiDone, total: imgRows.results.length + aiRows.results.length }
-}
-
-// KV cache helpers
-const CACHE_TTL = {
-  list: 60,        // 1 min — fresh news
-  trending: 120,   // 2 min
-  stats: 300,      // 5 min
-  categories: 300, // 5 min
-  topics: 600,     // 10 min
-  detail: 3600,    // 1 hour (analysis is cached in DB)
-}
-
-async function cacheGet<T>(kv: KVNamespace, key: string): Promise<T | null> {
-  try {
-    const val = await kv.get(key)
-    return val ? JSON.parse(val) : null
-  } catch { return null }
-}
-
-async function cacheSet(kv: KVNamespace, key: string, data: any, ttl: number) {
-  try { await kv.put(key, JSON.stringify(data), { expirationTtl: ttl }) } catch {}
+  return { imgFixed, aiAnalyzed: (aiRows.results as any[]).length }
 }
 
 export { cacheGet, cacheSet, CACHE_TTL }
-
-export function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } })
-}
