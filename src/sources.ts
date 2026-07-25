@@ -4,6 +4,8 @@ export interface RssSource {
   lang: 'zh' | 'en'
   /** Max articles per fetch. Defaults to 20 if not set. */
   limit?: number
+  /** Score multiplier for UGC/SEO-heavy sources. Defaults to 1. */
+  weight?: number
 }
 
 export const RSS_SOURCES: RssSource[] = [
@@ -17,7 +19,7 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '雷锋网',      url: 'https://www.leiphone.com/feed',          lang: 'zh' },
   { name: '品玩',        url: 'https://www.pingwest.com/feed',          lang: 'zh' },
   { name: 'Solidot',     url: 'https://www.solidot.org/index.rss',      lang: 'zh' },
-  { name: 'V2EX 热榜',   url: 'https://www.v2ex.com/feed/tab/hot.xml',  lang: 'zh' },
+  { name: 'V2EX 热榜',   url: 'https://www.v2ex.com/feed/tab/hot.xml',  lang: 'zh', weight: 0.7 },
   { name: '开源中国',    url: 'https://www.oschina.net/news/rss',        lang: 'zh' },
   { name: '投资界',      url: 'https://www.pedaily.cn/feed/',           lang: 'zh' },
   { name: '中国新闻网',  url: 'https://www.chinanews.com.cn/rss',       lang: 'zh' },
@@ -29,13 +31,13 @@ export const RSS_SOURCES: RssSource[] = [
   { name: 'OpenAI',      url: 'https://openai.com/news/rss.xml',        lang: 'en' },
   // ==================== 英文源 ====================
   { name: 'Hacker News',     url: 'https://hnrss.org/frontpage',                 lang: 'en' },
-  { name: 'GitHub Trending', url: 'https://github.com/trending/rss?since=daily',  lang: 'en' },
+  { name: 'GitHub Trending', url: 'https://github.com/trending/rss?since=daily',  lang: 'en', weight: 0.7 },
   { name: 'TechCrunch',      url: 'https://techcrunch.com/feed/',                 lang: 'en' },
   { name: 'The Verge',       url: 'https://www.theverge.com/rss/index.xml',       lang: 'en' },
   { name: 'Ars Technica',    url: 'https://feeds.arstechnica.com/arstechnica/index', lang: 'en' },
   { name: 'Wired',           url: 'https://www.wired.com/feed/rss',               lang: 'en' },
   { name: 'Engadget',        url: 'https://www.engadget.com/rss.xml',             lang: 'en' },
-  { name: 'Dev.to',          url: 'https://dev.to/feed',                          lang: 'en' },
+  { name: 'Dev.to',          url: 'https://dev.to/feed',                          lang: 'en', weight: 0.55 },
   { name: 'Android Central', url: 'https://www.androidcentral.com/rss.xml',       lang: 'en' },
   { name: 'New Scientist',   url: 'https://www.newscientist.com/feed/home',       lang: 'en' },
   { name: 'ScienceDaily',    url: 'https://www.sciencedaily.com/rss/all.xml',     lang: 'en' },

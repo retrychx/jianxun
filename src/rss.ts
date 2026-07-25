@@ -2,6 +2,7 @@ import { RSS_SOURCES, type RssSource } from './sources.js'
 import { keywordClassify } from './classifier.js'
 import { parseRSS, type RssItem } from './parse-rss.js'
 import { extractContent } from './analysis.js'
+import { normalizeTitle } from './title-norm.js'
 import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 
 const DEFAULT_MAX = 20
@@ -50,6 +51,7 @@ async function fetchOne(source: RssSource, DB: D1Database) {
 
     candidates.push({
       title,
+      titleNorm: normalizeTitle(title),
       url: link,
       image: extractImage(item),
       source: source.name,
@@ -57,7 +59,10 @@ async function fetchOne(source: RssSource, DB: D1Database) {
       description: desc,
       publishedAt: item.isoDate ? new Date(item.isoDate) : null,
       category,
-      score,
+      // UGC/SEO-heavy sources get their keyword score discounted
+      score: Math.round(score * (source.weight ?? 1)),
+      // score=50 before weighting means the classifier made a default guess
+      lowConfidence: score === 50,
     })
   }
 
@@ -79,13 +84,13 @@ export async function saveArticles(DB: D1Database, articles: any[], apiKey: stri
   let saved = 0
   const noImgUrls: string[] = []
   const aiBatch: any[] = []
-  // Chunked batch inserts (INSERT OR IGNORE survives duplicate URLs)
+  // Chunked batch inserts (INSERT OR IGNORE survives duplicate URLs and same-title variants)
   for (let i = 0; i < articles.length; i += 100) {
     const chunk = articles.slice(i, i + 100)
     const results = await DB.batch(chunk.map(a => DB.prepare(
-      'INSERT OR IGNORE INTO news (title, url, image, source, lang, description, published_at, category, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO news (title, title_norm, url, image, source, lang, description, published_at, category, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
-      a.title, a.url, a.image, a.source, a.lang, a.description,
+      a.title, a.titleNorm, a.url, a.image, a.source, a.lang, a.description,
       a.publishedAt?.toISOString() || null, a.category, a.score
     )))
     for (let j = 0; j < results.length; j++) {
@@ -93,8 +98,8 @@ export async function saveArticles(DB: D1Database, articles: any[], apiKey: stri
       saved++
       const a = chunk[j]
       if (!a.image) noImgUrls.push(a.url)
-      // Collect low-confidence articles for AI refinement (score=50 = default guess)
-      if (a.score === 50) aiBatch.push(a)
+      // Collect low-confidence articles for AI refinement (unweighted score was a default guess)
+      if (a.lowConfidence) aiBatch.push(a)
     }
   }
   // Background tasks must outlive the response, so attach them to the context

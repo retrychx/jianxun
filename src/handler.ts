@@ -1,6 +1,6 @@
 import type { D1Database, KVNamespace, ExecutionContext } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
-import { extractContent, analyzeWithDeepSeek, titleSimilarity } from './analysis.js'
+import { extractContent, analyzeWithDeepSeek, generateTopicLabels, titleSimilarity } from './analysis.js'
 
 type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
 
@@ -45,6 +45,21 @@ function tokenize(text: string): string[] {
   return [...new Set(words)].filter((w: string) => w.length > 1)
 }
 
+// English stopwords excluded from fallback topic labels
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'to', 'of', 'how', 'why', 'what', 'is', 'in', 'on', 'for', 'with', 'and', 'or',
+  'next', 'new', 'at', 'by', 'from', 'as', 'are', 'was', 'be', 'it', 'its', 'this', 'that', 'will',
+  'can', 'not', 'but', 'if', 'so', 'into', 'over', 'about', 'after', 'via', 'vs', 'your', 'we',
+  'their', 'has', 'have', 'do', 'does', 'get', 'may', 'now', 'more', 'most', 'all', 'also', 'just',
+  'say', 'says', 'make', 'use', 'using', 'first', 'best', 'top', 'when', 'which', 'who',
+])
+
+// Fallback topic label: up to 3 meaningful keywords (stopwords filtered)
+function fallbackLabel(words: string[]): string {
+  const kept = words.filter(w => !STOPWORDS.has(w.toLowerCase()))
+  return (kept.length ? kept : words).slice(0, 3).join(' · ')
+}
+
 export async function listNews(env: Env, url: URL) {
   const category = url.searchParams.get('category')
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1') || 1)
@@ -82,9 +97,23 @@ export async function listNews(env: Env, url: URL) {
 
 export async function trending(env: Env) {
   if (env.KV) { const cached = await cacheGet<any>(env.KV, 'trending'); if (cached) return cached }
-  // Only articles from the last 3 days, so old high-score items don't stick forever
-  const items = await env.DB.prepare("SELECT * FROM news WHERE published_at >= datetime('now', '-3 days') ORDER BY score DESC LIMIT 30").all()
-  const result = { items: (items.results as any[]).map(mapNews) }
+  // Only articles from the last 3 days, so old high-score items don't stick forever.
+  // heat = rows sharing the same normalized title; cross-source follow-ups boost ranking.
+  const items = await env.DB.prepare(
+    `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+     FROM news n
+     WHERE published_at >= datetime('now', '-3 days')
+     ORDER BY (n.score + 6 * heat) DESC LIMIT 30`
+  ).all()
+  // Extra title_norm dedup guards legacy rows that predate the unique index
+  const seen = new Set<string>()
+  const deduped = (items.results as any[]).filter((row: any) => {
+    const key = row.title_norm || row.title
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const result = { items: deduped.map((row: any) => ({ ...mapNews(row), heat: row.heat })) }
   if (env.KV) cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
   return result
 }
@@ -159,13 +188,19 @@ export async function detail(env: Env, id: number) {
 }
 export async function briefing(env: Env) {
   // Select top 7 articles: diverse sources, recent, high-scoring
-  // Prefer the last 48 hours; fall back to all-time if too few fresh articles
+  // Prefer the last 48 hours; fall back to all-time if too few fresh articles.
+  // heat = rows sharing the same normalized title (roughly how many outlets followed up).
   let items = await env.DB.prepare(
-    "SELECT * FROM news WHERE published_at >= datetime('now', '-48 hours') ORDER BY score DESC, published_at DESC LIMIT 50"
+    `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+     FROM news n
+     WHERE published_at >= datetime('now', '-48 hours')
+     ORDER BY score DESC, published_at DESC LIMIT 50`
   ).all()
   if ((items.results?.length || 0) < 3) {
     items = await env.DB.prepare(
-      "SELECT * FROM news ORDER BY score DESC, published_at DESC LIMIT 50"
+      `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+       FROM news n
+       ORDER BY score DESC, published_at DESC LIMIT 50`
     ).all()
   }
 
@@ -189,7 +224,7 @@ export async function briefing(env: Env) {
       if (!pool.length) { usedSources.add(s); continue }
       const article = pool.shift()!
       if (selected.length >= 7) break
-      selected.push(mapNews(article))
+      selected.push({ ...mapNews(article), heat: article.heat })
       usedSources.add(s)
     }
   }
@@ -200,28 +235,33 @@ export async function briefing(env: Env) {
       for (const article of bySource[s] || []) {
         if (selected.length >= 7) break
         if (!selected.find(n => n.id === article.id)) {
-          selected.push(mapNews(article))
+          selected.push({ ...mapNews(article), heat: article.heat })
         }
       }
     }
   }
 
-  // Generate reasons
+  // Generate reasons: rotate templates driven by follow-up count, recency and category
   const topics = await env.DB.prepare(
     "SELECT category, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC"
   ).all()
   const topCats = (topics.results as any[]).slice(0, 3).map((r: any) => r.category)
 
   const result = selected.slice(0, 7).map((item, i) => {
-    let reason = ''
-    const isTrending = item.score >= 65
     const isHotCat = topCats.includes(item.category)
+    const heat = item.heat || 1 // counts the article itself, so 2+ means multiple outlets
+    const publishedAt = item.publishedAt ? new Date(item.publishedAt).getTime() : NaN
+    const hoursAgo = Number.isFinite(publishedAt) ? Math.max(0, Math.round((Date.now() - publishedAt) / 3_600_000)) : null
 
-    if (i === 0) reason = '今日头条 · ' + (isHotCat ? `${item.category}领域最受关注` : '多源报道')
-    else if (isTrending && isHotCat) reason = `${item.category}热点 · 同类报道较多`
+    let reason = ''
+    if (i === 0) reason = '今日头条 · ' + (isHotCat ? `${item.category}领域最受关注` : '多源报道热度最高')
+    else if (heat >= 3) reason = `${heat} 家媒体跟进 · ${item.category}热点`
+    else if (heat === 2) reason = `2 家媒体报道 · ${item.category}动向`
+    else if (hoursAgo !== null && hoursAgo <= 6) reason = `${hoursAgo <= 1 ? '刚刚发布' : hoursAgo + ' 小时前'} · ${item.category}最新进展`
+    else if (item.score >= 70 && isHotCat) reason = `${item.category}热点 · 热度持续上升`
     else if (item.score >= 70) reason = '高关注度 · 读者广泛讨论'
-    else if (item.category === 'AI') reason = 'AI 赛道 · 持续受关注'
-    else if (item.score >= 60) reason = `${item.category} · 值得关注`
+    else if (isHotCat) reason = `${item.category}领域 · 近期焦点`
+    else if (hoursAgo !== null && hoursAgo <= 24) reason = `${item.category} · ${hoursAgo} 小时前的进展`
     else reason = `${item.category}领域 · 信息增量`
 
     return { ...item, reason }
@@ -256,6 +296,8 @@ export async function topics(env: Env) {
         angle: PERSPECTIVES[s] || '综合'
       }))
       // Narrative summary (use AI summary if available, otherwise use description of best article)
+      // Cluster is still in score order here; top titles feed the AI labeler
+      const topTitles = cluster.slice(0, 3).map(i => i.title)
       const bestItem = cluster.sort((a: any, b: any) => (b.summary?.length || 0) - (a.summary?.length || 0))[0]
       const narrative = bestItem?.summary
         ? bestItem.summary.slice(0, 300)
@@ -263,17 +305,27 @@ export async function topics(env: Env) {
 
       topics.push({
         keyword: words.slice(0, 3).join(' · '),
+        label: fallbackLabel(words),
         count: cluster.length,
         sources: [...new Set(cluster.map(i => i.source))],
         sourcePerspectives,
         dateRange,
         narrative: narrative.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
         items: cluster.slice(0, 5),
+        topTitles,
       })
     }
   }
   topics.sort((a, b) => b.count - a.count)
-  const result = { topics: topics.slice(0, 15).map((t: any) => ({ ...t, items: t.items.map(mapNews) })) }
+  const top = topics.slice(0, 15)
+  // One AI call labels every cluster; each cluster keeps its keyword label as fallback
+  const aiLabels = await generateTopicLabels(top.map(t => t.topTitles), env.DEEPSEEK_API_KEY)
+  const result = {
+    topics: top.map((t: any, i: number) => {
+      const { topTitles, ...rest } = t
+      return { ...rest, label: aiLabels?.[i] || t.label, items: t.items.map(mapNews) }
+    })
+  }
   if (env.KV) cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
   return result
 }

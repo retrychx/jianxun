@@ -85,6 +85,51 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
   }
 }
 
+// One DeepSeek call names every topic cluster with a short Chinese label (<=10 chars).
+// Returns a sparse array aligned with titleGroups, or null when the call is unavailable/fails;
+// callers fall back to keyword labels per cluster.
+export async function generateTopicLabels(titleGroups: string[][], apiKey: string | undefined): Promise<string[] | null> {
+  if (!apiKey || !titleGroups.length) return null
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash',
+        messages: [
+          {
+            role: 'system',
+            content: '你是新闻话题编辑。根据每组新闻标题为每组起一个话题标签：不超过10个字的中文短句，像人话，不要关键词堆砌，不要标点。只返回JSON数组：[{"index":0,"label":"..."},...]'
+          },
+          {
+            role: 'user',
+            content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n')
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1024,
+      }),
+    })
+    if (!res.ok) return null
+
+    const data = await res.json() as any
+    const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as { index: number; label: string }[]
+    const labels: string[] = []
+    for (const r of parsed) {
+      if (r && typeof r.label === 'string' && r.label.trim() && r.index >= 0 && r.index < titleGroups.length) {
+        labels[r.index] = r.label.trim().slice(0, 20)
+      }
+    }
+    return labels
+  } catch {
+    return null
+  }
+}
+
 // Simple text similarity for related articles
 function tokenize(text: string): string[] {
   const clean = text.replace(/[^\w一-鿿\s]/g, ' ')
