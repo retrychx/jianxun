@@ -65,6 +65,18 @@ else
   echo "✅ DeepSeek API Key 已设置"
 fi
 
+# ─── Admin Token（保护写接口） ───
+echo ""
+if [ -z "$(npx wrangler secret list 2>/dev/null | grep ADMIN_TOKEN)" ]; then
+  echo "🔐 生成 ADMIN_TOKEN（写接口鉴权）..."
+  ADMIN_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  echo "$ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+  echo "✅ ADMIN_TOKEN 已设置，请妥善保存（GitHub Actions 也需要它）："
+  echo "   $ADMIN_TOKEN"
+else
+  echo "✅ ADMIN_TOKEN 已设置"
+fi
+
 # ─── Build ───
 echo ""
 echo "🔨 构建前端..."
@@ -76,9 +88,12 @@ echo "🚀 部署到 Cloudflare Pages..."
 npx wrangler pages deploy packages/frontend/dist --branch main
 
 echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║   ✅ 部署完成！                       ║"
-echo "║                                      ║"
-echo "║   首次部署后，执行以下命令抓取新闻：   ║"
-echo "║   curl https://jianxun.pages.dev/api/news/fetch  ║"
-echo "╚══════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║   ✅ 部署完成！                                       ║"
+echo "║                                                      ║"
+echo "║   首次抓取（写接口需 ADMIN_TOKEN）：                  ║"
+echo "║   curl -X POST -H \"Authorization: Bearer <TOKEN>\"   ║"
+echo "║     https://jianxun.pages.dev/api/news/fetch         ║"
+echo "║                                                      ║"
+echo "║   之后由 GitHub Actions 每 3 小时自动抓取             ║"
+echo "╚══════════════════════════════════════════════════════╝"
