@@ -121,7 +121,7 @@ export default function App() {
     return () => { cancelled = true }
   }, [loadAll, loadNews, loadStats])
 
-  const handleCategory = (cat: string) => { setActiveCat(cat); setView('feed'); loadNews(cat) }
+  const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
 
   const handleFetch = async () => {
     setFetching(true); setMsg('正在抓取新闻...')
