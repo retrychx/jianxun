@@ -54,9 +54,7 @@ export default function App() {
   const [msg, setMsg] = useState('')
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
   const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
-  const [feedPage, setFeedPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [theme, setTheme] = useState<Theme>(getTheme)
+const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
 
   // Theme
@@ -91,17 +89,11 @@ export default function App() {
     setSelectedNewsId(id)
   }, [])
 
-  const loadNews = useCallback(async (cat: string, page = 1, append = false) => {
+  const loadNews = useCallback(async (cat: string) => {
     setLoading(true)
     try {
-      const data = await getNews({ category: cat, pageSize: 15, page })
-      if (append) {
-        setNews(prev => [...prev, ...data.items])
-      } else {
-        setNews(data.items)
-      }
-      setHasMore(data.items.length === 15)
-      setFeedPage(page)
+      const data = await getNews({ category: cat, pageSize: 50 })
+      setNews(data.items)
     } finally { setLoading(false) }
   }, [])
 
@@ -229,13 +221,8 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                {hasMore && !loading && (
-                  <button className="load-more" onClick={() => loadNews(activeCat, feedPage + 1, true)}>
-                    加载更多
-                  </button>
-                )}
-                {loading && <div className="loading" style={{ padding: 20 }}>加载中...</div>}
-                {!hasMore && <div className="loading" style={{ padding: 20, color: 'var(--text-tertiary)', fontSize: 13 }}>已加载全部</div>}
+
+              
               </>
             )
           ) : (
