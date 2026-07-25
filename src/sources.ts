@@ -22,8 +22,6 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '投资界',      url: 'https://www.pedaily.cn/feed/',           lang: 'zh' },
   { name: '中国新闻网',  url: 'https://www.chinanews.com.cn/rss',       lang: 'zh' },
   { name: '美团技术',    url: 'https://tech.meituan.com/feed/',         lang: 'zh' },
-  { name: '知乎热榜',   url: 'https://rsshub.app/zhihu/hot',              lang: 'zh' },
-  { name: '微博热搜',   url: 'https://rsshub.app/weibo/search/hot',       lang: 'zh' },
   // ==================== 英文源 ====================
   { name: 'Hacker News',     url: 'https://hnrss.org/frontpage',                 lang: 'en' },
   { name: 'GitHub Trending', url: 'https://github.com/trending/rss?since=daily',  lang: 'en' },
