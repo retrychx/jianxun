@@ -90,11 +90,49 @@ export async function detail(env: Env, id: number) {
   if (!row) return null
   const news = mapNews(row)
 
-  const { content, image } = await extractContent(news.url)
-  if (image && !news.image) {
-    await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, id).run()
-    news.image = image
+  let summary = news.description?.slice(0, 200) + '...'
+  let entities: any[] = []
+  let sentiment: any = null
+  let content: string | null = null
+
+  // Check cache first
+  if (row.entities && row.sentiment && row.analyzed_at) {
+    try { entities = JSON.parse(row.entities) } catch {}
+    try { sentiment = JSON.parse(row.sentiment) } catch {}
+    summary = row.summary || summary
+  } else {
+    const result = await extractContent(news.url)
+    content = result.content
+    if (result.image && !news.image) {
+      await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
+      news.image = result.image
+    }
+
+    if (env.DEEPSEEK_API_KEY && content) {
+      const ai = await analyzeWithDeepSeek(news.title, content, env.DEEPSEEK_API_KEY)
+      if (ai) {
+        summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
+        env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, analyzed_at=datetime('now') WHERE id=?").bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), id).run()
+        if (ai.category && ai.category !== news.category) {
+          news.category = ai.category
+          env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(ai.category, id).run()
+        }
+      }
+    }
   }
+
+  const words = tokenize(news.title)
+  let related: any[] = []
+  if (words.length) {
+    const clauses = words.map((_: string, i: number) => \`title LIKE ?\`)
+    const params = words.map((w: string) => \`%\${w}%\`)
+    const candidates = await env.DB.prepare(\`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10\`).bind(id, ...params).all()
+    related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
+    related.forEach((r: any) => delete r.sim)
+  }
+
+  return { ...news, analysis: { summary, entities, sentiment, content: content?.slice(0, 3000) || null }, related }
+}
 
   let summary = news.description?.slice(0, 200) + '...'
   let entities: any[] = []
