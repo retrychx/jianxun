@@ -152,6 +152,23 @@ export async function entitySearch(env: Env, name: string) {
   return { items: (items.results as any[]).map(mapNews), entity: name }
 }
 
+export async function fixImages(env: Env) {
+  const rows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY id DESC LIMIT 50").all()
+  let updated = 0
+  const results = await Promise.allSettled(
+    (rows.results as any[]).map(async (row: any) => {
+      const { image } = await extractContent(row.url)
+      if (image) {
+        await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run()
+        return true
+      }
+      return false
+    })
+  )
+  updated = results.filter(r => r.status === 'fulfilled' && r.value).length
+  return { updated, total: (rows.results as any[]).length }
+}
+
 export function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } })
 }
