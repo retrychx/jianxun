@@ -22,7 +22,7 @@ export function CategoryBar({ categories, active, onSelect }: Props) {
     if (!listRef.current) return
     const activeEl = listRef.current.querySelector('.tab-item.active') as HTMLElement | null
     if (activeEl) {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+      activeEl.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'center' })
     }
   }, [active])
 
