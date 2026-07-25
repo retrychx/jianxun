@@ -8,7 +8,6 @@ import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
 import { SearchView } from './components/SearchView'
 import { EntityView } from './components/EntityView'
-import { FetchMascot } from './components/FetchMascot'
 import { BottomNav } from './components/BottomNav'
 import { KinkLine } from './components/KinkLine'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
@@ -294,7 +293,9 @@ export default function App() {
       <div className="main-layout">
         <div className="news-feed">
           {initialLoading ? (
-            <FetchMascot />
+            <>
+              <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+            </>
           ) : view === 'search' ? (
             <SearchView
               results={searchResults}

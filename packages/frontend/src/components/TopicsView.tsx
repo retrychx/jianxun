@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Sparkles, Hash } from 'lucide-react'
+import { ChevronRight, Hash } from 'lucide-react'
 import type { TopicCluster } from '../api'
 
 interface Props {
@@ -33,7 +33,6 @@ function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsCli
       {/* AI Narrative Summary */}
       {topic.narrative && (
         <div className="narr-summary">
-          <Sparkles size={12} className="narr-summary-icon" />
           <p className="narr-summary-text">{topic.narrative}</p>
         </div>
       )}

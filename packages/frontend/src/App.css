@@ -25,6 +25,7 @@
   --radius: 10px;
   --radius-sm: 6px;
   --ease: cubic-bezier(.16,1,.3,1);
+  --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
 }
 
 [data-theme="dark"] {
@@ -102,6 +103,11 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .header { padding: 12px 0 10px; margin-bottom: 0 }
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px }
 .logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
+
+/* 社论感：logo 与各卡片/视图标题用衬线，正文保持无衬线 */
+.logo, .briefing-title, .bf-card-title, .card-title, .sheet-title, .tph-title {
+  font-family: var(--font-serif);
+}
 
 .header-nav { display: flex; align-items: center; gap: 20px; margin-left: 22px }
 .header-nav a {
@@ -253,7 +259,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   cursor: pointer; overflow: hidden; position: relative;
   transition: all .2s var(--ease);
 }
-.news-card:hover { border-color: var(--scrollbar); box-shadow: var(--shadow) }
+.news-card:hover { border-color: var(--scrollbar); box-shadow: var(--shadow-lg); transform: translateY(-2px) }
 .news-card:active { transform: scale(.995); box-shadow: none }
 
 /* Ripple */
@@ -359,9 +365,8 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .briefing-view { animation: fadeUp .5s var(--ease) both }
 .briefing-header { margin-bottom: 20px }
 .briefing-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; line-height: 1 }
-.briefing-icon { color: var(--accent); flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px }
-.briefing-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.02em; line-height: 1 }
-.briefing-subtitle { font-size: 13px; color: var(--text-tertiary); margin-top: 2px }
+.briefing-title { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -.01em; line-height: 1 }
+.briefing-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; letter-spacing: .05em }
 
 .briefing-list { display: flex; flex-direction: column; gap: 8px }
 .briefing-card {
@@ -369,7 +374,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px 18px; cursor: pointer; transition: all .2s var(--ease);
 }
-.briefing-card:hover { border-color: var(--scrollbar); box-shadow: var(--shadow) }
+.briefing-card:hover { border-color: var(--scrollbar); box-shadow: var(--shadow-lg); transform: translateY(-2px) }
 .briefing-card:active { transform: scale(.995) }
 
 .briefing-rank { display: flex; flex-direction: column; align-items: center; min-width: 24px; padding-top: 2px }
@@ -509,63 +514,6 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .ts-keyword { font-size: 14px }
   .narrative-box { padding: 12px 14px 14px }
 }
-/* ===== Fetch Mascot ===== */
-.mascot-overlay {
-  display: flex; align-items: center; justify-content: center;
-  padding: 60px 0; animation: fadeIn .3s ease;
-}
-
-.mascot-box {
-  display: flex; flex-direction: column; align-items: center; gap: 16px;
-}
-
-.mascot-avatar {
-  width: 72px; height: 72px; border-radius: 20px;
-  display: flex; align-items: center; justify-content: center;
-  animation: mascotBounce 1s ease-in-out infinite;
-  transition: background .3s;
-}
-
-@keyframes mascotBounce {
-  0%, 100% { transform: translateY(0) }
-  50% { transform: translateY(-8px) }
-}
-
-.mascot-svg { width: 40px; height: 40px; display: block }
-
-.mascot-text {
-  display: flex; align-items: baseline; gap: 2px;
-  font-size: 14px; color: var(--text-secondary);
-}
-
-.mascot-label { font-weight: 500 }
-.mascot-dots { font-weight: 700; min-width: 16px; font-variant-numeric: tabular-nums }
-
-/* Telegram machine (retro mode) */
-.mascot-telegram { display: flex; flex-direction: column; align-items: center }
-.telegram-box {
-  background: #f5f0eb; border: 2px solid #2a2220; padding: 0;
-  width: 200px; font-family: 'Courier New', monospace;
-  box-shadow: 4px 4px 0 #2a2220;
-}
-.telegram-header {
-  background: #2a2220; padding: 6px 10px; display: flex; gap: 6px;
-}
-.telegram-dot { width: 8px; height: 8px; border-radius: 50%; background: #f5f0eb }
-.telegram-dot:nth-child(1) { background: #8b1a1a }
-.telegram-dot:nth-child(2) { background: #d4c9b8 }
-.telegram-dot:nth-child(3) { background: #047857 }
-.telegram-body { padding: 16px; text-align: center; min-height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px }
-.telegram-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #7a6f64 }
-.telegram-tape { font-size: 18px; letter-spacing: 2px; color: #2a2220; font-weight: 700; line-height: 1 }
-.telegram-footer { border-top: 1px dashed #d4c9b8; padding: 6px 10px; display: flex; justify-content: space-between; font-size: 9px; color: #7a6f64; letter-spacing: .03em }
-
-[data-theme="dark"] .telegram-box { background: #2a2a2a; border-color: #f5f0eb; box-shadow: 4px 4px 0 #f5f0eb }
-[data-theme="dark"] .telegram-header { background: #1a1a1a }
-[data-theme="dark"] .telegram-label { color: #a89b8e }
-[data-theme="dark"] .telegram-tape { color: #f5f0eb }
-[data-theme="dark"] .telegram-footer { border-color: #444; color: #a89b8e }
-
 /* ===== Scroll to Top ===== */
 .scroll-top {
   position: fixed; bottom: 24px; right: 24px; width: 36px; height: 36px;

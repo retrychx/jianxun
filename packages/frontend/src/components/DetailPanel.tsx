@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, Sparkles, BarChart3, Tags, FileText, ExternalLink, X } from 'lucide-react'
+import { Newspaper, BarChart3, Tags, FileText, ExternalLink, X } from 'lucide-react'
 import type { NewsDetail, EntityItem, NewsItem } from '../api'
 import { getDetail, getByEntity } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
@@ -181,7 +181,6 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
             {detail.analysis.summary && (
               <div className="sheet-section">
                 <div className="sheet-label">
-                  <Sparkles size={13} />
                   摘要
                 </div>
                 <p className="sheet-summary">{detail.analysis.summary}</p>

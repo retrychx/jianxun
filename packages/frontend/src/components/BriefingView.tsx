@@ -1,4 +1,4 @@
-import { Sparkles, Newspaper, Hash } from 'lucide-react'
+import { Newspaper, Hash } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
@@ -20,7 +20,6 @@ export function BriefingView({ items, updatedAt, follows, onNewsClick, onEntityC
     <div className="briefing-view">
       <div className="briefing-header">
         <div className="briefing-title-row">
-          <Sparkles size={18} className="briefing-icon" />
           <h2 className="briefing-title">今日简报</h2>
         </div>
         <p className="briefing-subtitle">

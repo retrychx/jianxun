@@ -34,7 +34,7 @@ export function EntityView({ entity, onBack, onNewsClick }: Props) {
       </button>
       <div className="briefing-header">
         <div className="briefing-title-row">
-          <Hash size={18} className="briefing-icon" />
+          <Hash size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
           <h2 className="briefing-title">{entity}</h2>
         </div>
         {!loading && !error && <p className="briefing-subtitle">{items.length} 篇相关报道</p>}
