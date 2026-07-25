@@ -1,5 +1,6 @@
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Bell } from 'lucide-react'
 import type { BriefingItem } from '../api'
+import { useFollow } from '../hooks/useFollow'
 
 interface Props {
   items: BriefingItem[]
@@ -14,7 +15,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export function BriefingView({ items, onNewsClick }: Props) {
-  if (!items.length) return null
+  const { follows, toggleFollow } = useFollow()
+  const followedEntities = follows.filter(f => f.type === 'entity')
+  const followedCats = follows.filter(f => f.type === 'category')
 
   return (
     <div className="briefing-view">
@@ -24,30 +27,54 @@ export function BriefingView({ items, onNewsClick }: Props) {
           <h2 className="briefing-title">今日简报</h2>
         </div>
         <p className="briefing-subtitle">
-          今日 {items.length} 篇精选 · 从 {new Set(items.map(i => i.source)).size} 个来源中推荐
+          今日 {items.length} 篇精选 · {followedEntities.length} 个关注中
         </p>
       </div>
+
+      {/* My Follows */}
+      {followedEntities.length > 0 && (
+        <div className="bf-section">
+          <div className="bf-section-title">
+            <Bell size={13} />
+            关注的实体
+          </div>
+          <div className="bf-follows">
+            {followedEntities.map(f => (
+              <span key={f.id} className="bf-follow-tag">
+                {f.name}
+                <button className="bf-follow-x" onClick={() => toggleFollow(f.name, 'entity')}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Briefing List */}
       <div className="briefing-list">
-        {items.map((item, i) => (
-          <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)}>
-            <div className="briefing-rank">
-              <span className="briefing-num">{String(i + 1).padStart(2, '0')}</span>
-            </div>
-            <div className="briefing-body">
-              <div className="briefing-meta">
-                <span className="briefing-source">{item.source}</span>
-                <span className="briefing-cat" style={{ backgroundColor: CATEGORY_COLORS[item.category] || '#78716c' }}>
-                  {item.category}
-                </span>
+        {items.map((item, i) => {
+          const isFollowed = followedEntities.some(f => item.title.includes(f.name))
+          return (
+            <article key={item.id} className={`briefing-card ${isFollowed ? 'matched' : ''}`} onClick={() => onNewsClick(item.id)}>
+              <div className="briefing-rank">
+                <span className="briefing-num">{String(i + 1).padStart(2, '0')}</span>
               </div>
-              <h3 className="briefing-title">{item.title}</h3>
-              <div className="briefing-reason">
-                <span className="briefing-reason-dot" />
-                {item.reason}
+              <div className="briefing-body">
+                <div className="briefing-meta">
+                  <span className="briefing-source">{item.source}</span>
+                  <span className="briefing-cat" style={{ backgroundColor: CATEGORY_COLORS[item.category] || '#78716c' }}>
+                    {item.category}
+                  </span>
+                  {isFollowed && <span className="bf-match-badge">关注</span>}
+                </div>
+                <h3 className="briefing-title">{item.title}</h3>
+                <div className="briefing-reason">
+                  <span className="briefing-reason-dot" />
+                  {item.reason}
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          )
+        })}
       </div>
     </div>
   )

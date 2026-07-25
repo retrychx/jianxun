@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useFollow } from '../hooks/useFollow'
 import { Newspaper, Sparkles, BarChart3, Tags, Link2, FileText, ExternalLink, X, Maximize2 } from 'lucide-react'
 import type { NewsDetail, EntityItem, NewsItem } from '../api'
 import { getDetail, getByEntity } from '../api'
@@ -61,6 +62,8 @@ export function DetailPanel({ newsId, onClose, onEntityClick }: Props) {
     setLoading(true); setDetail(null); setEntityNews(new Map())
     getDetail(newsId).then(setDetail).finally(() => setLoading(false))
   }, [newsId])
+
+  const { isFollowing, toggleFollow } = useFollow()
 
   const handleEntityClick = async (entity: EntityItem) => {
     setExpandedEntity(prev => prev === entity.name ? null : entity.name)
@@ -180,16 +183,25 @@ export function DetailPanel({ newsId, onClose, onEntityClick }: Props) {
                 <div className="sheet-entity-list">
                   {detail.analysis.entities.map((e, i) => (
                     <div key={i} className="sheet-entity-group">
-                      <button
-                        className="sheet-entity-tag"
-                        style={{ borderColor: ENTITY_TYPE_COLORS[e.type] || '#737373' }}
-                        onClick={() => handleEntityClick(e)}
-                      >
-                        <span className="sheet-entity-name">{e.name}</span>
-                        <span className="sheet-entity-type" style={{ color: ENTITY_TYPE_COLORS[e.type] }}>
-                          {ENTITY_TYPE_LABELS[e.type] || e.type}
-                        </span>
-                      </button>
+                      <div className="sheet-entity-row">
+                        <button
+                          className="sheet-entity-tag"
+                          style={{ borderColor: ENTITY_TYPE_COLORS[e.type] || '#737373' }}
+                          onClick={() => handleEntityClick(e)}
+                        >
+                          <span className="sheet-entity-name">{e.name}</span>
+                          <span className="sheet-entity-type" style={{ color: ENTITY_TYPE_COLORS[e.type] }}>
+                            {ENTITY_TYPE_LABELS[e.type] || e.type}
+                          </span>
+                        </button>
+                        <button
+                          className={`entity-follow ${isFollowing('entity:' + e.name) ? 'following' : ''}`}
+                          onClick={(ev) => { ev.stopPropagation(); toggleFollow(e.name, 'entity') }}
+                          title={isFollowing('entity:' + e.name) ? '取消关注' : '关注'}
+                        >
+                          {isFollowing('entity:' + e.name) ? '✓' : '+'}
+                        </button>
+                      </div>
                       {expandedEntity === e.name && entityNews.get(e.name) && (
                         <div className="sheet-entity-dropdown">
                           {entityNews.get(e.name)!.slice(0, 5).map(n => (
