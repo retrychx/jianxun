@@ -162,16 +162,13 @@ const [theme, setTheme] = useState<Theme>(getTheme)
 
       <header className="header">
         <div className="header-top">
-          {view !== 'briefing' && (
-            <button className="back-btn" onClick={() => setView('briefing')}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-          )}
-          <h1 className="logo">{view === 'briefing' ? '简讯' : view === 'topics' ? '话题' : '时间线'}</h1>
+          <h1 className="logo">简讯</h1>
+          <div className="header-search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
+            {searchQuery && <button className="hs-field-clear" onClick={() => handleSearch('')}>&times;</button>}
+          </div>
           <div className="header-actions">
-            <button className="ha-btn" onClick={() => setSearchOpen(true)} title="搜索">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            </button>
             <button className="ha-btn" onClick={cycleTheme} title={theme}>
               {theme === 'light' ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>}
@@ -181,13 +178,6 @@ const [theme, setTheme] = useState<Theme>(getTheme)
             </button>
           </div>
         </div>
-        {searchOpen && (
-          <div className="header-search-bar">
-            <input className="hs-input-wide" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} autoFocus />
-            <button className="hs-close" onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults(null) }}>&times;</button>
-          </div>
-        )}
-
       </header>
       {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
