@@ -19,6 +19,18 @@ export interface RssFeed {
   items: RssItem[]
 }
 
+function extractField(block: string, tag: string): string | undefined {
+  // CDATA wrapped
+  const cdata = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, 'i')
+  let m = block.match(cdata)
+  if (m) return m[1].trim()
+
+  // Plain content
+  const plain = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')
+  m = block.match(plain)
+  return m ? m[1].trim() : undefined
+}
+
 export async function parseRSS(url: string): Promise<RssFeed> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 NewsBot/1.0' },
@@ -37,25 +49,29 @@ export async function parseRSS(url: string): Promise<RssFeed> {
     const block = match[1]
     const item: RssItem = {}
 
-    const title = block.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i) || block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-    if (title) item.title = title[1].trim()
+    // Title
+    item.title = extractField(block, 'title')
 
-    const link = block.match(/<link[^>]*href="([^"]+)"[^>]*\/?>/i) || block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)
-    if (link) item.link = link[1]?.trim()
+    // Link: try href attr, then CDATA, then plain
+    let l = block.match(/<link[^>]*href="([^"]+)"[^>]*\/?>/i)
+    if (!l) l = block.match(/<link[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/link>/i)
+    if (!l) l = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)
+    if (l) item.link = l[1].trim()
 
-    const desc = block.match(/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i) || block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)
-    if (desc) {
-      item.contentSnippet = desc[1].replace(/<[^>]+>/g, '').trim().slice(0, 2000)
-    }
+    // Description (strip HTML)
+    const desc = extractField(block, 'description')
+    if (desc) item.contentSnippet = desc.replace(/<[^>]+>/g, '').slice(0, 2000)
 
-    const content = block.match(/<content:encoded[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/content:encoded>/i)
-    if (content) item.content = content[1].trim().slice(0, 2000)
+    // content:encoded
+    const content = extractField(block, 'content:encoded')
+    if (content) item.content = content.slice(0, 2000)
 
-    const pubDate = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)
-    if (pubDate) item.isoDate = new Date(pubDate[1].trim()).toISOString()
+    // Dates
+    const pubDate = extractField(block, 'pubDate')
+    if (pubDate) item.isoDate = new Date(pubDate).toISOString()
 
-    const updated = block.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i)
-    if (updated && !item.isoDate) item.isoDate = new Date(updated[1].trim()).toISOString()
+    const updated = extractField(block, 'updated')
+    if (updated && !item.isoDate) item.isoDate = new Date(updated).toISOString()
 
     // Media content
     const mc = block.match(/<media:content[^>]*url="([^"]+)"/i)
