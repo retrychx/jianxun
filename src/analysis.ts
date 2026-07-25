@@ -8,7 +8,7 @@ export async function extractContent(url: string): Promise<{ content: string | n
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'text/html',
       },
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(8_000),
     })
     if (!res.ok) return { content: null, image: null }
     const html = await res.text()
@@ -22,7 +22,7 @@ export async function extractContent(url: string): Promise<{ content: string | n
     const dom = parseHTML(html)
     const reader = new Readability(dom.window.document)
     const article = reader.parse()
-    const content = article?.textContent?.trim()?.slice(0, 10_000) || null
+    const content = article?.textContent?.trim()?.slice(0, 5_000) || null
 
     return { content, image }
   } catch {
