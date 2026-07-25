@@ -73,7 +73,7 @@ pnpm build
 # ─── Deploy ───
 echo ""
 echo "🚀 部署到 Cloudflare Pages..."
-npx wrangler pages deploy --branch main
+npx wrangler pages deploy packages/frontend/dist --branch main
 
 echo ""
 echo "╔══════════════════════════════════════╗"
