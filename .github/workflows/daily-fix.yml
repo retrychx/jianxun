@@ -1,0 +1,14 @@
+name: Daily Image Fix
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 每天 6:00 UTC = 14:00 CST
+  workflow_dispatch:
+
+jobs:
+  fix-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger image fix
+        run: |
+          curl -s --max-time 180 https://jianxun.pages.dev/api/news/fix-images
