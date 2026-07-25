@@ -4,6 +4,25 @@ import { extractContent, analyzeWithDeepSeek, titleSimilarity } from './analysis
 
 type Env = { DB: D1Database; DEEPSEEK_API_KEY?: string }
 
+// Map snake_case DB fields to camelCase for frontend
+function mapNews(row: any) {
+  if (!row) return row
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    url: row.url,
+    image: row.image,
+    source: row.source,
+    lang: row.lang,
+    category: row.category,
+    score: row.score,
+    summary: row.summary,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  }
+}
+
 function tokenize(text: string): string[] {
   if (!text) return []
   const clean = text.replace(/[^\w一-鿿\s]/g, ' ')
@@ -39,16 +58,16 @@ export async function listNews(env: Env, url: URL) {
     env.DB.prepare(query).bind(...params).all(),
     env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
   ])
-  return { items: items.results, total: totalResult?.total || 0, page, pageSize }
+  return { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
 }
 
 export async function trending(env: Env) {
   const items = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 30').all()
-  return { items: items.results }
+  return { items: (items.results as any[]).map(mapNews) }
 }
 
 export async function categories(env: Env) {
-  const result = await env.DB.prepare('SELECT category, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC').all()
+  const result = await env.DB.prepare('SELECT category as name, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC').all()
   return { categories: result.results }
 }
 
@@ -67,8 +86,9 @@ export async function fetchNews(env: Env) {
 }
 
 export async function detail(env: Env, id: number) {
-  const news = await env.DB.prepare('SELECT * FROM news WHERE id = ?').bind(id).first<any>()
-  if (!news) return null
+  const row = await env.DB.prepare('SELECT * FROM news WHERE id = ?').bind(id).first<any>()
+  if (!row) return null
+  const news = mapNews(row)
 
   const { content, image } = await extractContent(news.url)
   if (image && !news.image) {
@@ -93,7 +113,7 @@ export async function detail(env: Env, id: number) {
     const clauses = words.map((_: string, i: number) => `title LIKE ?`)
     const params = words.map((w: string) => `%${w}%`)
     const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
-    related = (candidates.results as any[]).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
+    related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
     related.forEach((r: any) => delete r.sim)
   }
 
@@ -120,12 +140,12 @@ export async function topics(env: Env) {
     }
   }
   topics.sort((a, b) => b.count - a.count)
-  return { topics: topics.slice(0, 15) }
+  return { topics: topics.slice(0, 15).map(t => ({ ...t, items: t.items.map(mapNews) })) }
 }
 
 export async function entitySearch(env: Env, name: string) {
   const items = await env.DB.prepare("SELECT * FROM news WHERE title LIKE ? OR description LIKE ? ORDER BY score DESC LIMIT 30").bind(`%${name}%`, `%${name}%`).all()
-  return { items: items.results, entity: name }
+  return { items: (items.results as any[]).map(mapNews), entity: name }
 }
 
 export function json(data: any, status = 200) {
