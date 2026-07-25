@@ -23,12 +23,22 @@ function extractField(block: string, tag: string): string | undefined {
   // CDATA wrapped
   const cdata = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, 'i')
   let m = block.match(cdata)
-  if (m) return m[1].trim()
+  if (m) return decodeEntities(m[1]).trim()
 
   // Plain content
   const plain = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')
   m = block.match(plain)
-  return m ? m[1].trim() : undefined
+  return m ? decodeEntities(m[1]).trim() : undefined
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
 }
 
 export async function parseRSS(url: string): Promise<RssFeed> {
