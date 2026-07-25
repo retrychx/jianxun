@@ -8,7 +8,7 @@ interface Props {
 
 const RANK_COLORS = ['#b91c1c', '#b45309', '#737373']
 
-const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
+export const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
   if (!items.length) return null
 
   return (

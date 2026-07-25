@@ -4,7 +4,7 @@ import type { NewsItem } from '../api'
 interface Props {
   item: NewsItem
   onClick?: (e: React.MouseEvent) => void
-})
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
   AI: '#b91c1c', 科技: '#1d4ed8', 财经: '#047857',
@@ -43,7 +43,7 @@ function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
 
-const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
+export const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
   const [imgError, setImgError] = useState(false)
 
   return (
@@ -83,4 +83,4 @@ const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
       </div>
     </article>
   )
-}
+});
