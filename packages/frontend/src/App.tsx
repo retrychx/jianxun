@@ -134,20 +134,20 @@ export default function App() {
   }, [loadAll, loadNews, loadStats])
 
   // Infinite scroll
-  const isLoadingRef = useRef(loading)
-  isLoadingRef.current = loading
   useEffect(() => {
-    if (view !== 'feed') return
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && hasMore && !isLoadingRef.current) {
+    if (view !== 'feed' || !hasMore) return
+    const onScroll = () => {
+      if (loading) return
+      const sentinel = sentinelRef.current
+      if (!sentinel) return
+      const rect = sentinel.getBoundingClientRect()
+      if (rect.top < window.innerHeight + 300) {
         loadNews(activeCat, feedPage + 1, true)
       }
-    }, { rootMargin: '300px' })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [view, hasMore, activeCat, feedPage, loadNews])
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [view, hasMore, loading, activeCat, feedPage, loadNews])
 
   const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
 
