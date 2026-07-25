@@ -43,7 +43,8 @@ async function fetchOne(source: RssSource, DB: D1Database) {
     const existing = await DB.prepare('SELECT id FROM news WHERE url = ?').bind(link).first()
     if (existing) continue
 
-    const desc = (item.contentSnippet || item.content || '').slice(0, 2000)
+    const rawDesc = (item.contentSnippet || item.content || '').slice(0, 2000)
+    const desc = rawDesc.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     const { category, score } = keywordClassify(title, desc, source.lang)
 
     results.push({
