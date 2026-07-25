@@ -112,3 +112,7 @@ export function getDetail(id: number): Promise<NewsDetail> {
 export function getByEntity(name: string): Promise<{ items: NewsItem[]; entity: string }> {
   return fetchJson(`${BASE}/news/entity/${encodeURIComponent(name)}`)
 }
+
+export function searchNews(q: string): Promise<{ items: NewsItem[]; query: string }> {
+  return fetchJson(`${BASE}/news/search?q=${encodeURIComponent(q)}`)
+}

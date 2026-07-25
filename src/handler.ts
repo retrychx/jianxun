@@ -268,9 +268,29 @@ const PERSPECTIVES: Record<string, string> = {
   'NPR': '综合', 'BBC Tech': '综合',
 }
 
+export async function search(env: Env, q: string) {
+  if (!q || q.length < 2) return { items: [] }
+  const items = await env.DB.prepare(
+    "SELECT * FROM news WHERE title LIKE ? OR description LIKE ? ORDER BY published_at DESC LIMIT 30"
+  ).bind(`%${q}%`, `%${q}%`).all()
+  return { items: (items.results as any[]).map(mapNews), query: q }
+}
+
 export async function entitySearch(env: Env, name: string) {
   const items = await env.DB.prepare("SELECT * FROM news WHERE title LIKE ? OR description LIKE ? ORDER BY score DESC LIMIT 30").bind(`%${name}%`, `%${name}%`).all()
   return { items: (items.results as any[]).map(mapNews), entity: name }
+}
+
+export async function saveAnalysis(env: Env, id: number, body: any) {
+  try {
+    const { summary, category, entities, sentiment } = body
+    await env.DB.prepare(
+      "UPDATE news SET summary=?, entities=?, sentiment=?, category=COALESCE(?,category), analyzed_at=datetime('now') WHERE id=?"
+    ).bind(summary || null, JSON.stringify(entities || []), JSON.stringify(sentiment || {}), category || null, id).run()
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
 }
 
 export async function fixImages(env: Env) {

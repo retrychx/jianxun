@@ -7,7 +7,7 @@ import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
 import { FetchMascot } from './components/FetchMascot'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
-import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics, getBriefing } from './api'
+import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics, getBriefing, searchNews } from './api'
 import './App.css'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -56,6 +56,8 @@ export default function App() {
   const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
 const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<NewsItem[] | null>(null)
 
   // Theme
   useEffect(() => {
@@ -127,6 +129,17 @@ const [theme, setTheme] = useState<Theme>(getTheme)
 
 
   const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
+
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q)
+    if (!q || q.length < 2) { setSearchResults(null); return }
+    setLoading(true)
+    try {
+      const res = await searchNews(q)
+      setSearchResults(res.items)
+    } catch { setSearchResults([]) }
+    finally { setLoading(false) }
+  }
 
   const handleFetch = async () => {
     setFetching(true); setMsg('正在抓取新闻...')
