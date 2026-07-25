@@ -104,6 +104,10 @@ export async function detail(env: Env, id: number) {
     const result = await analyzeWithDeepSeek(news.title, content, env.DEEPSEEK_API_KEY)
     if (result) {
       summary = result.summary; entities = result.entities; sentiment = result.sentiment
+      if (result.category && result.category !== news.category) {
+        news.category = result.category
+        env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(result.category, id).run()
+      }
     }
   }
 

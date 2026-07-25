@@ -32,6 +32,7 @@ export async function extractContent(url: string): Promise<{ content: string | n
 
 interface DeepSeekResult {
   summary: string
+  category: string
   entities: { name: string; type: string; weight: number }[]
   sentiment: { label: string; scores: { positive: number; negative: number; neutral: number }; perspective: string }
 }
@@ -41,6 +42,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
 
 {
   "summary": "2-3句话的简洁中文摘要",
+  "category": "AI|科技|财经|国际|政治|健康|体育|娱乐|游戏|教育|社会",
   "entities": [
     { "name": "实体名称", "type": "person|company|product|technology|concept", "weight": 0.8 }
   ],
@@ -75,6 +77,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
     const parsed = JSON.parse(json)
     return {
       summary: parsed.summary || '无法生成摘要',
+      category: parsed.category || '科技',
       entities: (parsed.entities || []).slice(0, 6),
       sentiment: parsed.sentiment || { label: 'neutral', scores: { positive: 0.3, negative: 0.3, neutral: 0.4 }, perspective: '' },
     }
