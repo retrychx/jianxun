@@ -234,13 +234,18 @@ export default function App() {
                 <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>点击右上角「刷新」按钮获取最新资讯</p>
               </div>
             ) : (
-              <div className="card-list">
-                {news.map((item, i) => (
-                  <div key={item.id} className="card-enter" style={{ animationDelay: `${i * 40}ms` }}>
-                    <NewsCard item={item} onClick={handleCardClick(item.id)} />
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="card-list">
+                  {news.map((item, i) => (
+                    <div key={item.id} className="card-enter" style={{ animationDelay: `${i * 40}ms` }}>
+                      <NewsCard item={item} onClick={handleCardClick(item.id)} />
+                    </div>
+                  ))}
+                </div>
+                <div ref={sentinelRef} style={{ height: 1 }} />
+                {loading && <div className="loading" style={{ padding: 20 }}>加载中...</div>}
+                {!hasMore && <div className="loading" style={{ padding: 20, color: 'var(--text-tertiary)', fontSize: 13 }}>已加载全部</div>}
+              </>
             )
           ) : (
             <TopicsView topics={topics} onNewsClick={(id) => setSelectedNewsId(id)} />
