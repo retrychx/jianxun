@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef } from 'react'
 import { Cpu, TrendingUp, Globe, Scale, Users, Trophy, Film, Gamepad2, Heart, BookOpen, Ellipsis } from 'lucide-react'
 import type { CategoryCount } from '../api'
 
@@ -16,15 +16,23 @@ const CATEGORY_ICONS: Record<string, typeof Cpu> = {
 
 export function CategoryBar({ categories, active, onSelect }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
-  const allCategories = [{ name: '全部', count: 0 }, ...categories]
 
-  useEffect(() => {
-    if (!listRef.current) return
-    const activeEl = listRef.current.querySelector('.tab-item.active') as HTMLElement | null
-    if (activeEl) {
-      activeEl.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'center' })
+  const handleClick = (name: string) => {
+    onSelect(name)
+    // Scroll the clicked tab into view synchronously
+    const list = listRef.current
+    if (!list) return
+    const tab = list.querySelector(`[data-tab="${name}"]`) as HTMLElement | null
+    if (!tab) return
+    const listRect = list.getBoundingClientRect()
+    const tabRect = tab.getBoundingClientRect()
+    const isVisible = tabRect.left >= listRect.left && tabRect.right <= listRect.right
+    if (!isVisible) {
+      tab.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'center' })
     }
-  }, [active])
+  }
+
+  const allCategories = [{ name: '全部', count: 0 }, ...categories]
 
   return (
     <div className="tab-bar">
@@ -35,8 +43,9 @@ export function CategoryBar({ categories, active, onSelect }: Props) {
           return (
             <button
               key={c.name}
+              data-tab={c.name}
               className={`tab-item ${isActive ? 'active' : ''}`}
-              onClick={() => onSelect(c.name)}
+              onClick={() => handleClick(c.name)}
             >
               {Icon && <Icon size={13} className="tab-icon" />}
               <span className="tab-label">{c.name}</span>
