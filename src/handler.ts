@@ -139,7 +139,7 @@ export async function detail(env: Env, id: number) {
   }
 
   return { ...news, analysis: { summary, entities, sentiment, content: null }, related }
-}}
+}
 export async function briefing(env: Env) {
   // Select top 7 articles: diverse sources, recent, high-scoring
   const items = await env.DB.prepare(
