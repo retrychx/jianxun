@@ -43,4 +43,4 @@ const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
       </div>
     </div>
   )
-}
+})
