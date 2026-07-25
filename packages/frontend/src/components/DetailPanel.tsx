@@ -113,7 +113,7 @@ export function DetailPanel({ newsId, onClose, onEntityClick }: Props) {
           <div className="sheet-content">
             {/* Image */}
             {detail.image && (
-              <img className="sheet-image" src={detail.image} alt="" />
+              <img className="sheet-image" src={detail.image} alt="" loading="lazy" />
             )}
 
             {/* Head */}

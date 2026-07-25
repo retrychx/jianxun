@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import type { NewsItem } from '../api'
 
@@ -7,7 +8,7 @@ interface Props {
 
 const RANK_COLORS = ['#b91c1c', '#b45309', '#737373']
 
-export function TrendingPanel({ items }: Props) {
+const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
   if (!items.length) return null
 
   return (
