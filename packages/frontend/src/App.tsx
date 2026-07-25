@@ -160,38 +160,28 @@ const [theme, setTheme] = useState<Theme>(getTheme)
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">
-        <div className="header-left">
-          <h1 className="logo">简讯</h1>
-          <span className="header-divider" />
-          <span className="subtitle">AI 智能分类</span>
-        </div>
-        <div className="header-search">
-          <input
-            className="hs-input"
-            placeholder="搜索新闻..."
-            value={searchQuery}
-            onChange={e => handleSearch(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="hs-clear" onClick={() => handleSearch("")}>
-              &times;
-            </button>
-          )}
-        </div>
-        <div className="header-right">
-          <div className="view-toggle">
-            <button className={`view-btn ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
-            <button className={`view-btn ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题簇</button>
-            <button className={`view-btn ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
+        <div className="header-row">
+          <div className="header-left">
+            <h1 className="logo">简讯</h1>
           </div>
-          <span className="stat-badge">{stats.total} 条</span>
-          <span className="stat-badge today">今日 {stats.today} 条</span>
-          <button className="theme-btn" onClick={cycleTheme} title={theme}>
-            {theme === 'light' ? '明' : theme === 'dark' ? '暗' : '旧'}
-          </button>
-          <button className="fetch-btn" onClick={handleFetch} disabled={fetching}>
-            {fetching ? '抓取中...' : '刷新'}
-          </button>
+          <div className="header-search">
+            <input className="hs-input" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
+            {searchQuery && <button className="hs-clear" onClick={() => handleSearch("")}>&times;</button>}
+          </div>
+          <div className="header-right">
+            <button className="theme-btn" onClick={cycleTheme} title={theme}>{theme === 'light' ? '明' : theme === 'dark' ? '暗' : '旧'}</button>
+            <button className="fetch-btn" onClick={handleFetch} disabled={fetching}>{fetching ? '...' : '刷新'}</button>
+          </div>
+        </div>
+        <div className="header-nav">
+          <div className="nav-tabs">
+            <button className={`nav-tab ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
+            <button className={`nav-tab ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
+            <button className={`nav-tab ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
+          </div>
+          <div className="nav-filter">
+            <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
+          </div>
         </div>
       </header>
 
