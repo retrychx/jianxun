@@ -99,10 +99,11 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [cats, tr, tp] = await Promise.all([getCategories(), getTrending(), getTopics()])
+      const [cats, tr, tp, br] = await Promise.all([getCategories(), getTrending(), getTopics(), getBriefing()])
       setCategories(cats.categories)
       setTrending(tr.items)
       setTopics(tp.topics)
+      setBriefingItems(br.items)
     } catch { /* */ }
   }, [])
 
