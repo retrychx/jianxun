@@ -119,7 +119,6 @@ export async function detail(env: Env, id: number) {
   let summary = row.summary || news.description?.slice(0, 200) + '...'
   let entities: any[] = []
   let sentiment: any = null
-  let content: string | null = null
 
   // Parse cached AI analysis
   if (row.entities && row.sentiment && row.analyzed_at && row.analyzed_at !== 'failed') {
@@ -128,26 +127,9 @@ export async function detail(env: Env, id: number) {
     if (row.summary) summary = row.summary
   }
 
-  // Try to fetch content + DeepSeek (run best-effort, non-blocking)
-  // If it fails, the article will be analyzed on next cron run or next visit
-  try {
-    const result = await extractContent(news.url)
-    content = result.content
-    if (result.image && !news.image) {
-      await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
-    }
-    if (result.content && env.DEEPSEEK_API_KEY) {
-      const ai = await analyzeWithDeepSeek(news.title, result.content.slice(0, 3000), env.DEEPSEEK_API_KEY)
-      if (ai) {
-        summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
-        await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, image=COALESCE(?,image), analyzed_at=datetime('now') WHERE id=?")
-          .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category || news.category, result.image, id).run()
-        if (ai.category && ai.category !== news.category) news.category = ai.category
-      }
-    }
-  } catch {}  // Fail silently — analysis is optional, article still renders
-
-  const words = tokenize(news.title)
+  // Content & AI analysis happen via fix-images cron endpoint
+  // This keeps detail endpoint fast and reliable
+const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
     const clauses = words.map((_: string, i: number) => \`title LIKE ?\`)
