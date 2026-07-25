@@ -121,40 +121,42 @@ export async function detail(env: Env, id: number) {
   let sentiment: any = null
   let content: string | null = null
 
-  // Try to parse cached analysis
-  if (row.entities && row.sentiment && row.analyzed_at) {
+  // Parse cached AI analysis
+  if (row.analyzed_at && row.analyzed_at !== 'pending' && row.analyzed_at !== 'failed') {
     try { entities = JSON.parse(row.entities) } catch {}
     try { sentiment = JSON.parse(row.sentiment) } catch {}
+    if (row.summary) summary = row.summary
   }
 
-  // Lazy: fetch content + image only if not cached
-  if (!row.analyzed_at) {
+  // Step 1: fetch content + image (only first time)
+  if (!row.content) {
     const result = await extractContent(news.url).catch(() => ({ content: null, image: null }))
     content = result.content
     if (result.image && !news.image) {
       env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
-      news.image = result.image
     }
-
-    // Non-blocking: don't wait for DeepSeek, return fast with fallback summary.
-    // DeepSeek analysis happens on NEXT request when analyzed_at is still null.
-    // (We cache the page content in the 'content' DB field to speed up next attempt)
     if (result.content) {
-      // Content will be re-fetched on next detail view for AI analysis
+      env.DB.prepare("UPDATE news SET content = ? WHERE id = ?").bind(result.content.slice(0, 8000), id).run()
     }
+  } else {
+    content = row.content
   }
 
-  // If content is ready but AI hasn't analyzed yet, try DeepSeek (fast path: only if content is small)
+  // Step 2: run DeepSeek analysis (only on second visit, when content is cached)
   if (env.DEEPSEEK_API_KEY && content && !row.analyzed_at) {
     const ai = await analyzeWithDeepSeek(news.title, content.slice(0, 3000), env.DEEPSEEK_API_KEY).catch(() => null)
     if (ai) {
       summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
-      env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=CASE WHEN category != ? AND ? IS NOT NULL THEN ? ELSE category END, analyzed_at=datetime('now') WHERE id=?")
-        .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category, ai.category, ai.category, id).run()
+      env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
+        .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category || news.category, id).run()
+      if (ai.category && ai.category !== news.category) news.category = ai.category
+    } else {
+      // Mark as failed so we don't retry on every visit
+      env.DB.prepare("UPDATE news SET analyzed_at = 'failed' WHERE id = ?").bind(id).run()
     }
   }
 
-  // Related articles
+  // Related articles (same as before)
   const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
