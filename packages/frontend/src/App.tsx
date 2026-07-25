@@ -160,32 +160,25 @@ const [theme, setTheme] = useState<Theme>(getTheme)
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">
-        <div className="header-row">
+        <div className="header-inner">
           <div className="header-left">
             <h1 className="logo">简讯</h1>
-          </div>
-          <div className="header-search">
-            <input className="hs-input" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
-            {searchQuery && <button className="hs-clear" onClick={() => handleSearch("")}>&times;</button>}
+            <span className="htab-dot">/</span>
+            <button className={`htab ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
+            <span className="htab-dot">/</span>
+            <button className={`htab ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
+            <span className="htab-dot">/</span>
+            <button className={`htab ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
           </div>
           <div className="header-right">
+            <input className="hs-input" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
+            {searchQuery && <button className="hs-clear" onClick={() => handleSearch("")}>&times;</button>}
             <button className="theme-btn" onClick={cycleTheme} title={theme}>{theme === 'light' ? '明' : theme === 'dark' ? '暗' : '旧'}</button>
             <button className="fetch-btn" onClick={handleFetch} disabled={fetching}>{fetching ? '...' : '刷新'}</button>
           </div>
         </div>
-        <div className="header-nav">
-          <div className="nav-tabs">
-            <button className={`nav-tab ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
-            <button className={`nav-tab ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
-            <button className={`nav-tab ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
-          </div>
-          <div className="nav-filter">
-            <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
-          </div>
-        </div>
       </header>
-
-      <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
+      {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
       {/* Mini data viz */}
       {categories.length > 0 && (
