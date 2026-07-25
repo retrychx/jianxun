@@ -6,7 +6,10 @@ pages_build_output_dir = "packages/frontend/dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "jianxun"
-database_id = ""
+database_id = "70d6ee60-fd6a-4f85-a3ab-a525ec53a2e5"
 
 [env.production]
 vars = { DEEPSEEK_API_KEY = "" }
+d1_databases = [
+  { binding = "DB", database_name = "jianxun", database_id = "70d6ee60-fd6a-4f85-a3ab-a525ec53a2e5" }
+]

@@ -186,4 +186,6 @@ app.get('/api/hello', (c) => {
 })
 
 // Export for Cloudflare Pages
-export default app
+export default {
+  fetch: app.fetch,
+}
