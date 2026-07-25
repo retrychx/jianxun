@@ -1,9 +1,10 @@
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null }> {
   try {
+    // Fetch only first 30KB to stay under Worker CPU limits
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Accept: 'text/html',
+        'User-Agent': 'Mozilla/5.0',
+        'Range': 'bytes=0-30000'
       },
       signal: AbortSignal.timeout(5_000),
     })
@@ -11,20 +12,17 @@ export async function extractContent(url: string): Promise<{ content: string | n
     const html = await res.text()
 
     // Extract OG image
-    let image: string | null = null
     const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/)
-    if (imgMatch) image = imgMatch[1]
+    const image = imgMatch?.[1] || null
 
-    // Simple text extraction (no linkedom/readability — too heavy for Workers)
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-    const body = bodyMatch ? bodyMatch[1] : html
-    const text = body
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
+    // Fast text extraction: strip HTML tags
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-      .replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(parseInt(n)))
-      .replace(/\s+/g, ' ').trim()
+      .replace(/&(?:lt|gt|amp|quot|nbsp|#\d+);/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
       .slice(0, 5_000)
 
     return { content: text || null, image }
