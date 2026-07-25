@@ -695,3 +695,55 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   [data-theme="retro"] .sheet-panel::before { top: -4px; height: 4px; background: radial-gradient(circle at 8px -1px, transparent 3px, #f5f0eb 3px); background-size: 16px 4px }
   [data-theme="retro"] .trending-panel::before { display: none }
 }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  .app { padding: 0 14px }
+  .header { padding: 14px 0 12px; gap: 8px }
+  .logo { font-size: 16px }
+  .subtitle { display: none }
+  .header-divider { display: none }
+  .header-right { gap: 6px }
+  .stat-badge { font-size: 11px; padding: 3px 10px; height: 28px }
+  .fetch-btn { font-size: 11px; padding: 0 12px; height: 28px }
+  .theme-btn { width: 28px; height: 28px; font-size: 11px }
+  .view-toggle { border-radius: 6px }
+  .view-btn { font-size: 11px; padding: 0 10px; height: 28px }
+  .category-bar { gap: 4px; padding-bottom: 12px; flex-wrap: wrap; overflow-x: visible }
+  .cat-chip { font-size: 11px; padding: 4px 10px; height: 26px }
+  .main-layout { gap: 0 }
+  .sidebar { display: none }
+  .news-card { gap: 0; flex-direction: column }
+  .card-image-wrap { width: 100%; height: 180px; min-height: auto }
+  .card-body { padding: 14px }
+  .card-image-wrap + .card-body { padding-top: 0 }
+  .card-title { font-size: 15px }
+  .card-summary { font-size: 13px; -webkit-line-clamp: 2 }
+  .stats-bar { padding: 8px 0 12px; gap: 8px }
+  .stat-item { font-size: 10px }
+  .topics-header { margin-bottom: 12px }
+  .topics-title { font-size: 15px }
+  .topic-trigger { padding: 12px 14px }
+  .topic-keyword { font-size: 13px }
+  .topic-item { padding: 10px 14px 10px 44px; font-size: 12px }
+  .scroll-top { bottom: 16px; right: 16px; width: 32px; height: 32px; font-size: 12px }
+  .sheet-panel { max-height: 100vh; border-radius: 0 }
+  .sheet-image { height: 160px }
+  .sheet-section { padding: 14px 16px }
+  .sheet-title { font-size: 18px }
+  .sheet-summary { font-size: 14px }
+  .sheet-entity-dropdown { min-width: 200px; max-width: calc(100vw - 24px); left: auto; right: 0 }
+  .sheet-related-item { padding: 6px 8px }
+  .sheet-text { font-size: 13px; max-height: 200px }
+  .header-right .stat-badge:not(.today) { display: none }
+}
+
+@media (max-width: 420px) {
+  .card-image-wrap { height: 140px }
+  .card-body { padding: 12px }
+  .card-title { font-size: 14px }
+  .card-source { font-size: 10px }
+  .card-category { font-size: 9px; padding: 0 7px }
+  .sheet-image { height: 120px }
+  .sheet-title { font-size: 16px }
+}
