@@ -51,7 +51,7 @@ export async function listNews(env: Env, url: URL) {
     countQuery += ' WHERE category = ?'
     params.push(category); countParams.push(category)
   }
-  query += ' ORDER BY score DESC, created_at DESC LIMIT ? OFFSET ?'
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
   params.push(pageSize, offset)
 
   const [items, totalResult] = await Promise.all([

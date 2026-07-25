@@ -14,25 +14,27 @@ const CATEGORY_ICONS: Record<string, typeof Cpu> = {
 }
 
 export function CategoryBar({ categories, active, onSelect }: Props) {
+  const allCategories = [{ name: '全部', count: 0 }, ...categories]
+
   return (
-    <div className="category-bar">
-      <button className={`cat-chip ${active === '全部' ? 'active' : ''}`} onClick={() => onSelect('全部')}>
-        全部
-      </button>
-      {categories.map(c => {
-        const Icon = CATEGORY_ICONS[c.name] || Ellipsis
-        return (
-          <button
-            key={c.name}
-            className={`cat-chip ${active === c.name ? 'active' : ''}`}
-            onClick={() => onSelect(c.name)}
-          >
-            <Icon size={13} />
-            {c.name}
-            <span className="cat-count">{c.count}</span>
-          </button>
-        )
-      })}
+    <div className="tab-bar">
+      <div className="tab-list">
+        {allCategories.map(c => {
+          const Icon = c.name === '全部' ? null : (CATEGORY_ICONS[c.name] || Ellipsis)
+          const isActive = active === c.name
+          return (
+            <button
+              key={c.name}
+              className={`tab-item ${isActive ? 'active' : ''}`}
+              onClick={() => onSelect(c.name)}
+            >
+              {Icon && <Icon size={13} className="tab-icon" />}
+              <span className="tab-label">{c.name}</span>
+              {c.count > 0 && <span className="tab-count">{c.count}</span>}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

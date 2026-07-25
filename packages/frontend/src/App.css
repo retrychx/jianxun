@@ -157,25 +157,40 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px) } to { opacity: 1; transform: translateX(-50%) translateY(0) } }
 
-/* ===== Category Bar ===== */
-.category-bar {
-  display: flex; gap: 4px; overflow-x: auto; padding-bottom: 16px;
+/* ===== Category Tabs ===== */
+.tab-bar {
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.tab-list {
+  display: flex; gap: 0; overflow-x: auto;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
-.category-bar::-webkit-scrollbar { display: none }
-.cat-chip {
-  display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px; height: 30px;
-  border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
-  font-size: 12px; font-weight: 500; color: var(--text-secondary);
+.tab-list::-webkit-scrollbar { display: none }
+.tab-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 10px 16px 10px;
+  border: none; background: transparent;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
   cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  transition: all .15s var(--ease);
+  font-family: inherit; position: relative;
+  transition: color .15s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
 }
-.cat-chip:hover { background: var(--chip-hover); border-color: var(--scrollbar) }
-.cat-chip.active { background: var(--text); border-color: var(--text); color: var(--toast-text); font-weight: 600 }
-.cat-count { font-size: 11px; opacity: .5; font-weight: 500; font-variant-numeric: tabular-nums }
-.cat-chip.active .cat-count { opacity: .6 }
-
-/* ===== Main Layout ===== */
+.tab-item:hover { color: var(--text) }
+.tab-item.active {
+  color: var(--text); font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.tab-icon { opacity: .6; flex-shrink: 0 }
+.tab-item.active .tab-icon { opacity: 1 }
+.tab-count {
+  font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  background: var(--bg); padding: 0 6px; border-radius: 4px; line-height: 1.6;
+}
+.tab-item.active .tab-count { background: var(--accent-light); color: var(--accent) }/* ===== Main Layout ===== */
 .main-layout { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start }
 @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr } }
 
