@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel } from './components/TrendingPanel'
@@ -54,6 +54,9 @@ export default function App() {
   const [msg, setMsg] = useState('')
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
   const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
+  const [feedPage, setFeedPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
 
@@ -89,11 +92,17 @@ export default function App() {
     setSelectedNewsId(id)
   }, [])
 
-  const loadNews = useCallback(async (cat: string) => {
+  const loadNews = useCallback(async (cat: string, page = 1, append = false) => {
     setLoading(true)
     try {
-      const data = await getNews({ category: cat, pageSize: 50 })
-      setNews(data.items)
+      const data = await getNews({ category: cat, pageSize: 15, page })
+      if (append) {
+        setNews(prev => [...prev, ...data.items])
+      } else {
+        setNews(data.items)
+      }
+      setHasMore(data.items.length === 15)
+      setFeedPage(page)
     } finally { setLoading(false) }
   }, [])
 
@@ -123,6 +132,20 @@ export default function App() {
     init()
     return () => { cancelled = true }
   }, [loadAll, loadNews, loadStats])
+
+  // Infinite scroll
+  useEffect(() => {
+    if (view !== 'feed' || !hasMore || loading) return
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && hasMore && !loading) {
+        loadNews(activeCat, feedPage + 1, true)
+      }
+    }, { rootMargin: '300px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [view, hasMore, loading, activeCat, feedPage, loadNews])
 
   const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
 
