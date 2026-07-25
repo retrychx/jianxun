@@ -56,7 +56,6 @@ export default function App() {
   const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
   const [feedPage, setFeedPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const sentinelRef = useRef<HTMLDivElement>(null)
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
 
@@ -133,21 +132,7 @@ export default function App() {
     return () => { cancelled = true }
   }, [loadAll, loadNews, loadStats])
 
-  // Infinite scroll
-  useEffect(() => {
-    if (view !== 'feed' || !hasMore) return
-    const onScroll = () => {
-      if (loading) return
-      const sentinel = sentinelRef.current
-      if (!sentinel) return
-      const rect = sentinel.getBoundingClientRect()
-      if (rect.top < window.innerHeight + 300) {
-        loadNews(activeCat, feedPage + 1, true)
-      }
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [view, hasMore, loading, activeCat, feedPage, loadNews])
+
 
   const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
 
@@ -244,7 +229,11 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                <div ref={sentinelRef} style={{ height: 1 }} />
+                {hasMore && !loading && (
+                  <button className="load-more" onClick={() => loadNews(activeCat, feedPage + 1, true)}>
+                    加载更多
+                  </button>
+                )}
                 {loading && <div className="loading" style={{ padding: 20 }}>加载中...</div>}
                 {!hasMore && <div className="loading" style={{ padding: 20, color: 'var(--text-tertiary)', fontSize: 13 }}>已加载全部</div>}
               </>
