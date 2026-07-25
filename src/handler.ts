@@ -81,7 +81,7 @@ export async function stats(env: Env) {
 
 export async function fetchNews(env: Env) {
   const articles = await fetchAllRSS(env.DB)
-  const saved = await saveArticles(env.DB, articles)
+  const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY)
   return { fetched: saved }
 }
 
