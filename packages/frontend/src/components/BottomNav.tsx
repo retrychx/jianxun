@@ -1,4 +1,5 @@
 import { Sparkles, Newspaper, Hash } from 'lucide-react'
+import { KinkLine } from './KinkLine'
 import type { ViewName } from '../hooks/useHashRoute'
 
 const TABS: { view: ViewName; hash: string; label: string; Icon: typeof Sparkles }[] = [
@@ -20,8 +21,9 @@ export function BottomNav({ active }: { active: ViewName }) {
             className={`bottom-nav-item${isActive ? ' active' : ''}`}
             aria-current={isActive ? 'page' : undefined}
           >
-            <t.Icon size={18} />
+            <t.Icon size={20} />
             <span className="bottom-nav-label">{t.label}</span>
+            <KinkLine />
           </a>
         )
       })}

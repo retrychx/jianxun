@@ -1,23 +1,19 @@
-import { Sparkles, ChevronRight, Newspaper, Hash } from 'lucide-react'
-import type { BriefingItem, TopicCluster } from '../api'
+import { Sparkles, Newspaper, Hash } from 'lucide-react'
+import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
 import { formatTime, formatDate } from '../utils'
 
 interface Props {
   items: BriefingItem[]
-  topics: TopicCluster[]
-  newsCount: number
   updatedAt: Date | null
   follows: FollowItem[]
   onNewsClick: (id: number) => void
-  onShowTopics: () => void
-  onShowFeed: () => void
   onEntityClick: (name: string) => void
   onUnfollow: (name: string) => void
 }
 
-export function BriefingView({ items, topics, newsCount, updatedAt, follows, onNewsClick, onShowTopics, onShowFeed, onEntityClick, onUnfollow }: Props) {
+export function BriefingView({ items, updatedAt, follows, onNewsClick, onEntityClick, onUnfollow }: Props) {
   const followedEntities = follows.filter(f => f.type === 'entity')
 
   return (
@@ -76,29 +72,6 @@ export function BriefingView({ items, topics, newsCount, updatedAt, follows, onN
           ))}
         </div>
       )}
-
-      {/* Browse More */}
-      <div className="browse-more">
-        <div className="browse-more-title">浏览更多</div>
-        {topics.length > 0 && (
-          <button className="browse-card" onClick={onShowTopics}>
-            <div className="browse-card-icon"><Hash size={15} /></div>
-            <div className="browse-card-body">
-              <span className="browse-card-title">话题簇</span>
-              <span className="browse-card-sub">{topics.length} 个热点话题</span>
-            </div>
-            <ChevronRight size={15} className="browse-card-arrow" />
-          </button>
-        )}
-        <button className="browse-card" onClick={onShowFeed}>
-          <div className="browse-card-icon"><Newspaper size={15} /></div>
-          <div className="browse-card-body">
-            <span className="browse-card-title">全部新闻</span>
-            <span className="browse-card-sub">{newsCount} 篇报道 · 时间线</span>
-          </div>
-          <ChevronRight size={15} className="browse-card-arrow" />
-        </button>
-      </div>
     </div>
   )
 }

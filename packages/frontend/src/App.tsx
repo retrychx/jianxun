@@ -10,6 +10,7 @@ import { SearchView } from './components/SearchView'
 import { EntityView } from './components/EntityView'
 import { FetchMascot } from './components/FetchMascot'
 import { BottomNav } from './components/BottomNav'
+import { KinkLine } from './components/KinkLine'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, searchNews } from './api'
 import { useFollow } from './hooks/useFollow'
@@ -259,6 +260,11 @@ export default function App() {
       <header className="header">
         <div className="header-top">
           <h1 className="logo"><a href="#/" aria-label="简讯首页">简讯</a></h1>
+          <nav className="header-nav" aria-label="主导航">
+            <a href="#/" className={view === 'briefing' ? 'active' : ''} aria-current={view === 'briefing' ? 'page' : undefined}>简报<KinkLine /></a>
+            <a href="#/feed" className={view === 'feed' ? 'active' : ''} aria-current={view === 'feed' ? 'page' : undefined}>新闻<KinkLine /></a>
+            <a href="#/topics" className={view === 'topics' ? 'active' : ''} aria-current={view === 'topics' ? 'page' : undefined}>话题<KinkLine /></a>
+          </nav>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => handleSearchChange(e.target.value)} aria-label="搜索新闻" />
@@ -335,13 +341,9 @@ export default function App() {
           ) : (
             <BriefingView
               items={briefingItems}
-              topics={topics}
-              newsCount={stats.total || newsTotal}
               updatedAt={briefingAt}
               follows={follows}
               onNewsClick={openNews}
-              onShowTopics={() => { navCountRef.current++; navigate('#/topics') }}
-              onShowFeed={() => { navCountRef.current++; navigate('#/feed') }}
               onEntityClick={openEntity}
               onUnfollow={(name) => toggleFollow(name, 'entity')}
             />
