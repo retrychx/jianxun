@@ -1,6 +1,7 @@
 import { RSS_SOURCES, type RssSource } from './sources.js'
 import { keywordClassify } from './classifier.js'
 import { parseRSS, type RssItem } from './parse-rss.js'
+import { extractContent } from './analysis.js'
 import type { D1Database } from '@cloudflare/workers-types'
 
 const DEFAULT_MAX = 20
@@ -67,6 +68,7 @@ async function fetchOne(source: RssSource, DB: D1Database) {
 export async function saveArticles(DB: D1Database, articles: any[]) {
   if (!articles.length) return 0
   let saved = 0
+  const noImgUrls: string[] = []
   for (const a of articles) {
     try {
       await DB.prepare(
@@ -76,9 +78,25 @@ export async function saveArticles(DB: D1Database, articles: any[]) {
         a.publishedAt?.toISOString() || null, a.category, a.score
       ).run()
       saved++
+      if (!a.image) noImgUrls.push(a.url)
     } catch (e) {
       // duplicate URL
     }
   }
+  // Fire-and-forget: fetch OG images for articles without one
+  if (noImgUrls.length > 0) {
+    fetchMissingImages(DB, noImgUrls).catch(() => {})
+  }
   return saved
+}
+
+async function fetchMissingImages(DB: D1Database, urls: string[]) {
+  const results = await Promise.allSettled(
+    urls.slice(0, 15).map(async url => {
+      const { image } = await extractContent(url)
+      if (image) {
+        await DB.prepare('UPDATE news SET image = ? WHERE url = ?').bind(image, url).run()
+      }
+    })
+  )
 }
