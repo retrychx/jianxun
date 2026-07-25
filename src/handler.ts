@@ -264,7 +264,7 @@ const PERSPECTIVES: Record<string, string> = {
   'TechCrunch': '创投', 'The Verge': '消费', 'Ars Technica': '深度',
   'Wired': '文化', 'Engadget': '消费', 'Dev.to': '社区',
   'Android Central': '消费', 'New Scientist': '科学',
-  'ScienceDaily': '科学', 'Space.com': '科学', 'MIT Tech Review': 'AI',
+  'ScienceDaily': '科学', 'Space.com': '科学', 'MIT Tech Review': 'AI', '机器之心': 'AI', 'arXiv AI': '研究', 'arXiv Robot': '研究', 'OpenAI': 'AI',
   'NPR': '综合', 'BBC Tech': '综合',
 }
 

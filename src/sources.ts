@@ -22,6 +22,11 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '投资界',      url: 'https://www.pedaily.cn/feed/',           lang: 'zh' },
   { name: '中国新闻网',  url: 'https://www.chinanews.com.cn/rss',       lang: 'zh' },
   { name: '美团技术',    url: 'https://tech.meituan.com/feed/',         lang: 'zh' },
+  // --- AI 专题 ---
+  { name: '机器之心',    url: 'https://www.jiqizhixin.com/rss',          lang: 'zh' },
+  { name: 'arXiv AI',    url: 'https://rss.arxiv.org/rss/cs.AI',        lang: 'en' },
+  { name: 'arXiv Robot', url: 'https://arxiv.org/rss/cs.RO',           lang: 'en' },
+  { name: 'OpenAI',      url: 'https://openai.com/news/rss.xml',        lang: 'en' },
   // ==================== 英文源 ====================
   { name: 'Hacker News',     url: 'https://hnrss.org/frontpage',                 lang: 'en' },
   { name: 'GitHub Trending', url: 'https://github.com/trending/rss?since=daily',  lang: 'en' },
