@@ -223,7 +223,7 @@ const [theme, setTheme] = useState<Theme>(getTheme)
           {searchResults !== null ? (
             <SearchView results={searchResults} query={searchQuery} onClear={() => handleSearch('')} onNewsClick={(id) => setSelectedNewsId(id)} />
           ) : view === 'briefing' ? (
-            <BriefingView items={briefingItems} topics={topics} onNewsClick={(id) => setSelectedNewsId(id)} onViewTopics={() => setView('topics')} onViewFeed={() => setView('feed')} />
+            <BriefingView items={briefingItems} topics={topics} news={news} onNewsClick={(id) => setSelectedNewsId(id)} />
           ) : view === 'feed' ? (
             loading ? (
               <>
