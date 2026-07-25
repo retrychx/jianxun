@@ -165,12 +165,19 @@ export async function topics(env: Env) {
         name: s,
         angle: PERSPECTIVES[s] || '综合'
       }))
+      // Narrative summary (use AI summary if available, otherwise use description of best article)
+      const bestItem = cluster.sort((a: any, b: any) => (b.summary?.length || 0) - (a.summary?.length || 0))[0]
+      const narrative = bestItem?.summary
+        ? bestItem.summary.slice(0, 300)
+        : (cluster[0]?.description || '').slice(0, 200) + '...'
+
       topics.push({
         keyword: words.slice(0, 3).join(' · '),
         count: cluster.length,
         sources: [...new Set(cluster.map(i => i.source))],
         sourcePerspectives,
         dateRange,
+        narrative: narrative.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
         items: cluster.slice(0, 5),
       })
     }

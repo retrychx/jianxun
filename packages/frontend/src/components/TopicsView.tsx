@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import type { TopicCluster } from '../api'
 
 interface Props {
@@ -21,60 +21,82 @@ const ANGLE_COLORS: Record<string, string> = {
   '综合': '#78716c', '深度': '#1a1a1a', '文化': '#be185d',
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+function formatDate(d: string): string {
+  const date = new Date(d)
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+function formatTime(d: string): string {
+  const date = new Date(d)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsClick: (id: number) => void }) {
   const perspectives = topic.sourcePerspectives || []
-  const pct = Math.min(topic.count / 8 * 100, 100)
   const heatLabel = topic.count >= 5 ? '热议' : topic.count >= 3 ? '上升' : '发酵'
   const heatColor = topic.count >= 5 ? '#b91c1c' : topic.count >= 3 ? '#d97706' : '#737373'
+  const minutes = 100 / Math.max(topic.items.length, 2)
 
   return (
     <div className="narrative-box">
-      {/* Date range */}
-      {topic.dateRange && (
-        <div className="narr-date">{topic.dateRange}</div>
-      )}
-
-      {/* Source perspectives */}
-      {perspectives.length > 0 && (
-        <div className="narr-perspectives">
-          {perspectives.slice(0, 6).map(p => (
-            <span key={p.name} className="narr-persp" style={{ borderColor: ANGLE_COLORS[p.angle] || '#e5e5e5' }}>
-              <span className="narr-persp-dot" style={{ backgroundColor: ANGLE_COLORS[p.angle] || '#a3a3a3' }} />
-              {p.name}
-              <span className="narr-persp-angle">{p.angle}</span>
-            </span>
-          ))}
+      {/* AI Narrative Summary */}
+      {topic.narrative && (
+        <div className="narr-summary">
+          <Sparkles size={12} className="narr-summary-icon" />
+          <p className="narr-summary-text">{topic.narrative}</p>
         </div>
       )}
 
-      {/* Heat indicator */}
-      <div className="narr-heat">
-        <div className="narr-heat-track">
-          <div className="narr-heat-fill" style={{ width: `${pct}%`, backgroundColor: heatColor }} />
-        </div>
-        <span className="narr-heat-label" style={{ color: heatColor }}>{heatLabel}</span>
-      </div>
-
-      {/* Timeline */}
-      <div className="narr-timeline">
+      {/* Horizontal Timeline */}
+      <div className="narr-timeline-h">
         {topic.items.map((item, idx) => (
-          <div key={item.id} className="tl-item" onClick={() => onNewsClick(item.id)}>
-            <div className={`tl-dot ${idx === 0 ? 'active' : ''}`} />
-            <div className="tl-line" />
-            <div className="tl-body">
-              <div className="tl-meta">
-                <span className="tl-source">{item.source}</span>
-                {item.publishedAt && <span className="tl-time">{formatDate(item.publishedAt)}</span>}
-              </div>
-              <div className="tl-title">{item.title}</div>
+          <div key={item.id} className={`tl-h-item ${idx === 0 ? 'active' : ''}`} onClick={() => onNewsClick(item.id)}>
+            <div className="tl-h-line" />
+            <div className="tl-h-dot-wrap">
+              <div className="tl-h-dot" style={{ borderColor: idx === 0 ? 'var(--accent)' : 'var(--border)' }} />
+            </div>
+            <div className="tl-h-content">
+              <span className="tl-h-source">{item.source}</span>
+              {item.publishedAt && <span className="tl-h-time">{formatDate(item.publishedAt)}</span>}
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Source perspectives */}
+      {perspectives.length > 0 && (
+        <div className="narr-section">
+          <div className="narr-section-label">来源视角</div>
+          <div className="narr-persp-grid">
+            {perspectives.map(p => (
+              <span key={p.name} className="narr-persp-tag">
+                <span className="narr-persp-dot" style={{ backgroundColor: ANGLE_COLORS[p.angle] || '#a3a3a3' }} />
+                <span className="narr-persp-name">{p.name}</span>
+                <span className="narr-persp-angle">{p.angle}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vertical detail timeline */}
+      <div className="narr-section">
+        <div className="narr-section-label">报道时间线</div>
+        <div className="narr-timeline-v">
+          {topic.items.map((item, idx) => (
+            <div key={item.id} className="tl-v-item" onClick={() => onNewsClick(item.id)}>
+              <div className={`tl-v-dot ${idx === 0 ? 'active' : ''}`} />
+              {idx < topic.items.length - 1 && <div className="tl-v-line" />}
+              <div className="tl-v-body">
+                <div className="tl-v-meta">
+                  <span className="tl-v-source">{item.source}</span>
+                  {item.publishedAt && <span className="tl-v-time">{formatTime(item.publishedAt)}</span>}
+                </div>
+                <div className="tl-v-title">{item.title}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

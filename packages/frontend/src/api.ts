@@ -89,6 +89,7 @@ export interface TopicCluster {
   sources: string[]
   sourcePerspectives?: { name: string; angle: string }[]
   dateRange?: string
+  narrative?: string
   items: NewsItem[]
 }
 
