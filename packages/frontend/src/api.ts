@@ -50,7 +50,7 @@ export interface CategoryCount {
 const BASE = '/api'
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
@@ -77,10 +77,6 @@ export function getCategories(): Promise<{ categories: CategoryCount[] }> {
 
 export function getStats(): Promise<{ total: number; today: number }> {
   return fetchJson(`${BASE}/news/stats`)
-}
-
-export function triggerFetch(): Promise<{ fetched: number }> {
-  return fetchJson(`${BASE}/news/fetch`)
 }
 
 export interface TopicCluster {

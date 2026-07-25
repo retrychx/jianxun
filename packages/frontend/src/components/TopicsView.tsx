@@ -1,16 +1,10 @@
 import { useState } from 'react'
-import { ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronRight, Sparkles, Hash } from 'lucide-react'
 import type { TopicCluster } from '../api'
 
 interface Props {
   topics: TopicCluster[]
   onNewsClick: (id: number) => void
-}
-
-const SOURCE_COLORS: Record<string, string> = {
-  '36氪': '#b91c1c', '少数派': '#2563eb', '爱范儿': '#059669',
-  'TechCrunch': '#059669', 'Wired': '#dc2626', 'Engadget': '#7c3aed',
-  'Ars Technica': '#d97706', 'The Verge': '#0891b2',
 }
 
 const ANGLE_COLORS: Record<string, string> = {
@@ -33,9 +27,6 @@ function formatTime(d: string): string {
 
 function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsClick: (id: number) => void }) {
   const perspectives = topic.sourcePerspectives || []
-  const heatLabel = topic.count >= 5 ? '热议' : topic.count >= 3 ? '上升' : '发酵'
-  const heatColor = topic.count >= 5 ? '#b91c1c' : topic.count >= 3 ? '#d97706' : '#737373'
-  const minutes = 100 / Math.max(topic.items.length, 2)
 
   return (
     <div className="narrative-box">
@@ -105,7 +96,17 @@ function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsCli
 export function TopicsView({ topics, onNewsClick }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  if (!topics.length) return null
+  if (!topics.length) {
+    return (
+      <div className="topics-view">
+        <div className="empty">
+          <Hash size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+          <p>暂无话题</p>
+          <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>有足够多的同源报道时会自动生成话题簇</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="topics-view">
@@ -135,7 +136,7 @@ export function TopicsView({ topics, onNewsClick }: Props) {
                     <div className="ts-sources">
                       {topic.sources.slice(0, 3).join(' · ')}
                       {topic.sources.length > 3 && ` · +${topic.sources.length - 3}`}
-                      {topic.dateRange && <span className="ts-date"> · {topic.dateRange}</span>}
+                      {topic.dateRange && <span> · {topic.dateRange}</span>}
                     </div>
                   </div>
                 </div>

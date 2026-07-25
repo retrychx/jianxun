@@ -1,52 +1,43 @@
-import { Search, X } from 'lucide-react'
+import { X, SearchX } from 'lucide-react'
 import type { NewsItem } from '../api'
+import { NewsCard } from './NewsCard'
 
 interface Props {
   results: NewsItem[]
   query: string
+  searching: boolean
+  error: boolean
   onClear: () => void
   onNewsClick: (id: number) => void
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  AI: '#6b21a8', 科技: '#1d4ed8', 财经: '#047857',
-  国际: '#b91c1c', 政治: '#9a3412', 社会: '#9a3412',
-  体育: '#166534', 娱乐: '#a16207', 游戏: '#115e59',
-  健康: '#9d174d', 教育: '#3f6212', 其他: '#78716c',
-}
-
-export function SearchView({ results, query, onClear, onNewsClick }: Props) {
+export function SearchView({ results, query, searching, error, onClear, onNewsClick }: Props) {
   return (
     <div className="search-view">
       <div className="search-header">
-        <div className="search-input-wrap">
-          <Search size={14} className="search-input-icon" />
-          <input
-            className="search-input"
-            value={query}
-            readOnly
-            autoFocus
-          />
-          <button className="search-clear" onClick={onClear}>
-            <X size={14} />
-          </button>
+        <span className="search-query">「{query}」的搜索结果</span>
+        <button className="search-clear" onClick={onClear} aria-label="清除搜索">
+          <X size={14} />
+        </button>
+      </div>
+      {query.length < 2 ? (
+        <div className="search-hint">输入至少 2 个字符开始搜索</div>
+      ) : searching ? (
+        <div className="search-hint">搜索中...</div>
+      ) : error ? (
+        <div className="search-hint">搜索失败，请稍后重试</div>
+      ) : results.length === 0 ? (
+        <div className="search-hint">
+          <SearchX size={24} style={{ marginBottom: 8 }} />
+          <p>没有找到相关新闻</p>
         </div>
-        <span className="search-count">{results.length} 条结果</span>
-      </div>
-      <div className="search-results">
-        {results.map(item => (
-          <article key={item.id} className="search-card" onClick={() => onNewsClick(item.id)}>
-            <div className="search-meta">
-              <span className="search-source">{item.source}</span>
-              <span className="search-cat" style={{ backgroundColor: CATEGORY_COLORS[item.category] || '#78716c' }}>
-                {item.category}
-              </span>
-            </div>
-            <h3 className="search-title">{item.title}</h3>
-            {item.summary && <p className="search-summary">{item.summary.slice(0, 200)}</p>}
-          </article>
-        ))}
-      </div>
+      ) : (
+        <div className="card-list">
+          {results.map(item => (
+            <NewsCard key={item.id} item={item} onClick={onNewsClick} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

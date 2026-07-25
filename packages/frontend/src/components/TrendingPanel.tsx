@@ -1,14 +1,13 @@
 import { memo } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, ExternalLink } from 'lucide-react'
 import type { NewsItem } from '../api'
 
 interface Props {
   items: NewsItem[]
+  onNewsClick: (id: number) => void
 }
 
-const RANK_COLORS = ['#b91c1c', '#b45309', '#737373']
-
-export const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
+export const TrendingPanel = memo(function TrendingPanel({ items, onNewsClick }: Props) {
   if (!items.length) return null
 
   return (
@@ -20,14 +19,12 @@ export const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
       </div>
       <div className="trending-list">
         {items.slice(0, 10).map((item, i) => (
-          <a
+          <div
             key={item.id}
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
             className="trending-item"
+            onClick={() => onNewsClick(item.id)}
           >
-            <span className={`trending-rank ${i < 3 ? 'top3' : ''}`} style={i < 3 ? { color: RANK_COLORS[i] } : undefined}>
+            <span className={`trending-rank ${i < 3 ? 'top3' : ''}`}>
               {i + 1}
             </span>
             <div className="trending-content">
@@ -38,9 +35,36 @@ export const TrendingPanel = memo(function TrendingPanel({ items }: Props) {
                 <span>{item.category}</span>
               </span>
             </div>
-          </a>
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="trending-ext"
+              aria-label="打开原文"
+              onClick={e => e.stopPropagation()}
+            >
+              <ExternalLink size={12} />
+            </a>
+          </div>
         ))}
       </div>
     </div>
   )
 })
+
+// 移动端横向热门条（sidebar 在小屏隐藏时的入口）
+export function TrendingStrip({ items, onNewsClick }: Props) {
+  if (!items.length) return null
+
+  return (
+    <div className="trending-strip">
+      <span className="trending-strip-label"><TrendingUp size={12} /> 热门</span>
+      {items.slice(0, 10).map((item, i) => (
+        <button key={item.id} className="trending-chip" onClick={() => onNewsClick(item.id)}>
+          <span className={`trending-rank ${i < 3 ? 'top3' : ''}`}>{i + 1}</span>
+          <span className="trending-chip-title">{item.title}</span>
+        </button>
+      ))}
+    </div>
+  )
+}

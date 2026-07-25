@@ -1,16 +1,11 @@
 import { memo, useState } from 'react'
 import type { NewsItem } from '../api'
+import { categoryColor } from '../constants'
+import { formatDate } from '../utils'
 
 interface Props {
   item: NewsItem
-  onClick?: (e: React.MouseEvent) => void
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  AI: '#b91c1c', 科技: '#1d4ed8', 财经: '#047857',
-  国际: '#b91c1c', 政治: '#9a3412', 社会: '#9a3412',
-  体育: '#166534', 娱乐: '#a16207', 游戏: '#115e59',
-  健康: '#9d174d', 教育: '#3f6212', 其他: '#737373',
+  onClick?: (id: number) => void
 }
 
 const CATEGORY_GRADIENTS: Record<string, string> = {
@@ -28,17 +23,6 @@ const CATEGORY_GRADIENTS: Record<string, string> = {
   其他: 'linear-gradient(135deg, #57534e, #44403c)',
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (d.toDateString() === now.toDateString()) return time
-  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1)
-  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${time}`
-  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ` ${time}`
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric' }) + ` ${time}`
-}
-
 function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
@@ -47,7 +31,7 @@ export const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
   const [imgError, setImgError] = useState(false)
 
   return (
-    <article className="news-card" onClick={onClick}>
+    <article className="news-card" onClick={() => onClick?.(item.id)}>
       {item.image && !imgError && (
         <div className="card-image-wrap">
           <img
@@ -75,7 +59,7 @@ export const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
         <h3 className="card-title">{item.title}</h3>
         {item.summary && <p className="card-summary">{item.summary}</p>}
         <div className="card-footer">
-          <span className="card-category" style={{ backgroundColor: CATEGORY_COLORS[item.category] || '#78716c' }}>
+          <span className="card-category" style={{ backgroundColor: categoryColor(item.category) }}>
             {item.category}
           </span>
           <span className="card-domain">{getDomain(item.url)}</span>

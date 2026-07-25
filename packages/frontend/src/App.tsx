@@ -1,22 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Sun, Moon, Feather, ChevronRight, Newspaper } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
-import { TrendingPanel } from './components/TrendingPanel'
+import { TrendingPanel, TrendingStrip } from './components/TrendingPanel'
 import { DetailPanel } from './components/DetailPanel'
 import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
 import { SearchView } from './components/SearchView'
+import { EntityView } from './components/EntityView'
 import { FetchMascot } from './components/FetchMascot'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
-import { getNews, getTrending, getCategories, getStats, triggerFetch, getTopics, getBriefing, searchNews } from './api'
+import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, searchNews } from './api'
+import { useFollow } from './hooks/useFollow'
+import { categoryColor } from './constants'
 import './App.css'
 
-const CATEGORY_COLORS: Record<string, string> = {
-  AI: '#b91c1c', 科技: '#1d4ed8', 财经: '#047857',
-  国际: '#b91c1c', 政治: '#9a3412', 社会: '#9a3412',
-  体育: '#166534', 娱乐: '#a16207', 游戏: '#115e59',
-  健康: '#9d174d', 教育: '#3f6212', 其他: '#737373',
-}
+const PAGE_SIZE = 50
 
 function SkeletonCard() {
   return (
@@ -32,8 +31,14 @@ function SkeletonCard() {
   )
 }
 
+type View = 'briefing' | 'feed' | 'topics'
 type Theme = 'light' | 'dark' | 'retro'
 const THEMES: Theme[] = ['light', 'dark', 'retro']
+const THEME_META: Record<Theme, { label: string; Icon: typeof Sun }> = {
+  light: { label: '浅色', Icon: Sun },
+  dark: { label: '深色', Icon: Moon },
+  retro: { label: '复古', Icon: Feather },
+}
 
 function getTheme(): Theme {
   if (typeof document === 'undefined') return 'light'
@@ -44,22 +49,29 @@ function getTheme(): Theme {
 
 export default function App() {
   const [news, setNews] = useState<NewsItem[]>([])
+  const [newsTotal, setNewsTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [trending, setTrending] = useState<NewsItem[]>([])
   const [topics, setTopics] = useState<TopicCluster[]>([])
   const [briefingItems, setBriefingItems] = useState<BriefingItem[]>([])
+  const [briefingAt, setBriefingAt] = useState<Date | null>(null)
   const [categories, setCategories] = useState<CategoryCount[]>([])
   const [activeCat, setActiveCat] = useState('全部')
   const [stats, setStats] = useState({ total: 0, today: 0 })
-  const [loading, setLoading] = useState(true)
-  const [fetching, setFetching] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [msg, setMsg] = useState('')
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
-  const [view, setView] = useState<'briefing' | 'feed' | 'topics'>('briefing')
-const [theme, setTheme] = useState<Theme>(getTheme)
+  const [view, setView] = useState<View>('briefing')
+  const [entityView, setEntityView] = useState<string | null>(null)
+  const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<NewsItem[] | null>(null)
+  const [searchResults, setSearchResults] = useState<NewsItem[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(false)
+  const { follows, isFollowing, toggleFollow } = useFollow()
 
   // Theme
   useEffect(() => {
@@ -84,22 +96,30 @@ const [theme, setTheme] = useState<Theme>(getTheme)
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
-  // Ripple
-  const handleCardClick = useCallback((id: number) => (e: React.MouseEvent) => {
-    const el = e.currentTarget as HTMLElement
-    const rect = el.getBoundingClientRect()
-    el.style.setProperty('--x', `${((e.clientX - rect.left) / rect.width) * 100}%`)
-    el.style.setProperty('--y', `${((e.clientY - rect.top) / rect.height) * 100}%`)
-    setSelectedNewsId(id)
+  // Toast
+  const toastTimer = useRef<number | null>(null)
+  const showToast = useCallback((text: string) => {
+    setMsg(text)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setMsg(''), 3000)
   }, [])
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
-  const loadNews = useCallback(async (cat: string) => {
-    setLoading(true)
+  const loadNews = useCallback(async (cat: string, pageNum = 1, append = false) => {
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     try {
-      const data = await getNews({ category: cat, pageSize: 50 })
-      setNews(data.items)
-    } finally { setLoading(false) }
-  }, [])
+      const data = await getNews({ category: cat, page: pageNum, pageSize: PAGE_SIZE })
+      setNews(prev => append ? [...prev, ...data.items] : data.items)
+      setNewsTotal(data.total)
+      setPage(pageNum)
+    } catch {
+      showToast('新闻加载失败，请稍后重试')
+    } finally {
+      if (append) setLoadingMore(false)
+      else setLoading(false)
+    }
+  }, [showToast])
 
   const loadAll = useCallback(async () => {
     try {
@@ -108,53 +128,84 @@ const [theme, setTheme] = useState<Theme>(getTheme)
       setTrending(tr.items)
       setTopics(tp.topics)
       setBriefingItems(br.items)
-    } catch { /* */ }
-  }, [])
+      setBriefingAt(new Date())
+    } catch {
+      showToast('数据加载失败，请刷新重试')
+    }
+  }, [showToast])
 
   const loadStats = useCallback(async () => {
-    try { setStats(await getStats()) } catch {}
+    try { setStats(await getStats()) } catch { /* stats 非关键，静默失败 */ }
   }, [])
 
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      await loadAll()
-      if (cancelled) return
-      await loadNews('全部')
-      if (cancelled) return
-      await loadStats()
+      await Promise.all([loadAll(), loadNews('全部'), loadStats()])
+      if (!cancelled) setInitialLoading(false)
     }
     init()
     return () => { cancelled = true }
   }, [loadAll, loadNews, loadStats])
 
-
-
-  const handleCategory = (cat: string) => { setActiveCat(cat); if (view === 'feed') loadNews(cat) }
-
-  const handleSearch = async (q: string) => {
-    setSearchQuery(q)
-    if (!q || q.length < 2) { setSearchResults(null); return }
-    setLoading(true)
-    try {
-      const res = await searchNews(q)
-      setSearchResults(res.items)
-    } catch { setSearchResults([]) }
-    finally { setLoading(false) }
+  const handleCategory = (cat: string) => {
+    setActiveCat(cat)
+    setSearchQuery('')
+    setEntityView(null)
+    setView('feed')
+    loadNews(cat)
   }
 
-  const handleFetch = async () => {
-    setFetching(true); setMsg('正在抓取新闻...')
-    try {
-      const res = await triggerFetch()
-      setMsg(`已获取 ${res.fetched} 条新新闻`)
-      await Promise.all([loadAll(), loadNews(activeCat), loadStats()])
-    } catch (e) { setMsg(`抓取失败: ${(e as Error).message}`) }
-    finally { setFetching(false); setTimeout(() => setMsg(''), 4000) }
-  }
+  const handleNewsClick = useCallback((id: number) => setSelectedNewsId(id), [])
+
+  const openEntity = useCallback((name: string) => {
+    setEntityView(name)
+    setSelectedNewsId(null)
+  }, [])
+
+  // Search: 300ms debounce + 请求序号防竞态
+  const searchSeq = useRef(0)
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (q.length < 2) {
+      searchSeq.current++
+      setSearchResults([])
+      setSearchError(false)
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    const seq = ++searchSeq.current
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchNews(q)
+        if (seq !== searchSeq.current) return
+        setSearchResults(res.items)
+        setSearchError(false)
+      } catch {
+        if (seq !== searchSeq.current) return
+        setSearchResults([])
+        setSearchError(true)
+      } finally {
+        if (seq === searchSeq.current) setSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const searchActive = searchQuery.trim().length > 0
 
   // Stats for mini viz
   const totalScore = categories.reduce((s, c) => s + c.count, 0) || 1
+
+  const themeMeta = THEME_META[theme]
+
+  const backToBriefing = (
+    <button className="browse-back" onClick={() => setView('briefing')}>
+      <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} />
+      <span>返回简报</span>
+    </button>
+  )
 
   return (
     <div className="app">
@@ -165,40 +216,35 @@ const [theme, setTheme] = useState<Theme>(getTheme)
           <h1 className="logo">简讯</h1>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
-            {searchQuery && <button className="hs-field-clear" onClick={() => handleSearch('')}>&times;</button>}
+            <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} aria-label="搜索新闻" />
+            {searchQuery && <button className="hs-field-clear" onClick={() => setSearchQuery('')} aria-label="清除搜索">&times;</button>}
           </div>
           <div className="header-actions">
-            <button className="ha-btn" onClick={cycleTheme} title="theme">
-              {theme === 'light' ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>}
-            </button>
-            <button className="ha-btn" onClick={handleFetch} disabled={fetching} title="刷新">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={fetching ? { animation: 'spin .6s linear infinite' } : undefined}><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <button className="ha-btn" onClick={cycleTheme} title={`主题：${themeMeta.label}`} aria-label={`切换主题，当前为${themeMeta.label}模式`}>
+              <themeMeta.Icon size={15} />
             </button>
           </div>
         </div>
       </header>
       <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
-      {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
       {/* Mini data viz */}
       {categories.length > 0 && (
         <div className="stats-bar">
           {categories.slice(0, 7).map(c => (
             <div key={c.name} className="stat-item">
-              <span className="stat-dot" style={{ background: CATEGORY_COLORS[c.name] || '#78716c' }} />
+              <span className="stat-dot" style={{ background: categoryColor(c.name) }} />
               {c.name}
             </div>
           ))}
           <div className="stat-bar-group">
             {categories.slice(0, 12).map(c => {
-              const pct = (c.count / totalScore) * 20 + 4
+              const pct = Math.min((c.count / totalScore) * 20 + 4, 20)
               return (
                 <div
                   key={c.name}
                   className="stat-bar-seg"
-                  style={{ height: pct, background: CATEGORY_COLORS[c.name] || '#78716c' }}
+                  style={{ height: pct, background: categoryColor(c.name) }}
                   title={`${c.name}: ${c.count}`}
                 />
               )
@@ -207,60 +253,92 @@ const [theme, setTheme] = useState<Theme>(getTheme)
         </div>
       )}
 
-      {fetching && <FetchMascot fetching={fetching} />}
+      <TrendingStrip items={trending} onNewsClick={handleNewsClick} />
 
       <div className="main-layout">
         <div className="news-feed">
-          {searchResults !== null ? (
-            <SearchView results={searchResults} query={searchQuery} onClear={() => handleSearch('')} onNewsClick={(id) => setSelectedNewsId(id)} />
+          {initialLoading ? (
+            <FetchMascot />
+          ) : searchActive ? (
+            <SearchView
+              results={searchResults}
+              query={searchQuery.trim()}
+              searching={searching}
+              error={searchError}
+              onClear={() => setSearchQuery('')}
+              onNewsClick={handleNewsClick}
+            />
+          ) : entityView ? (
+            <EntityView entity={entityView} onBack={() => setEntityView(null)} onNewsClick={handleNewsClick} />
           ) : view === 'briefing' ? (
-            <BriefingView items={briefingItems} topics={topics} news={news} onNewsClick={(id) => setSelectedNewsId(id)} />
+            <BriefingView
+              items={briefingItems}
+              topics={topics}
+              newsCount={newsTotal}
+              updatedAt={briefingAt}
+              follows={follows}
+              onNewsClick={handleNewsClick}
+              onShowTopics={() => setView('topics')}
+              onShowFeed={() => setView('feed')}
+              onEntityClick={openEntity}
+              onUnfollow={(name) => toggleFollow(name, 'entity')}
+            />
           ) : view === 'feed' ? (
-            loading ? (
-              <>
-                <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
-              </>
-            ) : news.length === 0 ? (
-              <div className="empty">
-                <p style={{ fontSize: 24, marginBottom: 8, color: 'var(--text-tertiary)' }}>/</p>
-                <p>暂无新闻</p>
-                <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>点击右上角「刷新」按钮获取最新资讯</p>
-              </div>
-            ) : (
-              <>
-                <div className="card-list">
-                  {news.map((item, i) => (
-                    <div key={item.id} className="card-enter" style={{ animationDelay: `${i * 40}ms` }}>
-                      <NewsCard item={item} onClick={handleCardClick(item.id)} />
-                    </div>
-                  ))}
+            <>
+              {backToBriefing}
+              {loading ? (
+                <>
+                  <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+                </>
+              ) : news.length === 0 ? (
+                <div className="empty">
+                  <Newspaper size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+                  <p>暂无新闻</p>
+                  <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>切换分类看看，或稍后再来</p>
                 </div>
-
-              
-              </>
-            )
+              ) : (
+                <>
+                  <div className="card-list">
+                    {news.map((item, i) => (
+                      <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
+                        <NewsCard item={item} onClick={handleNewsClick} />
+                      </div>
+                    ))}
+                  </div>
+                  {page * PAGE_SIZE < newsTotal && (
+                    <button className="load-more" onClick={() => loadNews(activeCat, page + 1, true)} disabled={loadingMore}>
+                      {loadingMore ? '加载中...' : `加载更多（还有 ${newsTotal - news.length} 篇）`}
+                    </button>
+                  )}
+                </>
+              )}
+            </>
           ) : (
-            <TopicsView topics={topics} onNewsClick={(id) => setSelectedNewsId(id)} />
+            <>
+              {backToBriefing}
+              <TopicsView topics={topics} onNewsClick={handleNewsClick} />
+            </>
           )}
         </div>
         <aside className="sidebar">
-          <TrendingPanel items={trending} />
+          <TrendingPanel items={trending} onNewsClick={handleNewsClick} />
         </aside>
       </div>
+
+      {stats.total > 0 && (
+        <footer className="footer">共 {stats.total} 篇 · 今日 {stats.today} 篇</footer>
+      )}
 
       <DetailPanel
         newsId={selectedNewsId}
         onClose={() => setSelectedNewsId(null)}
-        onEntityClick={(entity) => {
-          setActiveCat('全部'); setLoading(true)
-          getNews({ category: '全部', pageSize: 50 }).then(data => {
-            setNews(data.items.filter(i => i.title.includes(entity) || (i.description || '').includes(entity)))
-            setLoading(false)
-          })
-        }}
+        onEntityClick={openEntity}
+        onNewsClick={handleNewsClick}
+        isFollowing={isFollowing}
+        toggleFollow={toggleFollow}
       />
 
-      <button className={`scroll-top ${scrolled ? 'visible' : ''}`} onClick={scrollToTop}>
+      <button className={`scroll-top ${scrolled ? 'visible' : ''}`} onClick={scrollToTop} aria-label="回到顶部">
         ↑
       </button>
     </div>
