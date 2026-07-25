@@ -132,9 +132,9 @@ export async function detail(env: Env, id: number) {
 const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
-    const clauses = words.map((_: string, i: number) => \`title LIKE ?\`)
-    const params = words.map((w: string) => \`%\${w}%\`)
-    const candidates = await env.DB.prepare(\`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10\`).bind(id, ...params).all()
+    const clauses = words.map((_: string, i: number) => `title LIKE ?`)
+    const params = words.map((w: string) => `%\${w}%`)
+    const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
     related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
     related.forEach((r: any) => delete r.sim)
   }
@@ -202,20 +202,40 @@ export async function entitySearch(env: Env, name: string) {
 }
 
 export async function fixImages(env: Env) {
-  const rows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY id DESC LIMIT 50").all()
-  let updated = 0
-  const results = await Promise.allSettled(
-    (rows.results as any[]).map(async (row: any) => {
+  // Step 1: Fix missing images
+  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL ORDER BY id DESC LIMIT 50").all()
+  let imgFixed = 0
+  await Promise.allSettled(
+    (imgRows.results as any[]).map(async (row: any) => {
       const { image } = await extractContent(row.url)
       if (image) {
         await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run()
-        updated++
-        return true
+        imgFixed++
       }
-      return false
     })
   )
-  return { updated, total: (rows.results as any[]).length }
+
+  // Step 2: AI analysis for unanalyzed articles
+  const aiRows = await env.DB.prepare("SELECT id, title FROM news WHERE analyzed_at IS NULL AND summary IS NULL ORDER BY id DESC LIMIT 10").all()
+  let aiDone = 0
+  const apiKey = env.DEEPSEEK_API_KEY
+  if (apiKey) {
+    await Promise.allSettled(
+      (aiRows.results as any[]).map(async (row: any) => {
+        try {
+          const content = 'No content available - visit article for details.'
+          const result = await analyzeWithDeepSeek(row.title, content, apiKey)
+          if (result) {
+            await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, analyzed_at=datetime('now') WHERE id=?")
+              .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', row.id).run()
+            aiDone++
+          }
+        } catch {}
+      })
+    )
+  }
+
+  return { imgFixed, aiDone, total: imgRows.results.length + aiRows.results.length }
 }
 
 // KV cache helpers
