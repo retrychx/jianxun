@@ -58,6 +58,7 @@ export default function App() {
 const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<NewsItem[] | null>(null)
 
   // Theme
@@ -160,23 +161,32 @@ const [theme, setTheme] = useState<Theme>(getTheme)
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">
-        <div className="header-inner">
-          <div className="header-left">
-            <h1 className="logo">简讯</h1>
-            <span className="htab-dot">/</span>
-            <button className={`htab ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
-            <span className="htab-dot">/</span>
-            <button className={`htab ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
-            <span className="htab-dot">/</span>
-            <button className={`htab ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
-          </div>
-          <div className="header-right">
-            <input className="hs-input" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} />
-            {searchQuery && <button className="hs-clear" onClick={() => handleSearch("")}>&times;</button>}
-            <button className="theme-btn" onClick={cycleTheme} title={theme}>{theme === 'light' ? '明' : theme === 'dark' ? '暗' : '旧'}</button>
-            <button className="fetch-btn" onClick={handleFetch} disabled={fetching}>{fetching ? '...' : '刷新'}</button>
+        <div className="header-top">
+          <h1 className="logo">简讯</h1>
+          <div className="header-actions">
+            <button className="ha-btn" onClick={() => handleSearch(searchQuery || ' ')} title="搜索">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </button>
+            <button className="ha-btn" onClick={cycleTheme} title={theme}>
+              {theme === 'light' ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>}
+            </button>
+            <button className="ha-btn" onClick={handleFetch} disabled={fetching} title="刷新">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={fetching ? { animation: 'spin .6s linear infinite' } : undefined}><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
           </div>
         </div>
+        {searchOpen && (
+          <div className="header-search-bar">
+            <input className="hs-input-wide" placeholder="搜索..." value={searchQuery} onChange={e => handleSearch(e.target.value)} autoFocus />
+            <button className="hs-close" onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults(null) }}>&times;</button>
+          </div>
+        )}
+        <nav className="header-nav">
+          <button className={`hn-link ${view === 'briefing' ? 'active' : ''}`} onClick={() => setView('briefing')}>简报</button>
+          <button className={`hn-link ${view === 'topics' ? 'active' : ''}`} onClick={() => setView('topics')}>话题</button>
+          <button className={`hn-link ${view === 'feed' ? 'active' : ''}`} onClick={() => setView('feed')}>时间线</button>
+        </nav>
       </header>
       {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
