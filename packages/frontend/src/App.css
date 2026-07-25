@@ -111,10 +111,10 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .hs-field {
   border: none; background: transparent;
   font-size: 13px; font-family: inherit; color: var(--text);
-  outline: none; padding: 4px 0; width: 120px;
+  outline: none; padding: 4px 0; width: 140px;
 }
 .hs-field::placeholder { color: var(--text-tertiary) }
-.hs-field:focus { width: 180px }
+.hs-field:focus { outline: none }
 .hs-field-clear {
   border: none; background: none; cursor: pointer;
   color: var(--text-tertiary); font-size: 14px; line-height: 1; padding: 0 2px;
@@ -748,7 +748,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .logo { font-size: 17px }
   .header-search-box { max-width: none }
   .hs-field { font-size: 12px; width: 80px }
-  .hs-field:focus { width: 120px }
+  
   .ha-btn { width: 28px; height: 28px }
 @media (max-width: 420px) {
   .card-image-wrap { height: 140px }
