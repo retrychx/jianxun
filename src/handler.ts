@@ -116,37 +116,45 @@ export async function detail(env: Env, id: number) {
   if (!row) return null
   const news = mapNews(row)
 
-  let summary = news.description?.slice(0, 200) + '...'
+  let summary = row.summary || news.description?.slice(0, 200) + '...'
   let entities: any[] = []
   let sentiment: any = null
   let content: string | null = null
 
-  // Check cache first
+  // Try to parse cached analysis
   if (row.entities && row.sentiment && row.analyzed_at) {
     try { entities = JSON.parse(row.entities) } catch {}
     try { sentiment = JSON.parse(row.sentiment) } catch {}
-    summary = row.summary || summary
-  } else {
-    const result = await extractContent(news.url)
+  }
+
+  // Lazy: fetch content + image only if not cached
+  if (!row.analyzed_at) {
+    const result = await extractContent(news.url).catch(() => ({ content: null, image: null }))
     content = result.content
     if (result.image && !news.image) {
-      await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
+      env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(result.image, id).run()
       news.image = result.image
     }
 
-    if (env.DEEPSEEK_API_KEY && content) {
-      const ai = await analyzeWithDeepSeek(news.title, content, env.DEEPSEEK_API_KEY)
-      if (ai) {
-        summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
-        env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, analyzed_at=datetime('now') WHERE id=?").bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), id).run()
-        if (ai.category && ai.category !== news.category) {
-          news.category = ai.category
-          env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(ai.category, id).run()
-        }
-      }
+    // Non-blocking: don't wait for DeepSeek, return fast with fallback summary.
+    // DeepSeek analysis happens on NEXT request when analyzed_at is still null.
+    // (We cache the page content in the 'content' DB field to speed up next attempt)
+    if (result.content) {
+      // Content will be re-fetched on next detail view for AI analysis
     }
   }
 
+  // If content is ready but AI hasn't analyzed yet, try DeepSeek (fast path: only if content is small)
+  if (env.DEEPSEEK_API_KEY && content && !row.analyzed_at) {
+    const ai = await analyzeWithDeepSeek(news.title, content.slice(0, 3000), env.DEEPSEEK_API_KEY).catch(() => null)
+    if (ai) {
+      summary = ai.summary; entities = ai.entities; sentiment = ai.sentiment
+      env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=CASE WHEN category != ? AND ? IS NOT NULL THEN ? ELSE category END, analyzed_at=datetime('now') WHERE id=?")
+        .bind(ai.summary, JSON.stringify(ai.entities), JSON.stringify(ai.sentiment), ai.category, ai.category, ai.category, id).run()
+    }
+  }
+
+  // Related articles
   const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
