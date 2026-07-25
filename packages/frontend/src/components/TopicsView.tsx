@@ -13,44 +13,65 @@ const SOURCE_COLORS: Record<string, string> = {
   'Ars Technica': '#d97706', 'The Verge': '#0891b2',
 }
 
-function getSentiment(count: number): { label: string; color: string; pct: number } {
-  if (count >= 5) return { label: '热议', color: '#b91c1c', pct: 100 }
-  if (count >= 3) return { label: '上升', color: '#d97706', pct: 60 }
-  return { label: '发酵', color: '#737373', pct: 30 }
+const ANGLE_COLORS: Record<string, string> = {
+  '商业': '#b91c1c', '创投': '#b91c1c', '消费': '#1d4ed8',
+  '趋势': '#d97706', '产业': '#059669', '技术': '#0891b2',
+  'AI': '#7c3aed', '科学': '#0d9488', '工程': '#ea580c',
+  '开源': '#16a34a', '社区': '#6366f1', '效率': '#b45309',
+  '综合': '#78716c', '深度': '#1a1a1a', '文化': '#be185d',
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsClick: (id: number) => void }) {
-  const sources = topic.sources.slice(0, 5)
-  const sentiment = getSentiment(topic.count)
+  const perspectives = topic.sourcePerspectives || []
+  const pct = Math.min(topic.count / 8 * 100, 100)
+  const heatLabel = topic.count >= 5 ? '热议' : topic.count >= 3 ? '上升' : '发酵'
+  const heatColor = topic.count >= 5 ? '#b91c1c' : topic.count >= 3 ? '#d97706' : '#737373'
 
   return (
     <div className="narrative-box">
-      <div className="narrative-header">
-        <span className="narrative-sources">
-          {sources.map((s, i) => (
-            <span key={s} className="narrative-source" style={{ backgroundColor: SOURCE_COLORS[s] || '#6b7280' }}>
-              {s}
+      {/* Date range */}
+      {topic.dateRange && (
+        <div className="narr-date">{topic.dateRange}</div>
+      )}
+
+      {/* Source perspectives */}
+      {perspectives.length > 0 && (
+        <div className="narr-perspectives">
+          {perspectives.slice(0, 6).map(p => (
+            <span key={p.name} className="narr-persp" style={{ borderColor: ANGLE_COLORS[p.angle] || '#e5e5e5' }}>
+              <span className="narr-persp-dot" style={{ backgroundColor: ANGLE_COLORS[p.angle] || '#a3a3a3' }} />
+              {p.name}
+              <span className="narr-persp-angle">{p.angle}</span>
             </span>
           ))}
-          {sources.length < topic.sources.length && (
-            <span className="narrative-source-more">+{topic.sources.length - sources.length}</span>
-          )}
-        </span>
-        <div className="narrative-heat">
-          <div className="narrative-track">
-            <div className="narrative-fill" style={{ width: `${sentiment.pct}%`, backgroundColor: sentiment.color }} />
-          </div>
-          <span className="narrative-status" style={{ color: sentiment.color }}>{sentiment.label}</span>
         </div>
+      )}
+
+      {/* Heat indicator */}
+      <div className="narr-heat">
+        <div className="narr-heat-track">
+          <div className="narr-heat-fill" style={{ width: `${pct}%`, backgroundColor: heatColor }} />
+        </div>
+        <span className="narr-heat-label" style={{ color: heatColor }}>{heatLabel}</span>
       </div>
-      <div className="narrative-timeline">
-        {topic.items.slice(0, 4).map((item, idx) => (
-          <div key={item.id} className="timeline-item" onClick={() => onNewsClick(item.id)}>
-            <div className={`timeline-dot ${idx === 0 ? 'latest' : ''}`} />
-            {idx < Math.min(topic.items.length, 4) - 1 && <div className="timeline-line" />}
-            <div className="timeline-content">
-              <div className="timeline-source">{item.source}</div>
-              <div className="timeline-title">{item.title}</div>
+
+      {/* Timeline */}
+      <div className="narr-timeline">
+        {topic.items.map((item, idx) => (
+          <div key={item.id} className="tl-item" onClick={() => onNewsClick(item.id)}>
+            <div className={`tl-dot ${idx === 0 ? 'active' : ''}`} />
+            <div className="tl-line" />
+            <div className="tl-body">
+              <div className="tl-meta">
+                <span className="tl-source">{item.source}</span>
+                {item.publishedAt && <span className="tl-time">{formatDate(item.publishedAt)}</span>}
+              </div>
+              <div className="tl-title">{item.title}</div>
             </div>
           </div>
         ))}
@@ -68,7 +89,7 @@ export function TopicsView({ topics, onNewsClick }: Props) {
     <div className="topics-view">
       <div className="tph">
         <h2 className="tph-title">今日叙事</h2>
-        <span className="tph-sub">{topics.length} 个话题</span>
+        <span className="tph-sub">{topics.length} 个话题 · {topics.reduce((s, t) => s + t.count, 0)} 篇报道</span>
       </div>
       <div className="topics-stream">
         {topics.map((topic, i) => {
@@ -92,6 +113,7 @@ export function TopicsView({ topics, onNewsClick }: Props) {
                     <div className="ts-sources">
                       {topic.sources.slice(0, 3).join(' · ')}
                       {topic.sources.length > 3 && ` · +${topic.sources.length - 3}`}
+                      {topic.dateRange && <span className="ts-date"> · {topic.dateRange}</span>}
                     </div>
                   </div>
                 </div>

@@ -87,6 +87,8 @@ export interface TopicCluster {
   keyword: string
   count: number
   sources: string[]
+  sourcePerspectives?: { name: string; angle: string }[]
+  dateRange?: string
   items: NewsItem[]
 }
 

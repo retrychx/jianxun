@@ -145,7 +145,7 @@ export async function topics(env: Env) {
   const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
   const items = all.results as any[]
   const used = new Set<number>()
-  const topics: { keyword: string; count: number; sources: string[]; items: any[] }[] = []
+  const topics: any[] = []
 
   for (const item of items) {
     if (used.has(item.id)) continue
@@ -157,13 +157,41 @@ export async function topics(env: Env) {
       if (words.some((w: string) => other.title?.includes(w))) { cluster.push(other); used.add(other.id) }
     }
     if (cluster.length >= 2) {
-      topics.push({ keyword: words.slice(0, 3).join(' · '), count: cluster.length, sources: [...new Set(cluster.map(i => i.source))], items: cluster.slice(0, 5) })
+      // Date range
+      const dates = cluster.map(i => i.published_at).filter(Boolean).sort()
+      const dateRange = dates.length >= 2 ? dates[0].slice(0, 10) + ' ~ ' + dates[dates.length - 1].slice(0, 10) : dates[0]?.slice(0, 10) || ''
+      // Source perspectives
+      const sourcePerspectives = [...new Set(cluster.map(i => i.source))].map(s => ({
+        name: s,
+        angle: PERSPECTIVES[s] || '综合'
+      }))
+      topics.push({
+        keyword: words.slice(0, 3).join(' · '),
+        count: cluster.length,
+        sources: [...new Set(cluster.map(i => i.source))],
+        sourcePerspectives,
+        dateRange,
+        items: cluster.slice(0, 5),
+      })
     }
   }
   topics.sort((a, b) => b.count - a.count)
-  const result = { topics: topics.slice(0, 15).map(t => ({ ...t, items: t.items.map(mapNews) })) }
+  const result = { topics: topics.slice(0, 15).map((t: any) => ({ ...t, items: t.items.map(mapNews) })) }
   if (env.KV) cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
   return result
+}
+
+const PERSPECTIVES: Record<string, string> = {
+  '36氪': '商业', '少数派': '效率', '爱范儿': '消费',
+  '量子位': 'AI', '钛媒体': '产业', '雷锋网': '技术',
+  '品玩': '趋势', 'Solidot': '开源', 'V2EX 热榜': '社区',
+  '开源中国': '开源', '投资界': '创投', '中国新闻网': '综合',
+  '美团技术': '工程', 'Hacker News': '社区', 'GitHub Trending': '开源',
+  'TechCrunch': '创投', 'The Verge': '消费', 'Ars Technica': '深度',
+  'Wired': '文化', 'Engadget': '消费', 'Dev.to': '社区',
+  'Android Central': '消费', 'New Scientist': '科学',
+  'ScienceDaily': '科学', 'Space.com': '科学', 'MIT Tech Review': 'AI',
+  'NPR': '综合', 'BBC Tech': '综合',
 }
 
 export async function entitySearch(env: Env, name: string) {
