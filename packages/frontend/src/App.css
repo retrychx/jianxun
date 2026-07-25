@@ -348,7 +348,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .briefing-source { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em }
 .briefing-cat { padding: 0 6px; border-radius: 3px; color: #fff; font-size: 9px; font-weight: 600; line-height: 1.6 }
 
-.briefing-title { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text); margin-bottom: 6px; transition: color .15s }
+.briefing-title { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text); transition: color .15s }
 .briefing-card:hover .briefing-title { color: var(--accent) }
 
 .briefing-reason {
