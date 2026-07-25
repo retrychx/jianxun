@@ -157,40 +157,46 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px) } to { opacity: 1; transform: translateX(-50%) translateY(0) } }
 
-/* ===== Category Tabs ===== */
+/* ===== Category Pills ===== */
 .tab-bar {
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  overflow: hidden;
 }
 .tab-list {
-  display: flex; gap: 0; overflow-x: auto;
+  display: flex; gap: 6px; overflow-x: auto;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding: 2px 0;
 }
 .tab-list::-webkit-scrollbar { display: none }
 .tab-item {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 10px 16px 10px;
-  border: none; background: transparent;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
   font-size: 13px; font-weight: 500; color: var(--text-secondary);
   cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  font-family: inherit; position: relative;
-  transition: color .15s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  font-family: inherit;
+  transition: all .2s cubic-bezier(.16,1,.3,1);
+  scroll-snap-align: start;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.tab-item:hover { color: var(--text) }
+.tab-item:hover { border-color: var(--scrollbar); color: var(--text) }
 .tab-item.active {
-  color: var(--text); font-weight: 600;
-  border-bottom-color: var(--accent);
+  background: var(--text); color: var(--toast-text);
+  border-color: var(--text); font-weight: 600;
 }
-.tab-icon { opacity: .6; flex-shrink: 0 }
+.tab-icon { opacity: .5; flex-shrink: 0 }
 .tab-item.active .tab-icon { opacity: 1 }
 .tab-count {
   font-size: 11px; font-weight: 500; color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-  background: var(--bg); padding: 0 6px; border-radius: 4px; line-height: 1.6;
+  padding: 0 5px; line-height: 1.5;
 }
-.tab-item.active .tab-count { background: var(--accent-light); color: var(--accent) }/* ===== Main Layout ===== */
+.tab-item.active .tab-count { color: rgba(255,255,255,.6) }/* ===== Main Layout ===== */
 .main-layout { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start }
 @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr } }
 
