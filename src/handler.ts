@@ -131,9 +131,9 @@ export async function detail(env: Env, id: number) {
   const words = tokenize(news.title)
   let related: any[] = []
   if (words.length) {
-    const clauses = words.map((_: string, i: number) => \`title LIKE ?\`)
-    const params = words.map((w: string) => \`%\${w}%\`)
-    const candidates = await env.DB.prepare(\`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10\`).bind(id, ...params).all()
+    const clauses = words.map((_: string, i: number) => `title LIKE ?`)
+    const params = words.map((w: string) => `%\${w}%`)
+    const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (\${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
     related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
     related.forEach((r: any) => delete r.sim)
   }
