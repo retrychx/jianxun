@@ -99,20 +99,29 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .app { max-width: 1200px; margin: 0 auto; padding: 0 20px }
 
 /* ===== Header ===== */
-.header { padding-top: 10px; margin-bottom: 20px }
-.header-top { display: flex; align-items: center; gap: 4px; margin-bottom: 4px }
-.back-btn {
-  width: 28px; height: 28px; border-radius: var(--radius-sm);
-  border: none; background: transparent; cursor: pointer;
-  color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
-  transition: all .15s; flex-shrink: 0; margin-right: 2px;
+.header { padding: 12px 0 14px; margin-bottom: 4px }
+.header-top { display: flex; align-items: center; gap: 12px }
+.logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
+
+.header-search-box {
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  max-width: 240px; position: relative;
 }
-.back-btn:hover { background: var(--card-hover); color: var(--text) }
-.logo { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex: 1 }
+.hs-icon { color: var(--text-tertiary); flex-shrink: 0 }
+.hs-field {
+  flex: 1; border: none; background: transparent;
+  font-size: 13px; font-family: inherit; color: var(--text);
+  outline: none; padding: 4px 0;
+}
+.hs-field::placeholder { color: var(--text-tertiary) }
+.hs-field-clear {
+  border: none; background: none; cursor: pointer;
+  color: var(--text-tertiary); font-size: 14px; line-height: 1; padding: 0 2px;
+}
 
 .header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0 }
 .ha-btn {
-  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  width: 30px; height: 30px; border-radius: var(--radius-sm);
   border: none; background: transparent; cursor: pointer;
   color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
   transition: all .15s;
@@ -120,20 +129,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ha-btn:hover { background: var(--card-hover); color: var(--text) }
 .ha-btn:disabled { opacity: .4; cursor: not-allowed }
 
-@keyframes spin { to { transform: rotate(360deg) } }
-
-.header-search-bar {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 14px; animation: fadeIn .15s ease;
-}
-.hs-input-wide {
-  flex: 1; padding: 8px 12px; border: 1px solid var(--border);
-  border-radius: var(--radius-sm); background: var(--surface);
-  font-size: 14px; font-family: inherit; color: var(--text);
-  outline: none;
-}
-.hs-input-wide:focus { border-color: var(--accent) }
-.hs-close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--text-tertiary); padding: 0 4px }/* ===== Theme Toggle ===== */
+@keyframes spin { to { transform: rotate(360deg) } }/* ===== Theme Toggle ===== */
 .theme-btn {
   width: 32px; height: 32px; border-radius: var(--radius-sm);
   border: 1px solid var(--border); background: var(--surface);
@@ -329,10 +325,10 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 /* ===== Briefing ===== */
 .briefing-view { animation: fadeUp .5s var(--ease) both }
 .briefing-header { margin-bottom: 20px }
-.briefing-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px }
-.briefing-icon { color: var(--accent) }
-.briefing-title { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.02em }
-.briefing-subtitle { font-size: 13px; color: var(--text-tertiary); margin-left: 26px }
+.briefing-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px }
+.briefing-icon { color: var(--accent); margin-top: -1px }
+.briefing-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.02em; line-height: 1.2 }
+.briefing-subtitle { font-size: 13px; color: var(--text-tertiary); margin-top: 2px }
 
 .briefing-list { display: flex; flex-direction: column; gap: 8px }
 .briefing-card {
@@ -747,12 +743,11 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 
   .header { border-bottom-width: 0; margin-bottom: 14px }
-  .header { padding-top: 6px }
-  .header-top { margin-bottom: 10px }
-  .logo { font-size: 18px }
+  .header { padding: 10px 0 10px }
+  .logo { font-size: 17px }
+  .header-search-box { max-width: none }
+  .hs-field { font-size: 12px }
   .ha-btn { width: 28px; height: 28px }
-  .header-nav { gap: 0; margin-bottom: 14px }
-  .hn-link { font-size: 13px; padding-bottom: 8px; margin-right: 16px }
 @media (max-width: 420px) {
   .card-image-wrap { height: 140px }
   .card-body { padding: 12px }
