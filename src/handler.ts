@@ -1,8 +1,8 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, KVNamespace } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
 import { extractContent, analyzeWithDeepSeek, titleSimilarity } from './analysis.js'
 
-type Env = { DB: D1Database; DEEPSEEK_API_KEY?: string }
+type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string }
 
 // Map snake_case DB fields to camelCase for frontend
 function mapNews(row: any) {
@@ -40,6 +40,13 @@ export async function listNews(env: Env, url: URL) {
   const page = parseInt(url.searchParams.get('page') || '1')
   const pageSize = parseInt(url.searchParams.get('pageSize') || '50')
   const offset = (page - 1) * pageSize
+  const cacheKey = category && category !== '全部' ? 'list:' + category : 'list:all'
+
+  // Try KV cache
+  if (env.KV && page === 1 && pageSize <= 50) {
+    const cached = await cacheGet<any>(env.KV, cacheKey)
+    if (cached) return cached
+  }
 
   let query = 'SELECT * FROM news'
   let countQuery = 'SELECT COUNT(*) as total FROM news'
@@ -58,30 +65,49 @@ export async function listNews(env: Env, url: URL) {
     env.DB.prepare(query).bind(...params).all(),
     env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
   ])
-  return { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
+  const result = { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
+  if (env.KV && page === 1) cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
+  return result
 }
 
 export async function trending(env: Env) {
+  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'trending'); if (cached) return cached }
   const items = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 30').all()
-  return { items: (items.results as any[]).map(mapNews) }
+  const result = { items: (items.results as any[]).map(mapNews) }
+  if (env.KV) cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
+  return result
 }
 
 export async function categories(env: Env) {
+  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'categories'); if (cached) return cached }
   const result = await env.DB.prepare('SELECT category as name, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC').all()
-  return { categories: result.results }
+  const data = { categories: result.results }
+  if (env.KV) cacheSet(env.KV, 'categories', data, CACHE_TTL.categories)
+  return data
 }
 
 export async function stats(env: Env) {
+  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'stats'); if (cached) return cached }
   const [total, today] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as total FROM news").first<{ total: number }>(),
     env.DB.prepare("SELECT COUNT(*) as total FROM news WHERE created_at >= datetime('now', 'start of day')").first<{ total: number }>(),
   ])
-  return { total: total?.total || 0, today: today?.total || 0 }
+  const data = { total: total?.total || 0, today: today?.total || 0 }
+  if (env.KV) cacheSet(env.KV, 'stats', data, CACHE_TTL.stats)
+  return data
 }
 
 export async function fetchNews(env: Env) {
   const articles = await fetchAllRSS(env.DB)
   const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY)
+  // Invalidate caches
+  if (env.KV && saved > 0) {
+    env.KV.delete('list:all').catch(() => {})
+    env.KV.delete('trending').catch(() => {})
+    env.KV.delete('topics').catch(() => {})
+    env.KV.delete('stats').catch(() => {})
+    env.KV.delete('categories').catch(() => {})
+  }
   return { fetched: saved }
 }
 
@@ -163,6 +189,7 @@ export async function detail(env: Env, id: number) {
 }
 
 export async function topics(env: Env) {
+  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'topics'); if (cached) return cached }
   const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
   const items = all.results as any[]
   const used = new Set<number>()
@@ -182,7 +209,9 @@ export async function topics(env: Env) {
     }
   }
   topics.sort((a, b) => b.count - a.count)
-  return { topics: topics.slice(0, 15).map(t => ({ ...t, items: t.items.map(mapNews) })) }
+  const result = { topics: topics.slice(0, 15).map(t => ({ ...t, items: t.items.map(mapNews) })) }
+  if (env.KV) cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
+  return result
 }
 
 export async function entitySearch(env: Env, name: string) {
@@ -198,14 +227,37 @@ export async function fixImages(env: Env) {
       const { image } = await extractContent(row.url)
       if (image) {
         await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run()
+        updated++
         return true
       }
       return false
     })
   )
-  updated = results.filter(r => r.status === 'fulfilled' && r.value).length
   return { updated, total: (rows.results as any[]).length }
 }
+
+// KV cache helpers
+const CACHE_TTL = {
+  list: 60,        // 1 min — fresh news
+  trending: 120,   // 2 min
+  stats: 300,      // 5 min
+  categories: 300, // 5 min
+  topics: 600,     // 10 min
+  detail: 3600,    // 1 hour (analysis is cached in DB)
+}
+
+async function cacheGet<T>(kv: KVNamespace, key: string): Promise<T | null> {
+  try {
+    const val = await kv.get(key)
+    return val ? JSON.parse(val) : null
+  } catch { return null }
+}
+
+async function cacheSet(kv: KVNamespace, key: string, data: any, ttl: number) {
+  try { await kv.put(key, JSON.stringify(data), { expirationTtl: ttl }) } catch {}
+}
+
+export { cacheGet, cacheSet, CACHE_TTL }
 
 export function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } })
