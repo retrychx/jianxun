@@ -33,6 +33,12 @@ export const TrendingPanel = memo(function TrendingPanel({ items, onNewsClick }:
                 <span>{item.source}</span>
                 <span className="trending-meta-dot">·</span>
                 <span>{item.category}</span>
+                {item.heat != null && item.heat > 1 && (
+                  <>
+                    <span className="trending-meta-dot">·</span>
+                    <span>{item.heat} 家媒体</span>
+                  </>
+                )}
               </span>
             </div>
             <a

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Cpu, TrendingUp, Globe, Scale, Users, Trophy, Film, Gamepad2, Heart, BookOpen, Ellipsis } from 'lucide-react'
 import type { CategoryCount } from '../api'
 
@@ -16,6 +16,26 @@ const CATEGORY_ICONS: Record<string, typeof Cpu> = {
 
 export function CategoryBar({ categories, active, onSelect }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
+  const [fade, setFade] = useState({ left: false, right: false })
+
+  // 跟踪横向滚动位置，给可滚方向加渐隐提示
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const update = () => {
+      setFade({
+        left: list.scrollLeft > 4,
+        right: list.scrollLeft + list.clientWidth < list.scrollWidth - 4,
+      })
+    }
+    update()
+    list.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      list.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [categories])
 
   const handleClick = (name: string) => {
     onSelect(name)
@@ -35,7 +55,7 @@ export function CategoryBar({ categories, active, onSelect }: Props) {
   const allCategories = [{ name: '全部', count: 0 }, ...categories]
 
   return (
-    <div className="tab-bar">
+    <div className={`tab-bar${fade.left ? ' fade-left' : ''}${fade.right ? ' fade-right' : ''}`}>
       <div className="tab-list" ref={listRef}>
         {allCategories.map(c => {
           const Icon = c.name === '全部' ? null : (CATEGORY_ICONS[c.name] || Ellipsis)

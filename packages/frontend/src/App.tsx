@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Sun, Moon, Feather, ChevronRight, Newspaper } from 'lucide-react'
+import { Sun, Moon, Feather, Newspaper } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel, TrendingStrip } from './components/TrendingPanel'
@@ -9,10 +9,11 @@ import { TopicsView } from './components/TopicsView'
 import { SearchView } from './components/SearchView'
 import { EntityView } from './components/EntityView'
 import { FetchMascot } from './components/FetchMascot'
+import { BottomNav } from './components/BottomNav'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, searchNews } from './api'
 import { useFollow } from './hooks/useFollow'
-import { categoryColor } from './constants'
+import { useHashRoute, useNavigate, buildHash, type Route } from './hooks/useHashRoute'
 import './App.css'
 
 const PAGE_SIZE = 50
@@ -31,7 +32,6 @@ function SkeletonCard() {
   )
 }
 
-type View = 'briefing' | 'feed' | 'topics'
 type Theme = 'light' | 'dark' | 'retro'
 const THEMES: Theme[] = ['light', 'dark', 'retro']
 const THEME_META: Record<Theme, { label: string; Icon: typeof Sun }> = {
@@ -56,15 +56,11 @@ export default function App() {
   const [briefingItems, setBriefingItems] = useState<BriefingItem[]>([])
   const [briefingAt, setBriefingAt] = useState<Date | null>(null)
   const [categories, setCategories] = useState<CategoryCount[]>([])
-  const [activeCat, setActiveCat] = useState('全部')
   const [stats, setStats] = useState({ total: 0, today: 0 })
   const [initialLoading, setInitialLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [msg, setMsg] = useState('')
-  const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null)
-  const [view, setView] = useState<View>('briefing')
-  const [entityView, setEntityView] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [scrolled, setScrolled] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -73,13 +69,26 @@ export default function App() {
   const [searchError, setSearchError] = useState(false)
   const { follows, isFollowing, toggleFollow } = useFollow()
 
+  // Hash 路由：route 为当前 hash 解析结果；baseRoute 为详情覆盖层之下的视图
+  const route = useHashRoute()
+  const navigate = useNavigate()
+  const [baseRoute, setBaseRoute] = useState<Route>(route)
+  useEffect(() => {
+    if (!route.newsId) setBaseRoute(route)
+  }, [route])
+  const selectedNewsId = route.newsId
+  const view = baseRoute.view
+  const activeCat = view === 'feed' ? (baseRoute.cat ?? '全部') : ''
+
+  // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
+  const navCountRef = useRef(0)
+  const lastViewHashRef = useRef('#/')
+
   // Theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('theme', theme)
   }, [theme])
-
-  const cycleTheme = () => setTheme(t => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length])
 
   // Lock body scroll when panel open
   useEffect(() => {
@@ -141,27 +150,77 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      await Promise.all([loadAll(), loadNews('全部'), loadStats()])
+      await Promise.all([loadAll(), loadStats()])
       if (!cancelled) setInitialLoading(false)
     }
     init()
     return () => { cancelled = true }
-  }, [loadAll, loadNews, loadStats])
+  }, [loadAll, loadStats])
 
-  const handleCategory = (cat: string) => {
-    setActiveCat(cat)
-    setSearchQuery('')
-    setEntityView(null)
-    setView('feed')
-    loadNews(cat)
+  // feed 视图：路由驱动加载与分类切换
+  const routeView = baseRoute.view
+  const routeCat = baseRoute.cat
+  useEffect(() => {
+    if (routeView !== 'feed') return
+    loadNews(routeCat ?? '全部')
+  }, [routeView, routeCat, loadNews])
+
+  // 视图切换后回到顶部
+  const routeEntity = baseRoute.entity
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [routeView, routeCat, routeEntity])
+
+  // 搜索框与路由双向同步；记录最近非搜索视图供清空后返回
+  const searchNavRef = useRef(false) // 本次 search 跳转来自输入框，跳过后续 query 回写
+  useEffect(() => {
+    if (route.newsId) return
+    if (route.view === 'search') {
+      if (searchNavRef.current) searchNavRef.current = false
+      else setSearchQuery(route.q ?? '')
+    } else {
+      setSearchQuery('')
+      lastViewHashRef.current = buildHash(route)
+    }
+  }, [route])
+
+  const handleSearchChange = (v: string) => {
+    setSearchQuery(v)
+    if (v.trim()) {
+      const hash = buildHash({ view: 'search', q: v.trim() })
+      if (window.location.hash.startsWith('#/search')) {
+        navigate(hash, true) // 输入中只替换 URL，不刷历史
+      } else {
+        searchNavRef.current = true
+        navCountRef.current++
+        navigate(hash)
+      }
+    } else if (window.location.hash.startsWith('#/search')) {
+      navCountRef.current++
+      navigate(lastViewHashRef.current)
+    }
   }
 
-  const handleNewsClick = useCallback((id: number) => setSelectedNewsId(id), [])
+  const handleCategory = (cat: string) => {
+    navCountRef.current++
+    navigate(buildHash({ view: 'feed', cat }))
+  }
+
+  const openNews = useCallback((id: number) => {
+    navCountRef.current++
+    navigate(`#/news/${id}`)
+  }, [navigate])
 
   const openEntity = useCallback((name: string) => {
-    setEntityView(name)
-    setSelectedNewsId(null)
-  }, [])
+    navCountRef.current++
+    navigate(buildHash({ view: 'entity', entity: name }))
+  }, [navigate])
+
+  // 返回键：SPA 内有历史则后退，否则（刷新/分享直达）回到简报
+  const goBack = useCallback(() => {
+    if (navCountRef.current > 0) window.history.back()
+    else navigate('#/')
+  }, [navigate])
 
   // Search: 300ms debounce + 请求序号防竞态
   const searchSeq = useRef(0)
@@ -193,99 +252,57 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  const searchActive = searchQuery.trim().length > 0
-
-  // Stats for mini viz
-  const totalScore = categories.reduce((s, c) => s + c.count, 0) || 1
-
-  const themeMeta = THEME_META[theme]
-
-  const backToBriefing = (
-    <button className="browse-back" onClick={() => setView('briefing')}>
-      <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} />
-      <span>返回简报</span>
-    </button>
-  )
-
   return (
     <div className="app">
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">
         <div className="header-top">
-          <h1 className="logo">简讯</h1>
+          <h1 className="logo"><a href="#/" aria-label="简讯首页">简讯</a></h1>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} aria-label="搜索新闻" />
-            {searchQuery && <button className="hs-field-clear" onClick={() => setSearchQuery('')} aria-label="清除搜索">&times;</button>}
+            <input className="hs-field" placeholder="搜索新闻..." value={searchQuery} onChange={e => handleSearchChange(e.target.value)} aria-label="搜索新闻" />
+            {searchQuery && <button className="hs-field-clear" onClick={() => handleSearchChange('')} aria-label="清除搜索">&times;</button>}
           </div>
-          <div className="header-actions">
-            <button className="ha-btn" onClick={cycleTheme} title={`主题：${themeMeta.label}`} aria-label={`切换主题，当前为${themeMeta.label}模式`}>
-              <themeMeta.Icon size={15} />
-            </button>
+          <div className="header-actions" role="group" aria-label="主题切换">
+            {THEMES.map(t => {
+              const meta = THEME_META[t]
+              return (
+                <button
+                  key={t}
+                  className={`ha-btn${theme === t ? ' active' : ''}`}
+                  onClick={() => setTheme(t)}
+                  title={`${meta.label}主题`}
+                  aria-label={`切换到${meta.label}主题`}
+                  aria-pressed={theme === t}
+                >
+                  <meta.Icon size={15} />
+                </button>
+              )
+            })}
           </div>
         </div>
       </header>
       <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
 
-      {/* Mini data viz */}
-      {categories.length > 0 && (
-        <div className="stats-bar">
-          {categories.slice(0, 7).map(c => (
-            <div key={c.name} className="stat-item">
-              <span className="stat-dot" style={{ background: categoryColor(c.name) }} />
-              {c.name}
-            </div>
-          ))}
-          <div className="stat-bar-group">
-            {categories.slice(0, 12).map(c => {
-              const pct = Math.min((c.count / totalScore) * 20 + 4, 20)
-              return (
-                <div
-                  key={c.name}
-                  className="stat-bar-seg"
-                  style={{ height: pct, background: categoryColor(c.name) }}
-                  title={`${c.name}: ${c.count}`}
-                />
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      <TrendingStrip items={trending} onNewsClick={handleNewsClick} />
-
       <div className="main-layout">
         <div className="news-feed">
           {initialLoading ? (
             <FetchMascot />
-          ) : searchActive ? (
+          ) : view === 'search' ? (
             <SearchView
               results={searchResults}
               query={searchQuery.trim()}
               searching={searching}
               error={searchError}
-              onClear={() => setSearchQuery('')}
-              onNewsClick={handleNewsClick}
+              onClear={() => handleSearchChange('')}
+              onNewsClick={openNews}
             />
-          ) : entityView ? (
-            <EntityView entity={entityView} onBack={() => setEntityView(null)} onNewsClick={handleNewsClick} />
-          ) : view === 'briefing' ? (
-            <BriefingView
-              items={briefingItems}
-              topics={topics}
-              newsCount={newsTotal}
-              updatedAt={briefingAt}
-              follows={follows}
-              onNewsClick={handleNewsClick}
-              onShowTopics={() => setView('topics')}
-              onShowFeed={() => setView('feed')}
-              onEntityClick={openEntity}
-              onUnfollow={(name) => toggleFollow(name, 'entity')}
-            />
+          ) : view === 'entity' && baseRoute.entity ? (
+            <EntityView entity={baseRoute.entity} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'feed' ? (
             <>
-              {backToBriefing}
+              <TrendingStrip items={trending} onNewsClick={openNews} />
               {loading ? (
                 <>
                   <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
@@ -301,27 +318,37 @@ export default function App() {
                   <div className="card-list">
                     {news.map((item, i) => (
                       <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} onClick={handleNewsClick} />
+                        <NewsCard item={item} onClick={openNews} />
                       </div>
                     ))}
                   </div>
                   {page * PAGE_SIZE < newsTotal && (
-                    <button className="load-more" onClick={() => loadNews(activeCat, page + 1, true)} disabled={loadingMore}>
+                    <button className="load-more" onClick={() => loadNews(activeCat || '全部', page + 1, true)} disabled={loadingMore}>
                       {loadingMore ? '加载中...' : `加载更多（还有 ${newsTotal - news.length} 篇）`}
                     </button>
                   )}
                 </>
               )}
             </>
+          ) : view === 'topics' ? (
+            <TopicsView topics={topics} onNewsClick={openNews} />
           ) : (
-            <>
-              {backToBriefing}
-              <TopicsView topics={topics} onNewsClick={handleNewsClick} />
-            </>
+            <BriefingView
+              items={briefingItems}
+              topics={topics}
+              newsCount={stats.total || newsTotal}
+              updatedAt={briefingAt}
+              follows={follows}
+              onNewsClick={openNews}
+              onShowTopics={() => { navCountRef.current++; navigate('#/topics') }}
+              onShowFeed={() => { navCountRef.current++; navigate('#/feed') }}
+              onEntityClick={openEntity}
+              onUnfollow={(name) => toggleFollow(name, 'entity')}
+            />
           )}
         </div>
         <aside className="sidebar">
-          <TrendingPanel items={trending} onNewsClick={handleNewsClick} />
+          <TrendingPanel items={trending} onNewsClick={openNews} />
         </aside>
       </div>
 
@@ -329,11 +356,13 @@ export default function App() {
         <footer className="footer">共 {stats.total} 篇 · 今日 {stats.today} 篇</footer>
       )}
 
+      <BottomNav active={view} />
+
       <DetailPanel
         newsId={selectedNewsId}
-        onClose={() => setSelectedNewsId(null)}
+        onClose={goBack}
         onEntityClick={openEntity}
-        onNewsClick={handleNewsClick}
+        onNewsClick={openNews}
         isFollowing={isFollowing}
         toggleFollow={toggleFollow}
       />

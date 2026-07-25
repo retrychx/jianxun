@@ -2,7 +2,7 @@ import { Sparkles, ChevronRight, Newspaper, Hash } from 'lucide-react'
 import type { BriefingItem, TopicCluster } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
-import { formatTime } from '../utils'
+import { formatTime, formatDate } from '../utils'
 
 interface Props {
   items: BriefingItem[]
@@ -61,9 +61,16 @@ export function BriefingView({ items, topics, newsCount, updatedAt, follows, onN
                 <div className="briefing-meta">
                   <span className="briefing-source">{item.source}</span>
                   <span className="briefing-cat" style={{ backgroundColor: categoryColor(item.category) }}>{item.category}</span>
+                  {item.publishedAt && <span className="briefing-time">{formatDate(item.publishedAt)}</span>}
+                  {item.heat != null && item.heat > 1 && (
+                    <span className="briefing-heat">{item.heat} 家媒体报道</span>
+                  )}
                 </div>
                 <h3 className="bf-card-title">{item.title}</h3>
-                <div className="briefing-reason"><span className="briefing-reason-dot" />{item.reason}</div>
+                <p className="briefing-summary">{item.summary ?? item.reason}</p>
+                {item.summary && item.reason && item.reason !== item.summary && (
+                  <div className="briefing-reason"><span className="briefing-reason-dot" />{item.reason}</div>
+                )}
               </div>
             </article>
           ))}

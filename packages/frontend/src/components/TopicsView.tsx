@@ -132,7 +132,7 @@ export function TopicsView({ topics, onNewsClick }: Props) {
                     <div className="ts-meter-fill" style={{ height: Math.min(topic.count * 5, 36) }} />
                   </div>
                   <div className="ts-info">
-                    <div className="ts-keyword">{topic.keyword}</div>
+                    <div className="ts-keyword">{topic.label ?? topic.keyword}</div>
                     <div className="ts-sources">
                       {topic.sources.slice(0, 3).join(' · ')}
                       {topic.sources.length > 3 && ` · +${topic.sources.length - 3}`}

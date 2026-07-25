@@ -11,6 +11,8 @@ export interface NewsItem {
   summary: string | null
   publishedAt: string | null
   createdAt: string
+  /** 同源跨媒体计数（增量字段，旧 API 可能不返回） */
+  heat?: number
 }
 
 export interface EntityItem {
@@ -81,6 +83,8 @@ export function getStats(): Promise<{ total: number; today: number }> {
 
 export interface TopicCluster {
   keyword: string
+  /** 中文话题名（增量字段，兜底用 keyword 拼接） */
+  label?: string
   count: number
   sources: string[]
   sourcePerspectives?: { name: string; angle: string }[]

@@ -98,10 +98,15 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
     }
   }
 
-  // Touch-to-close (drag down)
+  // Touch-to-close (drag down)，仅移动端底部抽屉启用
   const touchStart = useRef(0)
-  const onTouchStart = (e: React.TouchEvent) => { touchStart.current = e.touches[0].clientY }
+  const isMobileSheet = () => window.matchMedia('(max-width: 768px)').matches
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (!isMobileSheet()) return
+    touchStart.current = e.touches[0].clientY
+  }
   const onTouchEnd = (e: React.TouchEvent) => {
+    if (!isMobileSheet()) return
     const diff = e.changedTouches[0].clientY - touchStart.current
     if (diff > 80) handleClose()
   }
