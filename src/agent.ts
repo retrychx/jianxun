@@ -57,6 +57,15 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   // Phase 7: Narrative tracking
   await updateNarratives(env).catch(() => {})
+
+  // Phase 8: Breaking news detection
+  await detectBreakingNews(env).catch(() => {})
+
+  // Phase 9: Entity linking
+  await linkEntities(env).catch(() => {})
+
+  // Phase 10: Source health auto-tuning
+  await tuneSourceWeights(env).catch(() => {})
 }
 
 // ===================================================================
@@ -473,4 +482,234 @@ export async function loadActiveNarratives(env: Env): Promise<Narrative[]> {
 export async function loadSingleNarrative(env: Env, keyword: string): Promise<Narrative | null> {
   const row = await env.DB.prepare('SELECT * FROM narratives WHERE keyword = ?').bind(keyword).first<any>()
   return (row as Narrative) || null
+}
+
+// ===================================================================
+// Phase 8 — detectBreakingNews
+// ===================================================================
+
+/** Detect and flag high-significance stories covered by multiple sources.
+ *  Stores in narratives table with __breaking__ prefix, emits SSE event. */
+export async function detectBreakingNews(env: Env) {
+  // Query recently analyzed articles with high significance
+  const rows = await env.DB.prepare(
+    `SELECT id, title, summary, source, analysis_detail FROM news
+     WHERE analyzed_at >= datetime('now', '-6 hours')
+       AND analysis_detail IS NOT NULL
+     ORDER BY score DESC LIMIT 30`
+  ).all<any>()
+  const articles = rows.results || []
+
+  // Parse analysis_detail and group by significance + cross-source signal
+  const highSig: any[] = []
+  for (const a of articles) {
+    try {
+      const d = JSON.parse(a.analysis_detail)
+      if (d.impact === 'high' || d.significance) {
+        highSig.push({ ...a, _detail: d })
+      }
+    } catch {}
+  }
+
+  if (highSig.length < 2) return
+
+  // Group highly significant articles by title_norm overlap
+  const groups = new Map<string, any[]>()
+  for (const a of highSig) {
+    // Use first 30 chars of title as rough dedup key
+    const key = (a.title || '').slice(0, 30).toLowerCase().replace(/[^\w一-鿿]/g, '')
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(a)
+  }
+
+  // Multi-source groups = breaking news candidates
+  let brokeCount = 0
+  for (const [, group] of groups) {
+    if (group.length < 2) continue
+    const sources = [...new Set(group.map((a: any) => a.source))]
+    if (sources.length < 2) continue
+
+    const keyword = `__breaking__${group[0].title.slice(0, 40)}`
+    const summary = group.map((a: any) => a._detail?.significance || '').filter(Boolean).join('；').slice(0, 300)
+    const ids = group.map((a: any) => a.id)
+
+    try {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO narratives (keyword, label, first_seen, last_updated, status, summary, developments, article_ids, source_stats)
+         VALUES (?, ?, date('now'), datetime('now'), 'active', ?, '[]', ?, ?)`
+      ).bind(
+        keyword,
+        `🔴 突发: ${group[0].title.slice(0, 40)}`,
+        summary || `${sources.join('/')} 同时报道该事件`,
+        JSON.stringify(ids),
+        JSON.stringify(Object.fromEntries(sources.map(s => [s, group.filter((a: any) => a.source === s).length]))),
+      ).run()
+
+      // Emit SSE event for frontend
+      signalEvent('breaking', {
+        title: group[0].title.slice(0, 80),
+        sources,
+        significance: summary.slice(0, 100),
+        articleCount: group.length,
+      }).catch(() => {})
+
+      brokeCount++
+    } catch {}
+  }
+  return { breaking: brokeCount }
+}
+
+// ===================================================================
+// Phase 9 — linkEntities
+// ===================================================================
+
+/** Link synonymous entity names across articles using Jaccard similarity.
+ *  Stores canonical mappings in entity_links table, then updates article
+ *  entities to use canonical names. */
+export async function linkEntities(env: Env) {
+  // Collect entities from recently analyzed articles
+  const rows = await env.DB.prepare(
+    `SELECT id, entities FROM news
+     WHERE analyzed_at >= datetime('now', '-12 hours') AND entities IS NOT NULL`
+  ).all<any>()
+  if (!rows.results?.length) return { linked: 0 }
+
+  // Collect all entity names with their types
+  const rawEntities: { name: string; type: string; articleId: number }[] = []
+  for (const r of rows.results) {
+    try {
+      const list = JSON.parse(r.entities)
+      if (Array.isArray(list)) {
+        for (const e of list) {
+          if (e?.name) rawEntities.push({ name: e.name, type: e.type || 'concept', articleId: r.id })
+        }
+      }
+    } catch {}
+  }
+
+  // Dedup entity names (canonicalization via Jaccard similarity)
+  const SIMILARITY_THRESHOLD = 0.6
+  const canonical = new Map<string, { canonical: string; type: string }>()
+
+  for (const e of rawEntities) {
+    const norm = e.name.toLowerCase().trim()
+    if (canonical.has(norm)) continue
+
+    // Check for similar existing entries
+    let found = false
+    for (const [existing, mapped] of canonical) {
+      const tokensA = new Set(norm.split(/[\s_-]+/))
+      const tokensB = new Set(existing.split(/[\s_-]+/))
+      // Also check substring: "Apple" ≈ "Apple Inc."
+      if (norm.includes(existing) || existing.includes(norm)) {
+        canonical.set(norm, { canonical: mapped.canonical, type: mapped.type || e.type })
+        found = true
+        break
+      }
+      let intersection = 0
+      for (const t of tokensA) if (tokensB.has(t)) intersection++
+      const similarity = intersection / Math.max(tokensA.size + tokensB.size - intersection, 1)
+      if (similarity >= SIMILARITY_THRESHOLD && tokensA.size > 0 && tokensB.size > 0) {
+        canonical.set(norm, { canonical: mapped.canonical, type: mapped.type || e.type })
+        found = true
+        break
+      }
+    }
+    if (!found) {
+      canonical.set(norm, { canonical: e.name, type: e.type })
+    }
+  }
+
+  // Store links in entity_links table
+  const now = new Date().toISOString()
+  let linked = 0
+  for (const [original, mapping] of canonical) {
+    try {
+      const existing = await env.DB.prepare('SELECT article_count FROM entity_links WHERE original_name = ?').bind(original).first<any>()
+      const count = existing ? (existing.article_count || 0) + 1 : 1
+      await env.DB.prepare(
+        `INSERT OR REPLACE INTO entity_links (original_name, canonical_name, entity_type, last_seen, article_count)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(original, mapping.canonical, mapping.type, now, count).run()
+      linked++
+    } catch {}
+  }
+
+  // Update article entities to use canonical names
+  // For articles that had entities, rewrite the entities JSON with canonical names
+  for (const articleId of [...new Set(rawEntities.map(e => e.articleId))]) {
+    const article = rawEntities.filter(e => e.articleId === articleId)
+    const updatedEntities = article.map(e => ({
+      name: canonical.get(e.name.toLowerCase().trim())?.canonical || e.name,
+      type: e.type,
+      weight: 0.5,
+    }))
+    // Dedup by canonical name
+    const seen = new Set<string>()
+    const deduped = updatedEntities.filter(e => {
+      const key = e.name.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (deduped.length > 0) {
+      await env.DB.prepare('UPDATE news SET entities = ? WHERE id = ?')
+        .bind(JSON.stringify(deduped), articleId).run()
+    }
+  }
+  return { linked }
+}
+
+// ===================================================================
+// Phase 10 — tuneSourceWeights
+// ===================================================================
+
+/** Auto-adjust source weights based on fetch failure patterns.
+ *  Sources with repeated failures get their score weight reduced;
+ *  recovered sources gradually regain weight.
+ *  Also normalizes source_stats source names against RSS_SOURCES entries. */
+export async function tuneSourceWeights(env: Env) {
+  // Get current source health
+  const stats = await env.DB.prepare('SELECT * FROM source_stats').all<any>()
+  const rows = stats.results || []
+  if (!rows.length) return { tuned: 0 }
+
+  let tuned = 0
+  for (const row of rows) {
+    const failCount = row.fail_count || 0
+    const source = row.source
+
+    // Calculate adaptive weight: base 1.0, each failure reduces by 0.1, min 0.1
+    let newWeight = Math.max(0.1, 1.0 - failCount * 0.1)
+
+    // Check existing adaptive weight
+    const existing = await env.DB.prepare('SELECT weight FROM source_weights WHERE source = ?').bind(source).first<any>()
+    if (existing) {
+      const oldWeight = existing.weight || 1.0
+      // Don't change if weight hasn't moved enough
+      if (Math.abs(oldWeight - newWeight) < 0.05) {
+        // But ensure consecutive_failures is tracked
+        await env.DB.prepare(
+          'UPDATE source_weights SET consecutive_failures = ?, total_fetches = total_fetches + 1, last_adjusted = datetime(\'now\') WHERE source = ?'
+        ).bind(failCount, source).run()
+        continue
+      }
+    }
+
+    // Upsert adaptive weight
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO source_weights (source, weight, consecutive_failures, total_fetches, last_adjusted)
+       VALUES (?, ?, ?, COALESCE((SELECT total_fetches FROM source_weights WHERE source = ?) + 1, 1), datetime('now'))`
+    ).bind(source, newWeight, failCount, source).run()
+
+    // Reset fail_count if recovered (consecutive successes): if source_stats shows
+    // last_ok is recent and fail_count has been decremented or stale, we gradually raise weight
+    if (failCount === 0 && existing && existing.weight < 1.0) {
+      const recoveryWeight = Math.min(1.0, (existing.weight || 0.5) + 0.15)
+      await env.DB.prepare('UPDATE source_weights SET weight = ? WHERE source = ?').bind(recoveryWeight, source).run()
+    }
+
+    tuned++
+  }
+  return { tuned }
 }

@@ -198,6 +198,16 @@ export default function App() {
       loadDigestDates().catch(() => {})
     })
 
+    es.addEventListener('breaking', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        const title = data.title || ''
+        const sources = data.sources || []
+        showToast(`🔴 突发: ${title}（${sources.join('/')}）`)
+      } catch {}
+      loadAll().catch(() => {})
+    })
+
     es.onerror = () => {
       es.close()
       reconnectTimer = window.setTimeout(() => {
