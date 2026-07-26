@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Sun, Moon, Feather, Newspaper } from 'lucide-react'
+import { Sun, Moon, Feather, Newspaper, MessageCircleQuestion } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel, TrendingStrip } from './components/TrendingPanel'
@@ -71,6 +71,8 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [msg, setMsg] = useState('')
+  const [askOpen, setAskOpen] = useState(false)
+  const [askQuery, setAskQuery] = useState('')
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [lang, setLang] = useState<Lang>(getLang)
   const [digestDates, setDigestDates] = useState<string[]>([])
@@ -336,7 +338,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
+      {view === 'feed' && <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />}
 
       <div className="main-layout">
         <div className="news-feed">
@@ -353,6 +355,7 @@ export default function App() {
               lang={lang}
               onClear={() => handleSearchChange('')}
               onNewsClick={openNews}
+              onAsk={(q) => { setAskQuery(q); setAskOpen(true) }}
             />
           ) : view === 'entity' && baseRoute.entity ? (
             <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} />
@@ -362,8 +365,6 @@ export default function App() {
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'sources' ? (
             <SourcesView />
-          ) : view === 'ask' ? (
-            <AskView initialQuestion={baseRoute.q} lang={lang} onNewsClick={openNews} />
           ) : view === 'weekly' ? (
             <WeeklyView />
           ) : view === 'feed' ? (
@@ -430,6 +431,23 @@ export default function App() {
       </footer>
 
       <BottomNav active={navActive} />
+
+      {/* AI 问答悬浮入口 */}
+      <button
+        className="ask-fab"
+        onClick={() => { setAskQuery(''); setAskOpen(true) }}
+        aria-label="问问简讯"
+        title="问问简讯 · AI 搜索"
+      >
+        <MessageCircleQuestion size={21} />
+      </button>
+      <AskView
+        open={askOpen}
+        initialQuestion={askQuery}
+        lang={lang}
+        onNewsClick={(id) => { setAskOpen(false); openNews(id) }}
+        onClose={() => setAskOpen(false)}
+      />
 
       <DetailPanel
         newsId={selectedNewsId}

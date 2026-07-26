@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { CornerDownLeft, History, MessageCircleQuestion, SearchX } from 'lucide-react'
+import { CornerDownLeft, History, MessageCircleQuestion, SearchX, X } from 'lucide-react'
 import type { AskRef, AskResponse } from '../api'
 import { askNews } from '../api'
 import { displayTitle, type Lang } from '../utils'
 
 interface Props {
-  /** 路由带入的预填问题（#/ask?q=...），变化时自动提问一次 */
+  /** 浮窗是否打开 */
+  open: boolean
+  /** 外部带入的预填问题（如搜索视图「直接提问」），变化时自动提问一次 */
   initialQuestion?: string
   lang: Lang
   onNewsClick: (id: number) => void
+  onClose: () => void
 }
 
 const HISTORY_KEY = 'jianxun_ask_history'
@@ -43,7 +46,8 @@ function AnswerText({ text, refs, onNewsClick }: { text: string; refs: AskRef[];
   )
 }
 
-export function AskView({ initialQuestion, lang, onNewsClick }: Props) {
+// AI 问答浮窗：右下角弹出，桌面锚定右下角，移动端近全屏
+export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: Props) {
   const [question, setQuestion] = useState(initialQuestion || '')
   const [current, setCurrent] = useState('')
   const [result, setResult] = useState<AskResponse | null>(null)
@@ -79,90 +83,105 @@ export function AskView({ initialQuestion, lang, onNewsClick }: Props) {
     }
   }
 
-  // 从搜索视图带问题进来时自动提问
+  // 外部带问题进来时自动提问
   const askedInitial = useRef('')
   useEffect(() => {
     const q = (initialQuestion || '').trim()
-    if (q.length >= 2 && askedInitial.current !== q) {
+    if (open && q.length >= 2 && askedInitial.current !== q) {
       askedInitial.current = q
       submit(q)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuestion])
+  }, [initialQuestion, open])
 
+  // Esc 关闭
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
   const idle = !loading && !result && !error
 
   return (
-    <div className="ask-view">
-      <div className="briefing-header">
-        <div className="briefing-title-row">
-          <MessageCircleQuestion size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <h2 className="briefing-title">问问简讯</h2>
-        </div>
-        <p className="briefing-subtitle">基于近 7 天的报道回答，附引用来源</p>
-      </div>
-
-      <div className="ask-input-row">
-        <input
-          className="ask-input"
-          value={question}
-          onChange={e => setQuestion(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') submit(question) }}
-          placeholder="问一个最近新闻的问题，如：本周 OpenAI 有什么新动向？"
-          maxLength={60}
-          aria-label="提问"
-        />
-        <button
-          className="ask-submit"
-          onClick={() => submit(question)}
-          disabled={loading || question.trim().length < 2}
-          aria-label="提交问题"
-        >
-          <CornerDownLeft size={15} />
-        </button>
-      </div>
-
-      {idle && history.length > 0 && (
-        <div className="bf-section">
-          <div className="bf-section-title"><History size={13} /> 最近提问</div>
-          <div className="ask-history-list">
-            {history.map(h => (
-              <button key={h} className="ask-history-item" onClick={() => submit(h)}>{h}</button>
-            ))}
+    <>
+      <div className="ask-backdrop" onClick={onClose} />
+      <div className="ask-widget" role="dialog" aria-label="问问简讯" aria-modal="true">
+        <div className="ask-widget-head">
+          <div className="ask-widget-title">
+            <MessageCircleQuestion size={15} />
+            问问简讯
+            <span className="ask-widget-sub">基于近 7 天的报道回答</span>
           </div>
+          <button className="ask-widget-close" onClick={onClose} aria-label="关闭"><X size={16} /></button>
         </div>
-      )}
 
-      {loading && <div className="search-hint">正在检索相关报道并生成回答...</div>}
+        <div className="ask-widget-body">
+          <div className="ask-input-row">
+            <input
+              className="ask-input"
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submit(question) }}
+              placeholder="如：本周 OpenAI 有什么新动向？"
+              maxLength={60}
+              aria-label="提问"
+            />
+            <button
+              className="ask-submit"
+              onClick={() => submit(question)}
+              disabled={loading || question.trim().length < 2}
+              aria-label="提交问题"
+            >
+              <CornerDownLeft size={15} />
+            </button>
+          </div>
 
-      {error && <div className="search-hint">回答生成失败，请稍后重试</div>}
-
-      {!loading && !error && result && (
-        result.answer ? (
-          <div className="ask-result">
-            <AnswerText text={result.answer} refs={result.refs} onNewsClick={onNewsClick} />
-            {result.refs.length > 0 && (
-              <div className="bf-section">
-                <div className="bf-section-title">引用来源</div>
-                {result.refs.map(r => (
-                  <article key={r.ref} className="ask-ref-card" onClick={() => onNewsClick(r.id)}>
-                    <span className="ask-ref-num">[{r.ref}]</span>
-                    <div className="ask-ref-body">
-                      <div className="ask-ref-title">{displayTitle(r, lang)}</div>
-                      <div className="ask-ref-source">{r.source}</div>
-                    </div>
-                  </article>
+          {idle && history.length > 0 && (
+            <div className="bf-section">
+              <div className="bf-section-title"><History size={13} /> 最近提问</div>
+              <div className="ask-history-list">
+                {history.map(h => (
+                  <button key={h} className="ask-history-item" onClick={() => submit(h)}>{h}</button>
                 ))}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="search-hint">
-            <SearchX size={24} style={{ marginBottom: 8 }} />
-            <p>近 7 天没有找到与「{current}」相关的报道，换个问题试试</p>
-          </div>
-        )
-      )}
-    </div>
+            </div>
+          )}
+
+          {loading && <div className="search-hint">正在检索相关报道并生成回答...</div>}
+
+          {error && <div className="search-hint">回答生成失败，请稍后重试</div>}
+
+          {!loading && !error && result && (
+            result.answer ? (
+              <div className="ask-result">
+                <AnswerText text={result.answer} refs={result.refs} onNewsClick={onNewsClick} />
+                {result.refs.length > 0 && (
+                  <div className="bf-section">
+                    <div className="bf-section-title">引用来源</div>
+                    {result.refs.map(r => (
+                      <article key={r.ref} className="ask-ref-card" onClick={() => onNewsClick(r.id)}>
+                        <span className="ask-ref-num">[{r.ref}]</span>
+                        <div className="ask-ref-body">
+                          <div className="ask-ref-title">{displayTitle(r, lang)}</div>
+                          <div className="ask-ref-source">{r.source}</div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="search-hint">
+                <SearchX size={24} style={{ marginBottom: 8 }} />
+                <p>近 7 天没有找到与「{current}」相关的报道，换个问题试试</p>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </>
   )
 }

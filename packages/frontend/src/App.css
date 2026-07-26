@@ -984,14 +984,60 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 /* ===== Entity View ===== */
 .entity-view { animation: fadeUp .5s var(--ease) both }
 
-/* ===== Ask（问答搜索） ===== */
-.ask-view { animation: fadeUp .5s var(--ease) both }
+/* ===== Ask（AI 问答浮窗） ===== */
+.ask-fab {
+  position: fixed; right: 20px; bottom: 24px; z-index: 950;
+  width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-lg);
+  transition: transform .2s var(--ease), background .15s;
+}
+.ask-fab:hover { background: var(--accent-hover); transform: translateY(-2px) }
+.ask-fab:active { transform: scale(.94) }
+
+.ask-backdrop { position: fixed; inset: 0; z-index: 955; background: rgba(0,0,0,.18); animation: fadeIn .2s ease }
+.ask-widget {
+  position: fixed; right: 20px; bottom: 82px; z-index: 960;
+  width: 400px; max-width: calc(100vw - 40px); max-height: min(620px, 78vh);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: askPop .28s var(--ease);
+  transform-origin: bottom right;
+}
+@keyframes askPop { from { opacity: 0; transform: translateY(10px) scale(.97) } to { opacity: 1; transform: none } }
+.ask-widget-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px; border-bottom: 1px solid var(--border-light); flex-shrink: 0;
+}
+.ask-widget-title { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--text) }
+.ask-widget-title svg { color: var(--accent) }
+.ask-widget-sub { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px }
+.ask-widget-close {
+  border: none; background: none; cursor: pointer; padding: 4px;
+  color: var(--text-tertiary); display: flex; border-radius: var(--radius-sm);
+}
+.ask-widget-close:hover { background: var(--card-hover); color: var(--text) }
+.ask-widget-body { padding: 14px; overflow-y: auto }
+
 /* 搜索视图顶部的提问入口 */
 .search-ask-link {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 4px; border: none; background: none;
+  cursor: pointer; font-family: inherit; padding: 0;
   margin-bottom: 12px; font-size: 12px; font-weight: 500; color: var(--accent);
 }
 .search-ask-link:hover { color: var(--accent-hover) }
+
+@media (max-width: 768px) {
+  .ask-fab { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 14px) }
+  .ask-widget {
+    right: 0; left: 0; bottom: 0; width: auto; max-width: none; max-height: 82vh;
+    border-radius: 16px 16px 0 0; border-bottom: none;
+    transform-origin: bottom center;
+    animation: sheetUp .35s cubic-bezier(.16,1,.3,1);
+  }
+}
 
 .ask-input-row { display: flex; gap: 8px; margin-bottom: 18px }
 .ask-input {

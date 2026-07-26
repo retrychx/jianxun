@@ -1,7 +1,6 @@
 import { X, SearchX, MessageCircleQuestion } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { NewsCard } from './NewsCard'
-import { buildHash } from '../hooks/useHashRoute'
 import type { Lang } from '../utils'
 
 interface Props {
@@ -12,15 +11,17 @@ interface Props {
   lang: Lang
   onClear: () => void
   onNewsClick: (id: number) => void
+  /** 把当前搜索词作为问题打开 AI 问答浮窗 */
+  onAsk: (q: string) => void
 }
 
-export function SearchView({ results, query, searching, error, lang, onClear, onNewsClick }: Props) {
+export function SearchView({ results, query, searching, error, lang, onClear, onNewsClick, onAsk }: Props) {
   return (
     <div className="search-view">
       {/* 问答搜索入口：把当前搜索词带过去当问题 */}
-      <a className="search-ask-link" href={buildHash({ view: 'ask', q: query })}>
+      <button className="search-ask-link" onClick={() => onAsk(query)}>
         <MessageCircleQuestion size={13} /> 直接提问 →
-      </a>
+      </button>
       <div className="search-header">
         <span className="search-query">「{query}」的搜索结果</span>
         <button className="search-clear" onClick={onClear} aria-label="清除搜索">
