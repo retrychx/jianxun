@@ -640,7 +640,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 /* ===== Scroll to Top ===== */
 .scroll-top {
-  position: fixed; bottom: 24px; right: 24px; width: 36px; height: 36px;
+  position: fixed; bottom: 84px; right: 25px; width: 36px; height: 36px;
   border-radius: 50%; background: var(--surface); border: 1px solid var(--border);
   box-shadow: var(--shadow); cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-secondary); line-height: 1;
   display: flex; align-items: center; justify-content: center;
@@ -870,7 +870,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .weekly-total-num { font-size: 36px }
   .weekly-entity-name { min-width: 72px; max-width: 100px }
 
-  .scroll-top { bottom: 76px; right: 16px; width: 32px; height: 32px; font-size: 12px }
+  .scroll-top { bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 72px); right: 23px; width: 32px; height: 32px; font-size: 12px }
 
   /* Sheet: full screen on mobile */
   .sheet-panel { max-height: 100vh; min-height: 72vh; border-radius: 0 }
