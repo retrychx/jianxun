@@ -1,0 +1,10 @@
+name = "jianxun-cron"
+main = "index.ts"
+compatibility_date = "2026-07-01"
+
+# 每 2 小时触发一次内容抓取（GitHub Actions cron 延迟太大，作为主调度）
+[triggers]
+crons = ["23 */2 * * *"]
+
+[vars]
+SITE_URL = "https://jianxun.pages.dev"
