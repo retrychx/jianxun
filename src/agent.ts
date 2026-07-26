@@ -2,15 +2,25 @@
  * News Intelligence Agent — unified AI processing pipeline.
  *
  * Runs as a single ctx.waitUntil task after each fetchNews(), orchestrating:
- *   1. fixMissingImages  — fetch OG images for articles without one
- *   2. analyzeNewArticles — enhanced AI analysis (summary, entities, sentiment, keyPoints, etc.)
- *   3. refineCategories  — DeepSeek batch reclassify low-confidence articles
- *   4. translateMissing  — English→Chinese batch translation
- *   5. crossRefAnalysis  — compare same-story coverage across sources (NEW)
+ *   1. fixMissingImages    — fetch OG images for articles without one
+ *   2. analyzeNewArticles  — enhanced AI analysis (summary, entities, sentiment, keyPoints, etc.)
+ *   3. refineCategories    — DeepSeek batch reclassify low-confidence articles
+ *   4. translateMissing    — English→Chinese batch translation
+ *   5. crossRefAnalysis    — compare same-story coverage across sources
  *   6. generateDailyDigest — AI daily digest
- *   7. updateNarratives  — cross-cycle story tracking
+ *   7. updateNarratives    — cross-cycle story tracking
+ *   8. detectBreakingNews  — flag high-significance multi-source stories
+ *   9. linkEntities        — canonicalize entity names across articles
+ *  10. tuneSourceWeights   — auto-adjust source weights from failure patterns
  *
  * Each phase is also exported individually for standalone admin endpoints.
+ *
+ * Hardening features:
+ *  - Circuit breaker: pings DeepSeek once before starting AI phases
+ *  - Per-phase timeout (30s) prevents stuck calls from blocking the pipeline
+ *  - Structured logging: each phase records duration, success/failure, and reason
+ *  - Concurrency guard: skips if the agent ran within the last 5 minutes
+ *  - All phases degrade gracefully: a single phase failure never kills the pipeline
  */
 
 import type { ExecutionContext } from '@cloudflare/workers-types'
@@ -22,6 +32,7 @@ import {
   translateBatch,
   crossRefAnalysis,
   generateAnswer,
+  generateTopicLabels,
   type DeepSeekResult,
   type AnalysisDetail,
   type CrossRefResult,
@@ -29,43 +40,92 @@ import {
 import { tokenize } from './tokenize.js'
 import { clusterNews } from './topics.js'
 import { fallbackLabel, likeEscape, type Env } from './helpers.js'
+import { generateTodayDigest } from './digest.js'
 
-// ─── Public: main orchestrator ─────────────────────────────────
+// ─── Orchestrator ──────────────────────────────────────────────
 
 export async function runAgent(env: Env, ctx?: ExecutionContext) {
+  const start = Date.now()
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return
 
-  // Phase 1: Images
-  await fixMissingImages(env).catch(() => {})
+  // Concurrency guard: skip if agent ran within the last 5 minutes
+  const lastRun = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>()
+  if (lastRun?.value) {
+    const elapsed = Date.now() - new Date(lastRun.value).getTime()
+    if (elapsed < 300_000) { /* 5 min */ return }
+  }
 
-  // Phase 2: AI analysis (summary, entities, sentiment, keyPoints, significance)
-  await analyzeNewArticles(env).catch(() => {})
+  // Circuit breaker: cheap ping to verify DeepSeek is responding
+  const apiOk = await pingDeepSeek(apiKey)
+  const skipAi = !apiOk
 
-  // Phase 3: Category refinement
-  await refineCategories(env).catch(() => {})
+  // Run phases with timeout + structured logging
+  const results: Record<string, any> = {}
 
-  // Phase 4: English→Chinese translation
-  await translateMissing(env).catch(() => {})
+  // Phase 1: Images (no AI needed)
+  results.fixMissingImages = await runPhase('fixMissingImages', () => fixMissingImages(env))
 
-  // Phase 5: Cross-source comparison (NEW)
-  await runCrossRefAnalysis(env).catch(() => {})
+  if (!skipAi) {
+    results.analyzeNewArticles = await runPhase('analyzeNewArticles', () => analyzeNewArticles(env), 45_000)
+    results.refineCategories = await runPhase('refineCategories', () => refineCategories(env), 30_000)
+    results.translateMissing = await runPhase('translateMissing', () => translateMissing(env), 30_000)
+    results.crossRefAnalysis = await runPhase('crossRefAnalysis', () => runCrossRefAnalysis(env), 30_000)
+  }
 
-  // Phase 6: Daily digest
-  const { generateTodayDigest } = await import('./digest.js')
-  await generateTodayDigest(env).catch(() => {})
+  results.generateDailyDigest = await runPhase('generateDailyDigest', () => generateTodayDigest(env), 30_000)
+  results.updateNarratives = await runPhase('updateNarratives', () => updateNarratives(env), 30_000)
+  results.detectBreakingNews = await runPhase('detectBreakingNews', () => detectBreakingNews(env), 15_000)
+  results.linkEntities = await runPhase('linkEntities', () => linkEntities(env), 15_000)
+  results.tuneSourceWeights = await runPhase('tuneSourceWeights', () => tuneSourceWeights(env), 10_000)
 
-  // Phase 7: Narrative tracking
-  await updateNarratives(env).catch(() => {})
+  // Record agent run log
+  const totalMs = Date.now() - start
+  try {
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_run', ?)`
+    ).bind(new Date().toISOString()).run()
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_log', ?)`
+    ).bind(JSON.stringify({ ts: new Date().toISOString(), totalMs, skipAi, results })).run()
+  } catch {}
+}
 
-  // Phase 8: Breaking news detection
-  await detectBreakingNews(env).catch(() => {})
+// ─── Utilities ─────────────────────────────────────────────────
 
-  // Phase 9: Entity linking
-  await linkEntities(env).catch(() => {})
+/** Per-phase timeout wrapper + structured logging. */
+async function runPhase<T>(name: string, fn: () => Promise<T>, timeoutMs = 30_000): Promise<{ ok: boolean; result?: T; error?: string; ms: number }> {
+  const start = Date.now()
+  try {
+    const result = await Promise.race([
+      fn(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ])
+    const ms = Date.now() - start
+    console.log(`[agent] ${name} ok ${ms}ms`)
+    return { ok: true, result, ms }
+  } catch (err: any) {
+    const ms = Date.now() - start
+    const msg = err?.message || err?.toString() || 'unknown error'
+    console.error(`[agent] ${name} FAIL ${ms}ms: ${msg.slice(0, 200)}`)
+    return { ok: false, error: msg.slice(0, 200), ms }
+  }
+}
 
-  // Phase 10: Source health auto-tuning
-  await tuneSourceWeights(env).catch(() => {})
+/** Ping DeepSeek with a minimal request to verify the API is responsive. */
+async function pingDeepSeek(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch('https://api.deepseek.com/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(5_000),
+    })
+    return res.ok
+  } catch {
+    console.error('[agent] DeepSeek ping failed — skipping AI phases')
+    return false
+  }
 }
 
 // ===================================================================
@@ -439,7 +499,6 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
     const ids = cluster.items.map((i: any) => i.id)
     const rows = await env.DB.prepare(`SELECT id, title, summary, description, source FROM news WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<any>()
     const clusterArticles = rows.results || []
-    const { generateTopicLabels } = await import('./analysis.js')
     const label = await generateTopicLabels([clusterArticles.slice(0, 3).map((a: any) => a.title)], apiKey).then(l => l?.[0] || null)
     const narrativesLabel = label || fallbackLabel(cluster.words)
     const sources: Record<string, number> = {}
@@ -529,6 +588,13 @@ export async function detectBreakingNews(env: Env) {
     const sources = [...new Set(group.map((a: any) => a.source))]
     if (sources.length < 2) continue
 
+    // Dedup: skip if a similar __breaking__ narrative was already created
+    const titlePrefix = group[0].title.slice(0, 30).replace(/[%_\\]/g, '\\$&')
+    const existing = await env.DB.prepare(
+      "SELECT id FROM narratives WHERE keyword LIKE ? ESCAPE '\\' AND status = 'active' LIMIT 1"
+    ).bind(`__breaking__${titlePrefix}%`).first<any>()
+    if (existing) continue
+
     const keyword = `__breaking__${group[0].title.slice(0, 40)}`
     const summary = group.map((a: any) => a._detail?.significance || '').filter(Boolean).join('；').slice(0, 300)
     const ids = group.map((a: any) => a.id)
@@ -570,7 +636,8 @@ export async function linkEntities(env: Env) {
   // Collect entities from recently analyzed articles
   const rows = await env.DB.prepare(
     `SELECT id, entities FROM news
-     WHERE analyzed_at >= datetime('now', '-12 hours') AND entities IS NOT NULL`
+     WHERE analyzed_at >= datetime('now', '-12 hours') AND entities IS NOT NULL
+     ORDER BY score DESC LIMIT 100`
   ).all<any>()
   if (!rows.results?.length) return { linked: 0 }
 

@@ -13,17 +13,17 @@ export async function listNews(env: Env, url: URL) {
   const cached = await cacheGet<any>(cacheKey)
   if (cached) return cached
 
-  let query = 'SELECT * FROM news'
+  let query = 'SELECT n.*, COALESCE(sw.weight, 1.0) as source_weight FROM news n LEFT JOIN source_weights sw ON sw.source = n.source'
   let countQuery = 'SELECT COUNT(*) as total FROM news'
   const params: any[] = []
   const countParams: any[] = []
 
   if (category && category !== '全部') {
-    query += ' WHERE category = ?'
+    query += ' WHERE n.category = ?'
     countQuery += ' WHERE category = ?'
     params.push(category); countParams.push(category)
   }
-  query += ' ORDER BY published_at DESC, created_at DESC LIMIT ? OFFSET ?'
+  query += ' ORDER BY (n.score * COALESCE(sw.weight, 1.0)) DESC, n.published_at DESC LIMIT ? OFFSET ?'
   params.push(pageSize, offset)
 
   const [items, totalResult] = await Promise.all([
