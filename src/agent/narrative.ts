@@ -9,12 +9,13 @@ import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
 import { fallbackLabel, type Env } from '../helpers.js'
-import { getLastAgentRun, setLastAgentRun } from './utils.js'
+import { markAgentRun as setLastAgentRun } from './state.js'
+import { CONFIG } from './config.js'
 
-const MATCH_THRESHOLD = 0.1
-const MIN_CLUSTER_SIZE = 3
-const STALE_DAYS = 7
-const ARCHIVE_DAYS = 14
+const MATCH_THRESHOLD = CONFIG.narrative.matchThreshold
+const MIN_CLUSTER_SIZE = CONFIG.narrative.minClusterSize
+const STALE_DAYS = CONFIG.narrative.staleDays
+const ARCHIVE_DAYS = CONFIG.narrative.archiveDays
 
 export interface Narrative {
   id: number
@@ -45,7 +46,7 @@ export async function updateNarratives(env: Env) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return
 
-  const lastRun = await getLastAgentRun(env)
+  const lastRun = new Date(Date.now() - 86400000).toISOString()  // fallback: 24h ago
   const narratives = await loadActiveNarratives(env)
 
   const rows = await env.DB.prepare(

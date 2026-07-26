@@ -12,8 +12,13 @@
  */
 
 import { tokenize } from '../tokenize.js'
+import { CONFIG } from '../agent/config.js'
+import {
+  ANALYSIS_PROMPT, TOPIC_LABELS_PROMPT, DIGEST_PROMPT, TRANSLATION_PROMPT,
+  STORYLINE_PROMPT, ANSWER_PROMPT, CROSSREF_PROMPT, CLASSIFY_PROMPT,
+} from './prompts.js'
 
-export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
+export const DEEPSEEK_MODEL = CONFIG.deepseek.model
 
 export async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response | null> {
   for (let i = 0; i <= retries; i++) {
@@ -93,7 +98,7 @@ export async function generateTopicLabels(titleGroups: string[][], apiKey: strin
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是新闻话题编辑。根据每组新闻标题为每组起一个话题标签：不超过10个字的中文短句，像人话，不要关键词堆砌，不要标点。只返回JSON数组：[{"index":0,"label":"..."},...]' }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TOPIC_LABELS_PROMPT }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -132,7 +137,7 @@ export async function translateBatch(articles: { id: number; title: string; summ
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是翻译助手。把以下英文新闻的标题和摘要翻译成中文，summary_zh 不超过80字、忠实原意。只返回 JSON 数组：[{"id":数字,"title_zh":"...","summary_zh":"..."},...]' }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TRANSLATION_PROMPT }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048 }),
     })
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -148,7 +153,7 @@ export async function generateStoryline(articles: { title: string; summary: stri
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是新闻专题编辑。根据同一话题的多篇报道，写一段"前情提要"：不超过150字中文，按时间脉络讲清这件事的来龙去脉。只返回提要正文，不要 JSON、不要引号。' }, { role: 'user', content: articles.map(a => `${a.title}\n${(a.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: STORYLINE_PROMPT }, { role: 'user', content: articles.map(a => `${a.title}\n${(a.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
     })
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim(); if (!raw) return null
