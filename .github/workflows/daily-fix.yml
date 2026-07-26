@@ -16,3 +16,8 @@ jobs:
           curl -s --max-time 180 -X POST \
             -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
             "$SITE_URL/api/news/fix-images"
+      - name: Translate English articles
+        run: |
+          curl -s --max-time 120 -X POST \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
+            "$SITE_URL/api/news/translate"

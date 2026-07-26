@@ -24,9 +24,22 @@ export async function fetchAllRSS(DB: D1Database) {
   )
 
   const all: any[] = []
-  for (const r of results) {
-    if (r.status === 'fulfilled') all.push(...r.value)
-  }
+  const statUpdates: Promise<unknown>[] = []
+  results.forEach((r, i) => {
+    const name = RSS_SOURCES[i].name
+    if (r.status === 'fulfilled') {
+      all.push(...r.value)
+      statUpdates.push(DB.prepare(
+        "INSERT INTO source_stats (source, last_ok) VALUES (?, datetime('now')) ON CONFLICT(source) DO UPDATE SET last_ok = datetime('now'), last_error = NULL, fail_count = 0"
+      ).bind(name).run())
+    } else {
+      statUpdates.push(DB.prepare(
+        "INSERT INTO source_stats (source, last_error, fail_count) VALUES (?, datetime('now'), 1) ON CONFLICT(source) DO UPDATE SET last_error = datetime('now'), fail_count = fail_count + 1"
+      ).bind(name).run())
+    }
+  })
+  // Health stats must not break fetching
+  await Promise.allSettled(statUpdates)
   return all
 }
 

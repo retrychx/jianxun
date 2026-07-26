@@ -1,6 +1,7 @@
 import type { D1Database, KVNamespace, ExecutionContext } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
-import { extractContent, analyzeWithDeepSeek, generateTopicLabels, titleSimilarity } from './analysis.js'
+import { extractContent, analyzeWithDeepSeek, generateTopicLabels, generateDigest, translateBatch, generateStoryline, titleSimilarity } from './analysis.js'
+import { RSS_SOURCES } from './sources.js'
 
 type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
 
@@ -28,6 +29,8 @@ function mapNews(row: any) {
     category: row.category,
     score: row.score,
     summary: row.summary,
+    titleZh: row.title_zh || null,
+    summaryZh: row.summary_zh || null,
     publishedAt: row.published_at,
     createdAt: row.created_at,
   }
@@ -143,7 +146,268 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
     const deletions = ['trending', 'topics', 'stats', 'categories', 'briefing'].map(k => cacheDelete(k))
     await Promise.allSettled(deletions)
   }
+  // Digest generation involves a 30s LLM call, so it runs after the response
+  ctx.waitUntil(generateTodayDigest(env).catch(() => {}))
   return { fetched: saved }
+}
+
+// Generate at most one digest per CST day, once the day has enough new articles.
+export async function generateTodayDigest(env: Env): Promise<'exists' | 'insufficient' | 'failed' | 'generated'> {
+  const apiKey = env.DEEPSEEK_API_KEY
+  if (!apiKey) return 'failed'
+  const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<{ d: string }>()
+  const date = dateRow?.d
+  if (!date) return 'failed'
+  const existing = await env.DB.prepare('SELECT id FROM digests WHERE date = ?').bind(date).first()
+  if (existing) return 'exists'
+  // "Today" in UTC+8 starts at date('now','+8 hours') 00:00, i.e. that date minus 8h in UTC
+  const todayCount = await env.DB.prepare(
+    "SELECT COUNT(*) as n FROM news WHERE created_at >= datetime(date('now', '+8 hours'), '-8 hours')"
+  ).first<{ n: number }>()
+  if ((todayCount?.n || 0) < 10) return 'insufficient'
+  const candidates = await env.DB.prepare(
+    `SELECT n.id, n.title, n.summary, n.category, n.source,
+       (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+     FROM news n
+     WHERE published_at >= datetime('now', '-24 hours')
+     ORDER BY n.score DESC LIMIT 30`
+  ).all()
+  const digest = await generateDigest(candidates.results as any[], apiKey)
+  if (!digest) return 'failed'
+  await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')
+    .bind(date, digest.intro, JSON.stringify(digest.items), digest.extra ? JSON.stringify(digest.extra) : null).run()
+  await Promise.allSettled([cacheDelete('digest'), cacheDelete('digests')])
+  return 'generated'
+}
+
+// Admin/debug：内联跑一次日报生成，返回各阶段诊断（不写库）
+export async function debugDigest(env: Env) {
+  const apiKey = env.DEEPSEEK_API_KEY
+  if (!apiKey) return { stage: 'no-api-key' }
+  const candidates = await env.DB.prepare(
+    `SELECT n.id, n.title, n.summary, n.category, n.source,
+       (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+     FROM news n
+     WHERE published_at >= datetime('now', '-24 hours')
+     ORDER BY n.score DESC LIMIT 30`
+  ).all()
+  const res = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(60_000),
+    body: JSON.stringify({
+      model: 'deepseek-v4-flash',
+      messages: [
+        { role: 'system', content: '你是中文科技日报主编。从候选新闻中挑出今天最重要的 5-8 条做成日报。只返回 JSON：{"intro":"≤120字","items":[{"news_id":数字,"why":"≤30字","category":"分类"}],"extra":{"news_id":数字,"why":"≤30字"}或null}。news_id 必须来自候选列表。' },
+        { role: 'user', content: (candidates.results as any[]).slice(0, 30).map(c => `[${c.id}] ${c.title}（${c.source}/${c.category}）\n${(c.summary || '').slice(0, 200)}`).join('\n\n') }
+      ],
+      temperature: 0.2,
+      max_tokens: 2048,
+    }),
+  })
+  const text = await res.text()
+  let parsed: any = null
+  try {
+    const data = JSON.parse(text)
+    const raw = data.choices?.[0]?.message?.content || ''
+    parsed = { finishReason: data.choices?.[0]?.finish_reason, contentHead: raw.slice(0, 600), contentTail: raw.slice(-300) }
+  } catch { parsed = { nonJsonResponse: text.slice(0, 600) } }
+  return { stage: 'llm', httpStatus: res.status, candidateCount: candidates.results?.length, ...parsed }
+}
+
+export async function digest(env: Env, date: string | null) {
+  const cacheKey = date ? `digest:${date}` : 'digest'
+  { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
+  const row = date
+    ? await env.DB.prepare('SELECT * FROM digests WHERE date = ?').bind(date).first<any>()
+    : await env.DB.prepare('SELECT * FROM digests ORDER BY date DESC, id DESC LIMIT 1').first<any>()
+  if (!row) return null
+
+  let items: any[] = []
+  let extra: any = null
+  try { items = JSON.parse(row.items) } catch {}
+  try { extra = row.extra ? JSON.parse(row.extra) : null } catch {}
+  if (!Array.isArray(items)) items = []
+
+  // Join digest entries with news rows; deleted articles are skipped
+  const ids = [...items.map(i => i.news_id), extra?.news_id].filter(id => Number.isInteger(id))
+  const byId = new Map<number, any>()
+  if (ids.length) {
+    const rows = await env.DB.prepare(
+      `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+       FROM news n WHERE n.id IN (${ids.map(() => '?').join(',')})`
+    ).bind(...ids).all()
+    for (const r of rows.results as any[]) byId.set(r.id, r)
+  }
+
+  const result = {
+    date: row.date as string,
+    intro: row.intro as string,
+    items: items.flatMap((it: any) => {
+      const n = byId.get(it.news_id)
+      if (!n) return []
+      return [{
+        id: n.id, title: n.title, titleZh: n.title_zh || null,
+        why: it.why || '', category: it.category || n.category,
+        source: n.source, heat: n.heat || 1,
+      }]
+    }),
+    extra: (() => {
+      const n = extra && byId.get(extra.news_id)
+      return n ? { id: n.id, title: n.title, titleZh: n.title_zh || null, why: extra.why || '' } : null
+    })(),
+  }
+  await cacheSet(cacheKey, result, CACHE_TTL.digest)
+  return result
+}
+
+export async function digests(env: Env) {
+  { const cached = await cacheGet<any>('digests'); if (cached) return cached }
+  const rows = await env.DB.prepare('SELECT date FROM digests ORDER BY date DESC').all()
+  const result = { dates: (rows.results as any[]).map(r => r.date) }
+  await cacheSet('digests', result, CACHE_TTL.digests)
+  return result
+}
+
+export async function topic(env: Env, name: string) {
+  const cacheKey = `topic:${name}`
+  { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
+
+  // Same clustering as /topics; fall back to a plain title LIKE search
+  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
+  const hit = clusterNews(all.results as any[]).find(c =>
+    c.words.some(w => w === name || w.includes(name) || name.includes(w)) ||
+    fallbackLabel(c.words).includes(name)
+  )
+  let clusterItems: any[]
+  let keyword: string, label: string
+  if (hit) {
+    clusterItems = hit.items
+    keyword = hit.words.slice(0, 3).join(' · ')
+    label = fallbackLabel(hit.words)
+  } else {
+    const rows = await env.DB.prepare('SELECT * FROM news WHERE title LIKE ? ORDER BY published_at DESC LIMIT 20').bind(`%${name}%`).all()
+    if (!rows.results.length) return null
+    clusterItems = rows.results as any[]
+    keyword = name
+    label = name
+  }
+
+  // Storyline from the 10 highest-scoring articles in the cluster
+  const top = clusterItems.slice().sort((a: any, b: any) => (b.score || 0) - (a.score || 0)).slice(0, 10)
+  const storyline = await generateStoryline(
+    top.map((i: any) => ({ title: i.title, summary: i.summary || i.description || '' })),
+    env.DEEPSEEK_API_KEY
+  )
+
+  // Articles in chronological order
+  const timeline = clusterItems.slice()
+    .sort((a: any, b: any) => (a.published_at || '9999').localeCompare(b.published_at || '9999'))
+    .map(mapNews)
+
+  // Dominant sentiment label per source (rows without cached sentiment are skipped)
+  const bySource = new Map<string, { count: number; labels: Map<string, number> }>()
+  for (const r of clusterItems) {
+    const entry = bySource.get(r.source) || { count: 0, labels: new Map<string, number>() }
+    bySource.set(r.source, entry)
+    entry.count++
+    if (!r.sentiment) continue
+    try {
+      const label = JSON.parse(r.sentiment)?.label
+      if (label) entry.labels.set(label, (entry.labels.get(label) || 0) + 1)
+    } catch {}
+  }
+  const perspectives = [...bySource.entries()].map(([source, e]) => ({
+    source,
+    label: e.labels.size ? [...e.labels.entries()].sort((a, b) => b[1] - a[1])[0][0] : null,
+    count: e.count,
+  }))
+
+  const result = { keyword, label, storyline, timeline, perspectives }
+  await cacheSet(cacheKey, result, CACHE_TTL.topic)
+  return result
+}
+
+export async function sources(env: Env) {
+  { const cached = await cacheGet<any>('sources'); if (cached) return cached }
+  const [counts, stats] = await Promise.all([
+    env.DB.prepare(
+      "SELECT source, COUNT(*) as total, SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END) as today FROM news GROUP BY source"
+    ).all(),
+    env.DB.prepare('SELECT * FROM source_stats').all(),
+  ])
+  const countMap = new Map((counts.results as any[]).map(r => [r.source, r]))
+  const statMap = new Map((stats.results as any[]).map(r => [r.source, r]))
+  const weightMap = new Map(RSS_SOURCES.map(s => [s.name, s.weight ?? 1]))
+  // Configured sources first (in sources.ts order), then any legacy DB-only sources
+  const names = [...RSS_SOURCES.map(s => s.name), ...[...countMap.keys()].filter((n: string) => !weightMap.has(n))]
+  const items = names.map((name: string) => ({
+    name,
+    weight: weightMap.get(name) ?? 1,
+    total: countMap.get(name)?.total || 0,
+    today: countMap.get(name)?.today || 0,
+    lastOk: statMap.get(name)?.last_ok || null,
+    lastError: statMap.get(name)?.last_error || null,
+    failCount: statMap.get(name)?.fail_count || 0,
+  }))
+  const result = { items }
+  await cacheSet('sources', result, CACHE_TTL.sources)
+  return result
+}
+
+export async function weekly(env: Env) {
+  { const cached = await cacheGet<any>('weekly'); if (cached) return cached }
+  const rows = await env.DB.prepare(
+    "SELECT * FROM news WHERE created_at >= datetime('now', '-7 days') ORDER BY score DESC"
+  ).all()
+  const items = rows.results as any[]
+
+  // Count entity mentions across cached AI analyses
+  const entityCount = new Map<string, number>()
+  for (const r of items) {
+    if (!r.entities) continue
+    try {
+      const list = JSON.parse(r.entities)
+      if (!Array.isArray(list)) continue
+      for (const e of list) {
+        if (e?.name) entityCount.set(e.name, (entityCount.get(e.name) || 0) + 1)
+      }
+    } catch {}
+  }
+  const topEntities = [...entityCount.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([name, count]) => ({ name, count }))
+
+  // Top 5 topic clusters of the week, AI-labeled like /topics with keyword fallback
+  const clusters = clusterNews(items.slice(0, 80)).sort((a, b) => b.items.length - a.items.length).slice(0, 5)
+  const aiLabels = await generateTopicLabels(clusters.map(c => c.items.slice(0, 3).map(i => i.title)), env.DEEPSEEK_API_KEY)
+  const topTopics = clusters.map((c, i) => ({ label: aiLabels?.[i] || fallbackLabel(c.words), count: c.items.length }))
+
+  const result = { totalNew: items.length, topEntities, topTopics }
+  await cacheSet('weekly', result, CACHE_TTL.weekly)
+  return result
+}
+
+// Translate the 10 highest-scoring untranslated English articles and write back title_zh/summary_zh
+export async function translateMissing(env: Env) {
+  const apiKey = env.DEEPSEEK_API_KEY
+  if (!apiKey) return { translated: 0 }
+  const rows = await env.DB.prepare(
+    "SELECT id, title, summary, description FROM news WHERE lang = 'en' AND title_zh IS NULL ORDER BY score DESC LIMIT 10"
+  ).all()
+  if (!rows.results.length) return { translated: 0 }
+  const translated = await translateBatch(
+    (rows.results as any[]).map(r => ({ id: r.id, title: r.title, summary: r.summary || r.description || '' })),
+    apiKey
+  )
+  if (!translated) return { translated: 0 }
+  let n = 0
+  for (const t of translated) {
+    await env.DB.prepare('UPDATE news SET title_zh = ?, summary_zh = ? WHERE id = ?')
+      .bind(t.title_zh, t.summary_zh || null, t.id).run()
+    n++
+  }
+  return { translated: n }
 }
 
 export async function detail(env: Env, id: number) {
@@ -262,13 +526,12 @@ export async function briefing(env: Env) {
   return payload
 }
 
-export async function topics(env: Env) {
-  { const cached = await cacheGet<any>('topics'); if (cached) return cached }
-  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
-  const items = all.results as any[]
+// Greedy title-keyword clustering shared by /topics, /topic and /weekly:
+// seed with an unused article's keywords, then absorb every article whose title
+// contains one of them. Only clusters of 2+ articles are returned.
+function clusterNews(items: any[]): { words: string[]; items: any[] }[] {
   const used = new Set<number>()
-  const topics: any[] = []
-
+  const clusters: { words: string[]; items: any[] }[] = []
   for (const item of items) {
     if (used.has(item.id)) continue
     const words = tokenize(item.title)
@@ -278,7 +541,19 @@ export async function topics(env: Env) {
       if (used.has(other.id)) continue
       if (words.some((w: string) => other.title?.includes(w))) { cluster.push(other); used.add(other.id) }
     }
-    if (cluster.length >= 2) {
+    if (cluster.length >= 2) clusters.push({ words, items: cluster })
+  }
+  return clusters
+}
+
+export async function topics(env: Env) {
+  { const cached = await cacheGet<any>('topics'); if (cached) return cached }
+  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
+  const items = all.results as any[]
+  const topics: any[] = []
+
+  for (const { words, items: cluster } of clusterNews(items)) {
+    {
       // Date range
       const dates = cluster.map(i => i.published_at).filter(Boolean).sort()
       const dateRange = dates.length >= 2 ? dates[0].slice(0, 10) + ' ~ ' + dates[dates.length - 1].slice(0, 10) : dates[0]?.slice(0, 10) || ''
@@ -414,6 +689,7 @@ export async function fixImages(env: Env) {
 // Edge cache helpers（Cache API：按边缘节点缓存，零绑定配置；TTL 由 Cache-Control 控制）
 const CACHE_TTL = {
   list: 60, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
+  digest: 600, digests: 600, topic: 600, sources: 300, weekly: 3600,
 }
 
 const cacheReq = (key: string) => new Request(`https://jianxun-cache.internal/${encodeURIComponent(key)}`)
