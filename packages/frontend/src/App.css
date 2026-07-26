@@ -1019,7 +1019,70 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   color: var(--text-tertiary); display: flex; border-radius: var(--radius-sm);
 }
 .ask-widget-close:hover { background: var(--card-hover); color: var(--text) }
-.ask-widget-body { padding: 14px; overflow-y: auto }
+
+.ask-widget-handle { display: none }
+.ask-thread { flex: 1; overflow-y: auto; padding: 16px 14px 10px; display: flex; flex-direction: column; gap: 12px; min-height: 120px }
+
+/* 欢迎态：问候 + 建议问题 */
+.ask-welcome { display: flex; flex-direction: column; gap: 10px }
+.ask-welcome-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6 }
+.ask-suggestions { display: flex; flex-direction: column; gap: 6px }
+.ask-suggestion {
+  text-align: left; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text-secondary);
+  font-size: 12.5px; font-family: inherit; cursor: pointer; line-height: 1.45;
+  transition: all .15s;
+}
+.ask-suggestion:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-light) }
+.ask-history-label { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 11px; color: var(--text-tertiary) }
+.ask-suggestion.ask-history-item { border-style: dashed }
+
+/* 对话流 */
+.ask-msg-user {
+  align-self: flex-end; max-width: 85%;
+  padding: 8px 12px; border-radius: 14px 14px 4px 14px;
+  background: var(--accent-light); border: 1px solid var(--accent-border);
+  color: var(--text); font-size: 13.5px; line-height: 1.55;
+  animation: fadeUp .3s var(--ease) both;
+}
+.ask-msg-ai { align-self: flex-start; max-width: 100%; animation: fadeUp .3s var(--ease) both }
+.ask-msg-error { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary) }
+
+/* 打字指示 */
+.ask-typing { display: flex; gap: 5px; padding: 10px 2px }
+.ask-typing span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: askDot 1.2s ease-in-out infinite;
+}
+.ask-typing span:nth-child(2) { animation-delay: .15s }
+.ask-typing span:nth-child(3) { animation-delay: .3s }
+@keyframes askDot { 0%, 60%, 100% { transform: translateY(0); opacity: .35 } 30% { transform: translateY(-4px); opacity: 1 } }
+
+.ask-refs { margin-top: 2px }
+
+/* 底部输入条 */
+.ask-composer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--border-light); flex-shrink: 0;
+}
+.ask-input {
+  flex: 1; min-width: 0; padding: 9px 13px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text);
+  font-size: 13.5px; font-family: inherit; outline: none;
+  transition: border-color .15s;
+}
+.ask-input:focus { border-color: var(--accent-border) }
+.ask-input::placeholder { color: var(--text-tertiary) }
+.ask-send {
+  width: 34px; height: 34px; flex-shrink: 0; border: none; border-radius: 50%;
+  background: var(--accent); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.ask-send:hover { background: var(--accent-hover) }
+.ask-send:disabled { opacity: .35; cursor: not-allowed }
 
 /* 搜索视图顶部的提问入口 */
 .search-ask-link {
@@ -1037,36 +1100,8 @@ a { color: inherit; text-decoration: none; cursor: pointer }
     transform-origin: bottom center;
     animation: sheetUp .35s cubic-bezier(.16,1,.3,1);
   }
+  .ask-widget-handle { display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 8px auto 0; flex-shrink: 0 }
 }
-
-.ask-input-row { display: flex; gap: 8px; margin-bottom: 18px }
-.ask-input {
-  flex: 1; min-width: 0; padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--text);
-  font-size: 14px; font-family: inherit; outline: none;
-  transition: border-color .15s;
-}
-.ask-input:focus { border-color: var(--scrollbar) }
-.ask-input::placeholder { color: var(--text-tertiary) }
-.ask-submit {
-  width: 42px; flex-shrink: 0;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--text-secondary); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all .15s;
-}
-.ask-submit:hover { border-color: var(--scrollbar); color: var(--text) }
-.ask-submit:disabled { opacity: .4; cursor: not-allowed }
-
-.ask-history-list { display: flex; flex-wrap: wrap; gap: 4px }
-.ask-history-item {
-  padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
-  background: var(--surface); color: var(--text-secondary);
-  font-size: 12px; font-family: inherit; cursor: pointer;
-  transition: all .15s;
-}
-.ask-history-item:hover { border-color: var(--scrollbar); color: var(--text) }
 
 /* 回答正文：衬线（社论感），上标引用可点击 */
 .ask-answer-text { font-size: 15.5px; line-height: 1.85; color: var(--text); margin-bottom: 18px }

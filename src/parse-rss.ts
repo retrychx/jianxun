@@ -74,9 +74,13 @@ export async function parseRSS(url: string): Promise<RssFeed> {
     if (!l) l = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)
     if (l) item.link = l[1].trim()
 
-    // Description (strip HTML)
+    // Description (strip HTML)；Hacker News 的 description 是
+    // "Article URL: ... Comments URL: ... Points: N" 样板，无摘要价值，直接丢弃
     const desc = extractField(block, 'description')
-    if (desc) item.contentSnippet = desc.replace(/<[^>]+>/g, '').slice(0, 2000)
+    if (desc) {
+      const text = desc.replace(/<[^>]+>/g, '').trim()
+      item.contentSnippet = /^Article URL:\s*\S+\s+Comments URL:/.test(text) ? '' : text.slice(0, 2000)
+    }
 
     // content:encoded
     const content = extractField(block, 'content:encoded')

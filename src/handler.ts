@@ -417,7 +417,7 @@ export async function detail(env: Env, id: number) {
   if (!row) return null
   const news = mapNews(row)
 
-  let summary = row.summary || news.description?.slice(0, 200) + '...'
+  let summary = row.summary || (news.description ? news.description.slice(0, 200) + '...' : '')
   let entities: any[] = []
   let sentiment: any = null
 
@@ -637,14 +637,39 @@ export async function ask(env: Env, q: string): Promise<Response> {
   const cacheKey = `ask:${query}`
   { const cached = await cacheGet<any>(cacheKey); if (cached) return json(cached) }
 
-  const like = `%${query}%`
+  // 分词检索：拉丁词单独提取（防止与 CJK 粘连成复合词被停用词误杀），CJK 滑窗短段去停用词
+  const ASK_STOP = new Set([
+    '本周', '这周', '上周', '最近', '今天', '昨天', '什么', '怎么', '怎么样', '怎样', '为什么', '为啥',
+    '如何', '哪些', '哪里', '哪个', '了', '的', '有', '有什么', '新动向', '动向', '消息', '新闻', '报道', '一下', '发生',
+  ])
+  const latin = query.match(/[A-Za-z0-9][A-Za-z0-9+.#-]{1,}/g) || []
+  const cnSegs = tokenize(query.replace(/[A-Za-z0-9]+/g, ' '))
+  let tokens = [...new Set([...latin, ...cnSegs])]
+    .map(t => t.trim()).filter(Boolean)
+    .filter(t => !ASK_STOP.has(t) && !(t.length <= 3 && [...ASK_STOP].some(s => s.length >= 2 && t.includes(s))))
+    .slice(0, 6)
+  if (!tokens.length) tokens = [query]
+
+  const clauses = tokens.map(() => '(title LIKE ? OR summary LIKE ? OR entities LIKE ?)').join(' OR ')
+  const params = tokens.flatMap(t => [`%${t}%`, `%${t}%`, `%${t}%`])
   const rows = await env.DB.prepare(
-    `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news
+    `SELECT id, title, title_zh, summary, summary_zh, source, published_at, entities FROM news
      WHERE published_at >= datetime('now', '-7 days')
-       AND (title LIKE ? OR summary LIKE ? OR entities LIKE ?)
-     ORDER BY score DESC LIMIT 12`
-  ).bind(like, like, like).all()
-  const candidates = rows.results as any[]
+       AND (${clauses})
+     ORDER BY score DESC LIMIT 40`
+  ).bind(...params).all()
+
+  // 命中词数优先，其次分数
+  const ranked = (rows.results as any[])
+    .map(r => {
+      const hay = `${r.title || ''} ${r.summary || ''} ${r.entities || ''}`.toLowerCase()
+      const hits = tokens.filter(t => hay.includes(t.toLowerCase())).length
+      return { ...r, hits }
+    })
+    .filter(r => r.hits > 0)
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, 12)
+  const candidates = ranked
 
   if (!candidates.length) {
     const empty = { answer: null, refs: [] }
