@@ -73,6 +73,13 @@ export default function App() {
   } = useSearch()
   const { follows, isFollowing, toggleFollow } = useFollow()
 
+  // ─── 新文章标记：记录上次访问时间 ───
+  const saved = localStorage.getItem('lastVisit')
+  const now = Date.now()
+  localStorage.setItem('lastVisit', String(now))
+  // 首次访问（无记录）时取当前时间为基准，不标"新"
+  const lastVisitRef = useRef(saved ? Number(saved) : now)
+
   // Hash 路由：route 为当前 hash 解析结果；baseRoute 为详情覆盖层之下的视图
   const route = useHashRoute()
   const navigate = useNavigate()
@@ -367,7 +374,7 @@ export default function App() {
                   <div className="card-list">
                     {boostedNews.map((item, i) => (
                       <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} />
+                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} isNew={new Date(item.createdAt).getTime() > lastVisitRef.current} />
                       </div>
                     ))}
                   </div>

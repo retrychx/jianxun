@@ -330,7 +330,7 @@ export interface AskAnswer {
   refs: number[]
 }
 
-// Answers a reader question in Chinese (<=250字) from up to 12 candidate articles,
+// Answers a reader question in Chinese (<=250字) from up to 30 candidate articles,
 // citing them as [n] where n is the candidate array index.
 // Returns null when the call is unavailable/fails; callers degrade to answer:null.
 export async function generateAnswer(question: string, candidates: AskCandidate[], apiKey: string | undefined): Promise<AskAnswer | null> {
@@ -350,7 +350,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
           },
           {
             role: 'user',
-            content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0, 12).map((c, i) =>
+            content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0, 30).map((c, i) =>
               `[${i}] ${c.titleZh || c.title}（${c.source || '未知来源'}${c.publishedAt ? '/' + c.publishedAt.slice(0, 10) : ''}）\n${((c.summaryZh || c.summary) || '').slice(0, 200)}`
             ).join('\n\n')
           }

@@ -1137,6 +1137,18 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   line-height: 1.6; white-space: nowrap;
 }
 
+.card-new {
+  font-size: 10px; font-weight: 700; color: #fff;
+  background: var(--accent); border-radius: 3px; padding: 0 5px;
+  line-height: 1.6; white-space: nowrap;
+  animation: newPop .3s var(--ease);
+}
+
+@keyframes newPop {
+  from { transform: scale(.5); opacity: 0 }
+  to { transform: scale(1); opacity: 1 }
+}
+
 .follow-weekly { margin-top: 20px }
 .follow-weekly-list { display: flex; flex-direction: column; gap: 6px }
 .follow-weekly-row {

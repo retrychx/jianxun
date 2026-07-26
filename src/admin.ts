@@ -135,7 +135,7 @@ export async function ask(env: Env, q: string): Promise<Response> {
     `SELECT id, title, title_zh, summary, summary_zh, source, published_at, entities FROM news
      WHERE published_at >= datetime('now', '-7 days')
        AND (${clauses})
-     ORDER BY score DESC LIMIT 40`
+     ORDER BY score DESC LIMIT 80`
   ).bind(...params).all()
 
   const ranked = (rows.results as any[])
@@ -146,7 +146,7 @@ export async function ask(env: Env, q: string): Promise<Response> {
     })
     .filter(r => r.hits > 0)
     .sort((a, b) => b.hits - a.hits)
-    .slice(0, 12)
+    .slice(0, 30)
   const candidates = ranked
 
   if (!candidates.length) {

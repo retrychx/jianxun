@@ -108,7 +108,7 @@ function mergeClusters(a: Cluster, b: Cluster): Cluster {
 
 export async function topics(env: Env) {
   { const cached = await cacheGet<any>('topics'); if (cached) return cached }
-  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
+  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 200').all()
   const items = all.results as any[]
   const topicList: any[] = []
 
@@ -154,7 +154,7 @@ export async function topic(env: Env, name: string) {
   const cacheKey = `topic:${name}`
   { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
 
-  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
+  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 200').all()
   const hit = clusterNews(all.results as any[]).find(c =>
     c.words.some(w => w === name || w.includes(name) || name.includes(w)) ||
     fallbackLabel(c.words).includes(name)
@@ -227,7 +227,7 @@ export async function weekly(env: Env) {
     .sort((a, b) => b[1] - a[1]).slice(0, 10)
     .map(([name, count]) => ({ name, count }))
 
-  const clusters = clusterNews(items.slice(0, 80)).sort((a, b) => b.items.length - a.items.length).slice(0, 5)
+  const clusters = clusterNews(items.slice(0, 200)).sort((a, b) => b.items.length - a.items.length).slice(0, 5)
   const aiLabels = await generateTopicLabels(clusters.map(c => c.items.slice(0, 3).map(i => i.title)), env.DEEPSEEK_API_KEY)
   const topTopics = clusters.map((c, i) => ({ label: aiLabels?.[i] || fallbackLabel(c.words), count: c.items.length }))
 

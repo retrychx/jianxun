@@ -76,6 +76,27 @@ export async function stats(env: Env) {
 
 export async function search(env: Env, q: string) {
   if (!q || q.length < 2) return { items: [] }
+
+  // FTS5: escape special chars, use prefix matching for partial words
+  const ftsQuery = q.replace(/['"]/g, '').split(/\s+/).filter(Boolean).map(w => {
+    // Asterisks at word boundaries for prefix matching
+    const last = w[w.length - 1]
+    return /[a-zA-Z0-9]/.test(last) ? w + '*' : w
+  }).join(' ')
+
+  try {
+    const items = await env.DB.prepare(
+      `SELECT n.* FROM news_fts f JOIN news n ON n.id = f.rowid
+       WHERE news_fts MATCH ?
+       ORDER BY rank, n.score DESC LIMIT 30`
+    ).bind(ftsQuery).all()
+    if (items.results?.length) {
+      return { items: (items.results as any[]).map(mapNews), query: q }
+    }
+  } catch { /* FTS5 yielded no results or threw — fall through to LIKE */ }
+
+  // Fallback: LIKE search (better for short CJK queries where FTS5
+  // tokenchars produces many individual-character hits)
   const escaped = likeEscape(q)
   const items = await env.DB.prepare(
     "SELECT * FROM news WHERE title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' ORDER BY published_at DESC LIMIT 30"
