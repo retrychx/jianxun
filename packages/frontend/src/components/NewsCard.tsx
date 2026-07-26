@@ -1,10 +1,11 @@
 import { memo, useState } from 'react'
 import type { NewsItem } from '../api'
 import { categoryColor } from '../constants'
-import { formatDate } from '../utils'
+import { displaySummary, displayTitle, formatDate, type Lang } from '../utils'
 
 interface Props {
   item: NewsItem
+  lang?: Lang
   onClick?: (id: number) => void
 }
 
@@ -12,9 +13,10 @@ function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
 
-export const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
+export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick }: Props) {
   const [imgError, setImgError] = useState(false)
   const showImage = !!item.image && !imgError
+  const summary = displaySummary(item, lang)
 
   return (
     <article className={`news-card${showImage ? '' : ' no-image'}`} onClick={() => onClick?.(item.id)}>
@@ -34,8 +36,8 @@ export const NewsCard = memo(function NewsCard({ item, onClick }: Props) {
           <span className="card-source">{item.source}</span>
           <span className="card-time">{item.publishedAt ? formatDate(item.publishedAt) : ''}</span>
         </div>
-        <h3 className="card-title">{item.title}</h3>
-        {item.summary && <p className="card-summary">{item.summary}</p>}
+        <h3 className="card-title">{displayTitle(item, lang)}</h3>
+        {summary && <p className="card-summary">{summary}</p>}
         <div className="card-footer">
           <span className="card-category" style={{ backgroundColor: categoryColor(item.category) }}>
             {item.category}

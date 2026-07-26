@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { ChevronRight, Hash } from 'lucide-react'
 import type { TopicCluster } from '../api'
+import { displayTitle, type Lang } from '../utils'
 
 interface Props {
   topics: TopicCluster[]
+  lang: Lang
   onNewsClick: (id: number) => void
 }
 
@@ -25,7 +27,7 @@ function formatTime(d: string): string {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsClick: (id: number) => void }) {
+function TopicNarrative({ topic, lang, onNewsClick }: { topic: TopicCluster; lang: Lang; onNewsClick: (id: number) => void }) {
   const perspectives = topic.sourcePerspectives || []
 
   return (
@@ -82,7 +84,7 @@ function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsCli
                   <span className="tl-v-source">{item.source}</span>
                   {item.publishedAt && <span className="tl-v-time">{formatTime(item.publishedAt)}</span>}
                 </div>
-                <div className="tl-v-title">{item.title}</div>
+                <div className="tl-v-title">{displayTitle(item, lang)}</div>
               </div>
             </div>
           ))}
@@ -92,7 +94,7 @@ function TopicNarrative({ topic, onNewsClick }: { topic: TopicCluster; onNewsCli
   )
 }
 
-export function TopicsView({ topics, onNewsClick }: Props) {
+export function TopicsView({ topics, lang, onNewsClick }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   if (!topics.length) {
@@ -146,7 +148,10 @@ export function TopicsView({ topics, onNewsClick }: Props) {
               </button>
               <div className="ts-body-wrap">
                 <div className="ts-body">
-                  <TopicNarrative topic={topic} onNewsClick={onNewsClick} />
+                  <a className="ts-deep-link" href={`#/topic/${encodeURIComponent(topic.keyword)}`}>
+                    话题深挖 <ChevronRight size={12} />
+                  </a>
+                  <TopicNarrative topic={topic} lang={lang} onNewsClick={onNewsClick} />
                 </div>
               </div>
             </div>

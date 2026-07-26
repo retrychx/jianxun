@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'digest' | 'topic' | 'sources'
 
 export interface Route {
   view: ViewName
   cat?: string
   entity?: string
   q?: string
+  /** 话题深挖：#/topic/:name（keyword） */
+  topic?: string
+  /** 历史日报：#/digest/:date（YYYY-MM-DD） */
+  date?: string
   /** 详情覆盖层：#/news/:id */
   newsId: number | null
 }
@@ -30,9 +34,17 @@ export function parseHash(hash: string): Route {
       return segs[1] ? { view: 'entity', entity: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
     case 'search':
       return { view: 'search', q: params.get('q') || '', newsId: null }
+    case 'digest':
+      return segs[1] && /^\d{4}-\d{2}-\d{2}$/.test(segs[1])
+        ? { view: 'digest', date: segs[1], newsId: null }
+        : DEFAULT_ROUTE
+    case 'topic':
+      return segs[1] ? { view: 'topic', topic: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
+    case 'sources':
+      return { view: 'sources', newsId: null }
     case 'news': {
       const id = Number(segs[1])
-      // 刷新/分享直达：回到默认视图（简报）并打开面板
+      // 刷新/分享直达：回到默认视图（日报）并打开面板
       return Number.isFinite(id) && id > 0 ? { view: 'briefing', newsId: id } : DEFAULT_ROUTE
     }
     default:
@@ -40,7 +52,7 @@ export function parseHash(hash: string): Route {
   }
 }
 
-export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string }): string {
+export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string; topic?: string; date?: string }): string {
   switch (r.view) {
     case 'feed':
       return `#/feed${r.cat && r.cat !== '全部' ? `?cat=${encodeURIComponent(r.cat)}` : ''}`
@@ -50,6 +62,12 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return `#/entity/${encodeURIComponent(r.entity || '')}`
     case 'search':
       return `#/search?q=${encodeURIComponent(r.q || '')}`
+    case 'digest':
+      return `#/digest/${r.date || ''}`
+    case 'topic':
+      return `#/topic/${encodeURIComponent(r.topic || '')}`
+    case 'sources':
+      return '#/sources'
     default:
       return '#/'
   }

@@ -4,10 +4,11 @@ import type { NewsDetail, EntityItem, NewsItem, SentimentData } from '../api'
 import { getDetail, getByEntity } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
-import { formatFullDate } from '../utils'
+import { displayTitle, formatFullDate, type Lang } from '../utils'
 
 interface Props {
   newsId: number | null
+  lang: Lang
   onClose: () => void
   onEntityClick: (entity: string) => void
   onNewsClick: (id: number) => void
@@ -32,7 +33,7 @@ const SENTIMENT_LABELS: Record<string, { label: string; color: string }> = {
   mixed: { label: '混合', color: '#b45309' },
 }
 
-export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFollowing, toggleFollow }: Props) {
+export function DetailPanel({ newsId, lang, onClose, onEntityClick, onNewsClick, isFollowing, toggleFollow }: Props) {
   const [detail, setDetail] = useState<NewsDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(false)
@@ -171,7 +172,7 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
                   {detail.category}
                 </span>
               </div>
-              <h2 className="sheet-title">{detail.title}</h2>
+              <h2 className="sheet-title">{displayTitle(detail, lang)}</h2>
               <div className="sheet-meta">
                 <span>{formatFullDate(detail.publishedAt || detail.createdAt)}</span>
                 <span className="sheet-meta-dot">·</span>
@@ -259,7 +260,7 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
                               {(entityNews.get(e.name) || []).slice(0, 5).map(n => (
                                 <div key={n.id} className="sheet-entity-item" onClick={() => onNewsClick(n.id)}>
                                   <span className="sheet-entity-item-source">{n.source}</span>
-                                  <span className="sheet-entity-item-title">{n.title}</span>
+                                  <span className="sheet-entity-item-title">{displayTitle(n, lang)}</span>
                                 </div>
                               ))}
                               {entityNews.has(e.name) && entityNews.get(e.name)!.length === 0 && (
@@ -289,7 +290,7 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
                   {detail.related.map(r => (
                     <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer" className="sheet-related-item">
                       <span className="sheet-related-source">{r.source}</span>
-                      <span className="sheet-related-title">{r.title}</span>
+                      <span className="sheet-related-title">{displayTitle(r, lang)}</span>
                       <ExternalLink size={11} className="sheet-related-arrow" />
                     </a>
                   ))}

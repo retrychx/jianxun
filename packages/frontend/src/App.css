@@ -105,7 +105,8 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
 
 /* 社论感：logo 与各卡片/视图标题用衬线，正文保持无衬线 */
-.logo, .briefing-title, .bf-card-title, .card-title, .sheet-title, .tph-title {
+.logo, .briefing-title, .bf-card-title, .card-title, .sheet-title, .tph-title,
+.digest-date, .digest-title, .digest-num, .digest-intro, .topic-storyline-text {
   font-family: var(--font-serif);
 }
 
@@ -157,6 +158,10 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ha-btn:hover { background: var(--card-hover); color: var(--text) }
 .ha-btn.active { background: var(--accent-light); color: var(--accent) }
 .ha-btn:disabled { opacity: .4; cursor: not-allowed }
+
+/* 语言切换：与主题按钮同风格的小文字按钮 */
+.header-lang { display: flex; align-items: center; gap: 2px; flex-shrink: 0 }
+.ha-btn.lang-btn { width: auto; min-width: 28px; padding: 0 6px; font-size: 11px; font-weight: 600; font-family: inherit; letter-spacing: .02em }
 
 @keyframes spin { to { transform: rotate(360deg) } }
 
@@ -405,6 +410,124 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .briefing-card { padding: 14px; gap: 12px }
   .bf-card-title { font-size: 14px }
 }
+
+/* ===== Digest（日报） ===== */
+.digest-view { animation: fadeUp .5s var(--ease) both }
+.digest-header { margin-bottom: 18px }
+.digest-date-row { display: flex; align-items: center; gap: 10px }
+.digest-date { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -.01em; line-height: 1.2 }
+.digest-nav {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); cursor: pointer; transition: all .15s;
+}
+.digest-nav:hover { border-color: var(--scrollbar); color: var(--text) }
+.digest-nav.disabled { opacity: .35; pointer-events: none }
+/* 开场白：衬线斜体 + 细竖线，引文感 */
+.digest-intro {
+  margin-top: 10px; padding-left: 12px;
+  border-left: 2px solid var(--border);
+  font-style: italic; font-size: 14.5px; line-height: 1.7; color: var(--text-secondary);
+}
+
+/* 条目列表：细分割线而非卡片盒 */
+.digest-list { display: flex; flex-direction: column }
+.digest-card { display: flex; gap: 16px; padding: 16px 6px; cursor: pointer; border-radius: var(--radius-sm); transition: background .15s }
+.digest-card + .digest-card { border-top: 1px solid var(--border-light) }
+.digest-card:hover { background: var(--card-hover) }
+.digest-num {
+  min-width: 30px; padding-top: 1px;
+  font-size: 17px; font-weight: 700; line-height: 1.4;
+  color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+.digest-body { min-width: 0; flex: 1 }
+.digest-title { font-size: 16px; font-weight: 600; line-height: 1.45; color: var(--text); transition: color .15s }
+.digest-card:hover .digest-title { color: var(--accent) }
+/* 「为什么重要」：accent 竖线强调 */
+.digest-why {
+  margin-top: 6px; padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+}
+.digest-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap }
+.digest-source { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em }
+.digest-heat { font-size: 11px; color: var(--text-tertiary); white-space: nowrap }
+
+/* 番外：accent 底色卡片与正刊区分 */
+.digest-extra {
+  margin-top: 18px; padding: 16px 18px; cursor: pointer;
+  background: var(--accent-light); border: 1px solid var(--accent-border);
+  border-radius: var(--radius); transition: all .2s var(--ease);
+}
+.digest-extra:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px) }
+.digest-extra:active { transform: scale(.995) }
+.digest-extra-label {
+  font-size: 10px; font-weight: 700; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px;
+}
+.digest-extra .digest-title { font-size: 15px }
+
+/* 往期入口：虚线框，与 load-more 同一语言 */
+.digest-archive {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin-top: 18px; padding: 13px;
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; color: var(--text-tertiary);
+  transition: all .15s;
+}
+.digest-archive:hover { border-color: var(--scrollbar); color: var(--text); background: var(--card-hover) }
+
+/* ===== Topic（话题深挖） ===== */
+.topic-view { animation: fadeUp .5s var(--ease) both }
+.topic-storyline {
+  margin-bottom: 20px; padding: 12px 14px;
+  background: var(--accent-light); border-radius: var(--radius-sm);
+}
+.topic-storyline .narr-section-label { margin-bottom: 6px }
+.topic-storyline-text { font-size: 14px; line-height: 1.75; color: var(--text) }
+.topic-section { margin-bottom: 20px }
+.topic-section > .narr-section-label { margin-bottom: 10px }
+.topic-persp-list { display: flex; flex-direction: column; gap: 8px }
+.topic-persp-row { display: flex; align-items: center; gap: 10px }
+.topic-persp-source {
+  min-width: 90px; max-width: 140px; flex-shrink: 0;
+  font-size: 11px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.topic-persp-row .sheet-sentiment-track { flex: 1 }
+.topic-persp-count { min-width: 20px; text-align: right; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums }
+
+/* 话题簇内的深挖入口 */
+.ts-deep-link {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin: 12px 18px 0;
+  font-size: 12px; font-weight: 500; color: var(--accent);
+}
+.ts-deep-link:hover { color: var(--accent-hover) }
+
+/* ===== Sources（信源健康度） ===== */
+.sources-view { animation: fadeUp .5s var(--ease) both }
+.sources-table-wrap {
+  overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.sources-table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 12.5px }
+.sources-table th {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  text-align: left; white-space: nowrap;
+  font-size: 10px; font-weight: 700; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.sources-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); white-space: nowrap }
+.sources-table tr:last-child td { border-bottom: none }
+.sources-name { font-weight: 600; color: var(--text) }
+.sources-num { font-variant-numeric: tabular-nums }
+.sources-fail { color: #dc2626; font-weight: 700 }
+
+/* 页脚小字链接 */
+.footer-link { color: var(--text-tertiary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border) }
+.footer-link:hover { color: var(--text-secondary) }
 /* ===== Topics / Narrative ===== */
 .topics-view { animation: fadeUp .5s var(--ease) both }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
@@ -729,6 +852,14 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .news-card.no-image .card-body { padding: 14px }
   .card-title { font-size: 15px }
   .card-summary { font-size: 13px; -webkit-line-clamp: 2 }
+
+  .digest-date { font-size: 18px }
+  .digest-intro { font-size: 13.5px }
+  .digest-card { padding: 14px 2px; gap: 12px }
+  .digest-num { min-width: 26px; font-size: 15px }
+  .digest-title { font-size: 15px }
+  .digest-extra { padding: 14px }
+  .topic-persp-source { min-width: 72px; max-width: 100px }
 
   .scroll-top { bottom: 76px; right: 16px; width: 32px; height: 32px; font-size: 12px }
 

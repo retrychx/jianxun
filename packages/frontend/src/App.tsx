@@ -8,12 +8,16 @@ import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
 import { SearchView } from './components/SearchView'
 import { EntityView } from './components/EntityView'
+import { DigestLoader } from './components/DigestView'
+import { TopicView } from './components/TopicView'
+import { SourcesView } from './components/SourcesView'
 import { BottomNav } from './components/BottomNav'
 import { KinkLine } from './components/KinkLine'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
-import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, searchNews } from './api'
+import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests, searchNews } from './api'
 import { useFollow } from './hooks/useFollow'
-import { useHashRoute, useNavigate, buildHash, type Route } from './hooks/useHashRoute'
+import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from './hooks/useHashRoute'
+import type { Lang } from './utils'
 import './App.css'
 
 const PAGE_SIZE = 50
@@ -47,6 +51,10 @@ function getTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+function getLang(): Lang {
+  return localStorage.getItem('lang') === 'en' ? 'en' : 'zh'
+}
+
 export default function App() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [newsTotal, setNewsTotal] = useState(0)
@@ -62,6 +70,8 @@ export default function App() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [msg, setMsg] = useState('')
   const [theme, setTheme] = useState<Theme>(getTheme)
+  const [lang, setLang] = useState<Lang>(getLang)
+  const [digestDates, setDigestDates] = useState<string[]>([])
   const [scrolled, setScrolled] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<NewsItem[]>([])
@@ -79,6 +89,8 @@ export default function App() {
   const selectedNewsId = route.newsId
   const view = baseRoute.view
   const activeCat = view === 'feed' ? (baseRoute.cat ?? '全部') : ''
+  // tab 高亮：历史日报/话题深挖归入「日报」；信源页不高亮任何 tab
+  const navActive: ViewName = view === 'digest' || view === 'topic' ? 'briefing' : view
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -89,6 +101,11 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('theme', theme)
   }, [theme])
+
+  // Language
+  useEffect(() => {
+    localStorage.setItem('lang', lang)
+  }, [lang])
 
   // Lock body scroll when panel open
   useEffect(() => {
@@ -147,15 +164,23 @@ export default function App() {
     try { setStats(await getStats()) } catch { /* stats 非关键，静默失败 */ }
   }, [])
 
+  // 往期日报日期列表：仅用于日期箭头与往期入口，失败静默（箭头隐藏）
+  const loadDigestDates = useCallback(async () => {
+    try {
+      const d = await getDigests()
+      setDigestDates(Array.isArray(d.dates) ? d.dates : [])
+    } catch { /* 非关键，静默失败 */ }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      await Promise.all([loadAll(), loadStats()])
+      await Promise.all([loadAll(), loadStats(), loadDigestDates()])
       if (!cancelled) setInitialLoading(false)
     }
     init()
     return () => { cancelled = true }
-  }, [loadAll, loadStats])
+  }, [loadAll, loadStats, loadDigestDates])
 
   // feed 视图：路由驱动加载与分类切换
   const routeView = baseRoute.view
@@ -167,9 +192,11 @@ export default function App() {
 
   // 视图切换后回到顶部
   const routeEntity = baseRoute.entity
+  const routeTopic = baseRoute.topic
+  const routeDate = baseRoute.date
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [routeView, routeCat, routeEntity])
+  }, [routeView, routeCat, routeEntity, routeTopic, routeDate])
 
   // 搜索框与路由双向同步；记录最近非搜索视图供清空后返回
   const searchNavRef = useRef(false) // 本次 search 跳转来自输入框，跳过后续 query 回写
@@ -216,7 +243,7 @@ export default function App() {
     navigate(buildHash({ view: 'entity', entity: name }))
   }, [navigate])
 
-  // 返回键：SPA 内有历史则后退，否则（刷新/分享直达）回到简报
+  // 返回键：SPA 内有历史则后退，否则（刷新/分享直达）回到日报
   const goBack = useCallback(() => {
     if (navCountRef.current > 0) window.history.back()
     else navigate('#/')
@@ -260,9 +287,9 @@ export default function App() {
         <div className="header-top">
           <h1 className="logo"><a href="#/" aria-label="简讯首页">简讯</a></h1>
           <nav className="header-nav" aria-label="主导航">
-            <a href="#/" className={view === 'briefing' ? 'active' : ''} aria-current={view === 'briefing' ? 'page' : undefined}>简报<KinkLine /></a>
-            <a href="#/feed" className={view === 'feed' ? 'active' : ''} aria-current={view === 'feed' ? 'page' : undefined}>新闻<KinkLine /></a>
-            <a href="#/topics" className={view === 'topics' ? 'active' : ''} aria-current={view === 'topics' ? 'page' : undefined}>话题<KinkLine /></a>
+            <a href="#/" className={navActive === 'briefing' ? 'active' : ''} aria-current={navActive === 'briefing' ? 'page' : undefined}>日报<KinkLine /></a>
+            <a href="#/feed" className={navActive === 'feed' ? 'active' : ''} aria-current={navActive === 'feed' ? 'page' : undefined}>新闻<KinkLine /></a>
+            <a href="#/topics" className={navActive === 'topics' ? 'active' : ''} aria-current={navActive === 'topics' ? 'page' : undefined}>话题<KinkLine /></a>
           </nav>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -286,6 +313,22 @@ export default function App() {
               )
             })}
           </div>
+          <div className="header-lang" role="group" aria-label="语言切换">
+            <button
+              className={`ha-btn lang-btn${lang === 'zh' ? ' active' : ''}`}
+              onClick={() => setLang('zh')}
+              title="中文优先（无译文显示原文）"
+              aria-label="切换到中文"
+              aria-pressed={lang === 'zh'}
+            >中</button>
+            <button
+              className={`ha-btn lang-btn${lang === 'en' ? ' active' : ''}`}
+              onClick={() => setLang('en')}
+              title="Always show original language"
+              aria-label="Switch to English"
+              aria-pressed={lang === 'en'}
+            >EN</button>
+          </div>
         </div>
       </header>
       <CategoryBar categories={categories} active={activeCat} onSelect={handleCategory} />
@@ -302,14 +345,21 @@ export default function App() {
               query={searchQuery.trim()}
               searching={searching}
               error={searchError}
+              lang={lang}
               onClear={() => handleSearchChange('')}
               onNewsClick={openNews}
             />
           ) : view === 'entity' && baseRoute.entity ? (
-            <EntityView entity={baseRoute.entity} onBack={goBack} onNewsClick={openNews} />
+            <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} />
+          ) : view === 'digest' && baseRoute.date ? (
+            <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} />
+          ) : view === 'topic' && baseRoute.topic ? (
+            <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
+          ) : view === 'sources' ? (
+            <SourcesView />
           ) : view === 'feed' ? (
             <>
-              <TrendingStrip items={trending} onNewsClick={openNews} />
+              <TrendingStrip items={trending} lang={lang} onNewsClick={openNews} />
               {loading ? (
                 <>
                   <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
@@ -325,7 +375,7 @@ export default function App() {
                   <div className="card-list">
                     {news.map((item, i) => (
                       <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} onClick={openNews} />
+                        <NewsCard item={item} lang={lang} onClick={openNews} />
                       </div>
                     ))}
                   </div>
@@ -338,31 +388,41 @@ export default function App() {
               )}
             </>
           ) : view === 'topics' ? (
-            <TopicsView topics={topics} onNewsClick={openNews} />
+            <TopicsView topics={topics} lang={lang} onNewsClick={openNews} />
           ) : (
-            <BriefingView
-              items={briefingItems}
-              updatedAt={briefingAt}
-              follows={follows}
+            <DigestLoader
+              dates={digestDates}
+              lang={lang}
               onNewsClick={openNews}
-              onEntityClick={openEntity}
-              onUnfollow={(name) => toggleFollow(name, 'entity')}
+              fallback={
+                <BriefingView
+                  items={briefingItems}
+                  updatedAt={briefingAt}
+                  follows={follows}
+                  lang={lang}
+                  onNewsClick={openNews}
+                  onEntityClick={openEntity}
+                  onUnfollow={(name) => toggleFollow(name, 'entity')}
+                />
+              }
             />
           )}
         </div>
         <aside className="sidebar">
-          <TrendingPanel items={trending} onNewsClick={openNews} />
+          <TrendingPanel items={trending} lang={lang} onNewsClick={openNews} />
         </aside>
       </div>
 
-      {stats.total > 0 && (
-        <footer className="footer">共 {stats.total} 篇 · 今日 {stats.today} 篇</footer>
-      )}
+      <footer className="footer">
+        {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
+        <a href="#/sources" className="footer-link">信源</a>
+      </footer>
 
-      <BottomNav active={view} />
+      <BottomNav active={navActive} />
 
       <DetailPanel
         newsId={selectedNewsId}
+        lang={lang}
         onClose={goBack}
         onEntityClick={openEntity}
         onNewsClick={openNews}

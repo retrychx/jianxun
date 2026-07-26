@@ -13,6 +13,10 @@ export interface NewsItem {
   createdAt: string
   /** 同源跨媒体计数（增量字段，旧 API 可能不返回） */
   heat?: number
+  /** 中文译题（增量字段，仅英文文章可能有值） */
+  titleZh?: string | null
+  /** 中文摘要（增量字段，仅英文文章可能有值） */
+  summaryZh?: string | null
 }
 
 export interface EntityItem {
@@ -115,4 +119,72 @@ export function getByEntity(name: string): Promise<{ items: NewsItem[]; entity: 
 
 export function searchNews(q: string): Promise<{ items: NewsItem[]; query: string }> {
   return fetchJson(`${BASE}/news/search?q=${encodeURIComponent(q)}`)
+}
+
+/* ===== 日报 / 话题深挖 / 信源（增量接口，404 或字段缺失时调用方需兜底） ===== */
+
+export interface DigestItem {
+  id: number
+  title: string
+  titleZh?: string | null
+  /** 「为什么重要」一句话 */
+  why: string
+  category: string
+  source: string
+  heat?: number
+}
+
+export interface DigestExtra {
+  id: number
+  title: string
+  titleZh?: string | null
+  why: string
+}
+
+export interface DigestResponse {
+  date: string
+  intro?: string | null
+  items: DigestItem[]
+  extra?: DigestExtra | null
+}
+
+export function getDigest(date?: string): Promise<DigestResponse> {
+  return fetchJson(`${BASE}/news/digest${date ? `?date=${encodeURIComponent(date)}` : ''}`)
+}
+
+export function getDigests(): Promise<{ dates: string[] }> {
+  return fetchJson(`${BASE}/news/digests`)
+}
+
+export interface TopicPerspective {
+  source: string
+  /** 立场标签（正/负/中…）；可能为 null（无情感数据） */
+  label?: string | null
+  count: number
+}
+
+export interface TopicDetail {
+  keyword: string
+  label?: string | null
+  storyline?: string | null
+  timeline: NewsItem[]
+  perspectives?: TopicPerspective[]
+}
+
+export function getTopic(name: string): Promise<TopicDetail> {
+  return fetchJson(`${BASE}/news/topic?name=${encodeURIComponent(name)}`)
+}
+
+export interface SourceHealth {
+  name: string
+  weight: number
+  total: number
+  today: number
+  lastOk?: string | null
+  lastError?: string | null
+  failCount: number
+}
+
+export function getSources(): Promise<{ items: SourceHealth[] }> {
+  return fetchJson(`${BASE}/news/sources`)
 }

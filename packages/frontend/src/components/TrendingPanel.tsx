@@ -1,13 +1,15 @@
 import { memo } from 'react'
 import { TrendingUp, ExternalLink } from 'lucide-react'
 import type { NewsItem } from '../api'
+import { displayTitle, type Lang } from '../utils'
 
 interface Props {
   items: NewsItem[]
+  lang?: Lang
   onNewsClick: (id: number) => void
 }
 
-export const TrendingPanel = memo(function TrendingPanel({ items, onNewsClick }: Props) {
+export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', onNewsClick }: Props) {
   if (!items.length) return null
 
   return (
@@ -28,7 +30,7 @@ export const TrendingPanel = memo(function TrendingPanel({ items, onNewsClick }:
               {i + 1}
             </span>
             <div className="trending-content">
-              <span className="trending-title">{item.title}</span>
+              <span className="trending-title">{displayTitle(item, lang)}</span>
               <span className="trending-meta">
                 <span>{item.source}</span>
                 <span className="trending-meta-dot">·</span>
@@ -59,7 +61,7 @@ export const TrendingPanel = memo(function TrendingPanel({ items, onNewsClick }:
 })
 
 // 移动端横向热门条（sidebar 在小屏隐藏时的入口）
-export function TrendingStrip({ items, onNewsClick }: Props) {
+export function TrendingStrip({ items, lang = 'zh', onNewsClick }: Props) {
   if (!items.length) return null
 
   return (
@@ -68,7 +70,7 @@ export function TrendingStrip({ items, onNewsClick }: Props) {
       {items.slice(0, 10).map((item, i) => (
         <button key={item.id} className="trending-chip" onClick={() => onNewsClick(item.id)}>
           <span className={`trending-rank ${i < 3 ? 'top3' : ''}`}>{i + 1}</span>
-          <span className="trending-chip-title">{item.title}</span>
+          <span className="trending-chip-title">{displayTitle(item, lang)}</span>
         </button>
       ))}
     </div>

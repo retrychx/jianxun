@@ -2,18 +2,19 @@ import { Newspaper, Hash } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
-import { formatTime, formatDate } from '../utils'
+import { displaySummary, displayTitle, formatTime, formatDate, type Lang } from '../utils'
 
 interface Props {
   items: BriefingItem[]
   updatedAt: Date | null
   follows: FollowItem[]
+  lang: Lang
   onNewsClick: (id: number) => void
   onEntityClick: (name: string) => void
   onUnfollow: (name: string) => void
 }
 
-export function BriefingView({ items, updatedAt, follows, onNewsClick, onEntityClick, onUnfollow }: Props) {
+export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow }: Props) {
   const followedEntities = follows.filter(f => f.type === 'entity')
 
   return (
@@ -49,7 +50,9 @@ export function BriefingView({ items, updatedAt, follows, onNewsClick, onEntityC
         </div>
       ) : (
         <div className="briefing-list">
-          {items.map((item, i) => (
+          {items.map((item, i) => {
+            const summary = displaySummary(item, lang)
+            return (
             <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)}>
               <div className="briefing-rank"><span className="briefing-num">{String(i + 1).padStart(2, '0')}</span></div>
               <div className="briefing-body">
@@ -61,14 +64,15 @@ export function BriefingView({ items, updatedAt, follows, onNewsClick, onEntityC
                     <span className="briefing-heat">{item.heat} 家媒体报道</span>
                   )}
                 </div>
-                <h3 className="bf-card-title">{item.title}</h3>
-                <p className="briefing-summary">{item.summary ?? item.reason}</p>
-                {item.summary && item.reason && item.reason !== item.summary && (
+                <h3 className="bf-card-title">{displayTitle(item, lang)}</h3>
+                <p className="briefing-summary">{summary ?? item.reason}</p>
+                {summary && item.reason && item.reason !== summary && (
                   <div className="briefing-reason"><span className="briefing-reason-dot" />{item.reason}</div>
                 )}
               </div>
             </article>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

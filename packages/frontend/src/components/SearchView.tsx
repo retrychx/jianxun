@@ -1,17 +1,19 @@
 import { X, SearchX } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { NewsCard } from './NewsCard'
+import type { Lang } from '../utils'
 
 interface Props {
   results: NewsItem[]
   query: string
   searching: boolean
   error: boolean
+  lang: Lang
   onClear: () => void
   onNewsClick: (id: number) => void
 }
 
-export function SearchView({ results, query, searching, error, onClear, onNewsClick }: Props) {
+export function SearchView({ results, query, searching, error, lang, onClear, onNewsClick }: Props) {
   return (
     <div className="search-view">
       <div className="search-header">
@@ -34,7 +36,7 @@ export function SearchView({ results, query, searching, error, onClear, onNewsCl
       ) : (
         <div className="card-list">
           {results.map(item => (
-            <NewsCard key={item.id} item={item} onClick={onNewsClick} />
+            <NewsCard key={item.id} item={item} lang={lang} onClick={onNewsClick} />
           ))}
         </div>
       )}

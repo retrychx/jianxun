@@ -3,14 +3,16 @@ import { ChevronRight, Hash } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { getByEntity } from '../api'
 import { NewsCard } from './NewsCard'
+import type { Lang } from '../utils'
 
 interface Props {
   entity: string
+  lang: Lang
   onBack: () => void
   onNewsClick: (id: number) => void
 }
 
-export function EntityView({ entity, onBack, onNewsClick }: Props) {
+export function EntityView({ entity, lang, onBack, onNewsClick }: Props) {
   const [items, setItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -54,7 +56,7 @@ export function EntityView({ entity, onBack, onNewsClick }: Props) {
         <div className="card-list">
           {items.map((item, i) => (
             <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-              <NewsCard item={item} onClick={onNewsClick} />
+              <NewsCard item={item} lang={lang} onClick={onNewsClick} />
             </div>
           ))}
         </div>

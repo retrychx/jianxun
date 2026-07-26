@@ -3,7 +3,7 @@ import { KinkLine } from './KinkLine'
 import type { ViewName } from '../hooks/useHashRoute'
 
 const TABS: { view: ViewName; hash: string; label: string; Icon: typeof Sunrise }[] = [
-  { view: 'briefing', hash: '#/', label: '简报', Icon: Sunrise },
+  { view: 'briefing', hash: '#/', label: '日报', Icon: Sunrise },
   { view: 'feed', hash: '#/feed', label: '新闻', Icon: Newspaper },
   { view: 'topics', hash: '#/topics', label: '话题', Icon: Hash },
 ]
