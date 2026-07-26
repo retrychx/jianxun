@@ -91,7 +91,7 @@ export async function listNews(env: Env, url: URL) {
     env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
   ])
   const result = { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
-  if (env.KV) cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
+  if (env.KV) await cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
   return result
 }
 
@@ -114,7 +114,7 @@ export async function trending(env: Env) {
     return true
   })
   const result = { items: deduped.map((row: any) => ({ ...mapNews(row), heat: row.heat })) }
-  if (env.KV) cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
+  if (env.KV) await cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
   return result
 }
 
@@ -122,7 +122,7 @@ export async function categories(env: Env) {
   if (env.KV) { const cached = await cacheGet<any>(env.KV, 'categories'); if (cached) return cached }
   const result = await env.DB.prepare('SELECT category as name, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC').all()
   const data = { categories: result.results }
-  if (env.KV) cacheSet(env.KV, 'categories', data, CACHE_TTL.categories)
+  if (env.KV) await cacheSet(env.KV, 'categories', data, CACHE_TTL.categories)
   return data
 }
 
@@ -133,7 +133,7 @@ export async function stats(env: Env) {
     env.DB.prepare("SELECT COUNT(*) as total FROM news WHERE created_at >= datetime('now', 'start of day')").first<{ total: number }>(),
   ])
   const data = { total: total?.total || 0, today: today?.total || 0 }
-  if (env.KV) cacheSet(env.KV, 'stats', data, CACHE_TTL.stats)
+  if (env.KV) await cacheSet(env.KV, 'stats', data, CACHE_TTL.stats)
   return data
 }
 
@@ -150,7 +150,7 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
         for (const key of page.keys) deletions.push(env.KV.delete(key.name))
         cursor = page.list_complete ? undefined : page.cursor
       } while (cursor)
-      for (const key of ['trending', 'topics', 'stats', 'categories']) deletions.push(env.KV.delete(key))
+      for (const key of ['trending', 'topics', 'stats', 'categories', 'briefing']) deletions.push(env.KV.delete(key))
       await Promise.allSettled(deletions)
     } catch {}
   }
@@ -187,6 +187,7 @@ export async function detail(env: Env, id: number) {
   return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related }
 }
 export async function briefing(env: Env) {
+  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'briefing'); if (cached) return cached }
   // Select top 7 articles: diverse sources, recent, high-scoring
   // Prefer the last 48 hours; fall back to all-time if too few fresh articles.
   // heat = rows sharing the same normalized title (roughly how many outlets followed up).
@@ -267,7 +268,9 @@ export async function briefing(env: Env) {
     return { ...item, reason }
   })
 
-  return { items: result }
+  const payload = { items: result }
+  if (env.KV) await cacheSet(env.KV, 'briefing', payload, CACHE_TTL.briefing)
+  return payload
 }
 
 export async function topics(env: Env) {
@@ -326,7 +329,7 @@ export async function topics(env: Env) {
       return { ...rest, label: aiLabels?.[i] || t.label, items: t.items.map(mapNews) }
     })
   }
-  if (env.KV) cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
+  if (env.KV) await cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
   return result
 }
 
@@ -421,7 +424,7 @@ export async function fixImages(env: Env) {
 
 // KV cache helpers
 const CACHE_TTL = {
-  list: 60, trending: 120, stats: 300, categories: 300, topics: 600, detail: 3600,
+  list: 60, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
 }
 
 async function cacheGet<T>(kv: KVNamespace, key: string): Promise<T | null> {
