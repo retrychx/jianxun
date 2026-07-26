@@ -10,6 +10,8 @@ import { SearchView } from './components/SearchView'
 import { EntityView } from './components/EntityView'
 import { DigestLoader } from './components/DigestView'
 import { TopicView } from './components/TopicView'
+import { NarrativesView } from './components/NarrativesView'
+import { NarrativeDetailView } from './components/NarrativeDetailView'
 import { SourcesView } from './components/SourcesView'
 import { AskView } from './components/AskView'
 import { WeeklyView } from './components/WeeklyView'
@@ -286,6 +288,7 @@ export default function App() {
             <a href="#/" className={navActive === 'briefing' ? 'active' : ''} aria-current={navActive === 'briefing' ? 'page' : undefined}>日报<KinkLine /></a>
             <a href="#/feed" className={navActive === 'feed' ? 'active' : ''} aria-current={navActive === 'feed' ? 'page' : undefined}>新闻<KinkLine /></a>
             <a href="#/topics" className={navActive === 'topics' ? 'active' : ''} aria-current={navActive === 'topics' ? 'page' : undefined}>话题<KinkLine /></a>
+            <a href="#/narratives" className={navActive === 'narratives' || navActive === 'narrative' ? 'active' : ''} aria-current={navActive === 'narratives' || navActive === 'narrative' ? 'page' : undefined}>叙事<KinkLine /></a>
           </nav>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -352,6 +355,10 @@ export default function App() {
             <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} follows={follows} onEntityClick={openEntity} />
           ) : view === 'topic' && baseRoute.topic ? (
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
+          ) : view === 'narratives' ? (
+            <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} />
+          ) : view === 'narrative' && baseRoute.narrative ? (
+            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'weekly' ? (
@@ -416,7 +423,7 @@ export default function App() {
 
       <footer className="footer">
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
+        <a href="#/narratives" className="footer-link">叙事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
       </footer>
 
       <BottomNav active={navActive} />

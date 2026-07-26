@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'digest' | 'topic' | 'sources' | 'weekly'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative'
 
 export interface Route {
   view: ViewName
@@ -11,6 +11,8 @@ export interface Route {
   topic?: string
   /** 历史日报：#/digest/:date（YYYY-MM-DD） */
   date?: string
+  /** 叙事详情：#/narrative/:keyword */
+  narrative?: string
   /** 详情覆盖层：#/news/:id */
   newsId: number | null
 }
@@ -42,6 +44,10 @@ export function parseHash(hash: string): Route {
         : DEFAULT_ROUTE
     case 'topic':
       return segs[1] ? { view: 'topic', topic: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
+    case 'narratives':
+      return { view: 'narratives', newsId: null }
+    case 'narrative':
+      return segs[1] ? { view: 'narrative', narrative: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
     case 'sources':
       return { view: 'sources', newsId: null }
     case 'news': {
@@ -54,7 +60,7 @@ export function parseHash(hash: string): Route {
   }
 }
 
-export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string; topic?: string; date?: string }): string {
+export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string; topic?: string; date?: string; narrative?: string }): string {
   switch (r.view) {
     case 'feed':
       return `#/feed${r.cat && r.cat !== '全部' ? `?cat=${encodeURIComponent(r.cat)}` : ''}`
@@ -70,6 +76,10 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return `#/digest/${r.date || ''}`
     case 'topic':
       return `#/topic/${encodeURIComponent(r.topic || '')}`
+    case 'narratives':
+      return '#/narratives'
+    case 'narrative':
+      return `#/narrative/${encodeURIComponent(r.narrative || '')}`
     case 'sources':
       return '#/sources'
     default:

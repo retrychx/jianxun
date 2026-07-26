@@ -221,3 +221,38 @@ export interface WeeklyResponse {
 export function getWeekly(): Promise<WeeklyResponse> {
   return fetchJson(`${BASE}/news/weekly`)
 }
+
+/* ===== 叙事追踪（增量接口） ===== */
+
+export interface NarrativeSummary {
+  keyword: string
+  label: string
+  status: 'active' | 'stale' | 'archived'
+  firstSeen: string
+  lastUpdated: string
+  summary: string | null
+  developmentCount: number
+  articleCount: number
+  sourceStats: Record<string, number>
+}
+
+export interface NarrativeDetail extends NarrativeSummary {
+  developments: { date: string; text: string; articleCount: number; sources: string[] }[]
+  articles: NewsItem[]
+}
+
+export interface NarrativesTimeline {
+  timeline: { date: string; items: { keyword: string; label: string; text: string; articleCount: number; sources: string[] }[] }[]
+}
+
+export function getNarratives(): Promise<{ narratives: NarrativeSummary[] }> {
+  return fetchJson(`${BASE}/news/narrative`)
+}
+
+export function getNarrative(keyword: string): Promise<NarrativeDetail> {
+  return fetchJson(`${BASE}/news/narrative?keyword=${encodeURIComponent(keyword)}`)
+}
+
+export function getNarrativesTimeline(): Promise<NarrativesTimeline> {
+  return fetchJson(`${BASE}/news/narratives`)
+}
