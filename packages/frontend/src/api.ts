@@ -33,6 +33,13 @@ export interface SentimentData {
   perspective?: string
 }
 
+export interface AnalysisDetail {
+  keyPoints: string[]
+  significance: string
+  controversy: boolean
+  impact: 'short' | 'medium' | 'high'
+}
+
 export interface NewsDetail extends NewsItem {
   analysis: {
     summary: string
@@ -41,6 +48,8 @@ export interface NewsDetail extends NewsItem {
     content: string | null
   }
   related: NewsItem[]
+  /** Enhanced AI analysis fields (may be null for unanalyzed articles) */
+  analysisDetail: AnalysisDetail | null
 }
 
 export interface NewsListResponse {

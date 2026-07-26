@@ -15,11 +15,11 @@ export { listNews, trending, categories, stats, search, entitySearch, detail, br
 // Topic clustering
 export { topics, topic, weekly } from './topics.js'
 
-// News Narrative Agent
-export { runAgent, loadActiveNarratives, loadSingleNarrative } from './agent.js'
+// News Intelligence Agent (unified AI pipeline)
+export { runAgent, fixMissingImages as fixImages, fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, loadActiveNarratives, loadSingleNarrative } from './agent.js'
 
 // Daily digest
 export { generateTodayDigest, debugDigest, digest, digests } from './digest.js'
 
-// Admin write endpoints + ask
-export { fetchNews, fixImages, translateMissing, saveAnalysis, ask } from './admin.js'
+// Admin write endpoints + ask (agent phase functions exported from agent.ts)
+export { fetchNews, saveAnalysis, ask } from './admin.js'

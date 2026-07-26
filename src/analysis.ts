@@ -53,28 +53,49 @@ export async function extractContent(url: string): Promise<{ content: string | n
 }
 
 
-interface DeepSeekResult {
+export interface DeepSeekResult {
   summary: string
   category: string
-  entities: { name: string; type: string; weight: number }[]
+  entities: { name: string; type: string; weight: number; role?: string }[]
   sentiment: { label: string; scores: { positive: number; negative: number; neutral: number }; perspective: string }
 }
 
-export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string): Promise<DeepSeekResult | null> {
-  const prompt = `你是一个智能新闻分析助手。分析以下新闻文章的全文，返回 JSON（不要其他文字）：
+/** Enhanced analysis detail stored in news.analysis_detail */
+export interface AnalysisDetail {
+  keyPoints: string[]
+  significance: string
+  controversy: boolean
+  impact: 'short' | 'medium' | 'high'
+}
+
+export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string): Promise<{
+  base: DeepSeekResult
+  detail: AnalysisDetail
+} | null> {
+  const prompt = `你是一位资深科技新闻分析编辑。深刻理解这篇文章，返回以下 JSON（不要其他文字）：
 
 {
-  "summary": "2-3句话的简洁中文摘要",
+  "summary": "2-3句精炼中文摘要，包含核心事实（谁/什么/影响）",
+  "keyPoints": ["要点1（≤20字）", "要点2（≤20字）", "要点3（≤20字）", "要点4", "要点5"],
   "category": "AI|科技|财经|国际|政治|健康|体育|娱乐|游戏|教育|社会",
   "entities": [
-    { "name": "实体名称", "type": "person|company|product|technology|concept", "weight": 0.8 }
+    { "name": "实体名", "type": "person|company|product|technology|concept", "weight": 0.8, "role": "角色简述（≤10字）" }
   ],
   "sentiment": {
     "label": "positive|negative|neutral|mixed",
     "scores": { "positive": 0.x, "negative": 0.x, "neutral": 0.x },
-    "perspective": "报道角度和倾向简短描述（中文）"
-  }
-}`
+    "perspective": "报道角度和倾向简短描述（中文，≤20字）"
+  },
+  "significance": "这篇文章在当天新闻中的重要性判断（≤40字，说明为什么值得关注）",
+  "controversy": false,
+  "impact": "short|medium|high"
+}
+
+注意：
+- summary 必须包含谁/做了什么/影响，不要空泛
+- keyPoints 提炼文章的核心论据，每条一个完整信息点
+- significance 说明对读者的意义，不只是重复标题
+- controversy 为 true 时代表该报道存在争议或正反双方观点`
 
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
@@ -100,10 +121,18 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
     const json = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const parsed = JSON.parse(json)
     return {
-      summary: parsed.summary || '无法生成摘要',
-      category: parsed.category || '科技',
-      entities: (parsed.entities || []).slice(0, 6),
-      sentiment: parsed.sentiment || { label: 'neutral', scores: { positive: 0.3, negative: 0.3, neutral: 0.4 }, perspective: '' },
+      base: {
+        summary: parsed.summary || '无法生成摘要',
+        category: parsed.category || '科技',
+        entities: (parsed.entities || []).slice(0, 6).map((e: any) => ({ name: e.name, type: e.type, weight: e.weight || 0.5, role: e.role })),
+        sentiment: parsed.sentiment || { label: 'neutral', scores: { positive: 0.3, negative: 0.3, neutral: 0.4 }, perspective: '' },
+      },
+      detail: {
+        keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0, 5) : [],
+        significance: typeof parsed.significance === 'string' ? parsed.significance.slice(0, 60) : '',
+        controversy: !!parsed.controversy,
+        impact: ['short', 'medium', 'high'].includes(parsed.impact) ? parsed.impact : 'medium',
+      },
     }
   } catch {
     return null
@@ -387,4 +416,75 @@ export function titleSimilarity(a: string, b: string): number {
   const intersection = new Set([...setA].filter(x => setB.has(x)))
   const union = new Set([...setA, ...setB])
   return intersection.size / union.size
+}
+
+// ─── Cross-source comparison analysis ────────────────────────────
+
+export interface CrossRefResult {
+  keyword: string
+  sources: { name: string; angle: string }[]
+  comparison: string
+  articleIds: number[]
+}
+
+// Given articles from different sources covering the same story,
+// generates a comparison of their angles and reporting differences.
+export async function crossRefAnalysis(
+  groups: { source: string; title: string; summary: string }[][],
+  apiKey: string | undefined,
+): Promise<CrossRefResult[] | null> {
+  if (!apiKey || !groups.length) return null
+
+  const results: CrossRefResult[] = []
+
+  for (const group of groups) {
+    if (group.length < 2) continue
+    const sources = group.map(g => g.source)
+    const jointTitle = group.map(g => g.title).join(' | ')
+
+    try {
+      const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(30_000),
+        body: JSON.stringify({
+          model: DEEPSEEK_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `你是新闻对比分析编辑。以下是多家媒体对同一事件的报道。比较各家的报道角度、侧重点和潜在倾向差异。只返回 JSON（不要其他文字）：
+
+{
+  "keyword": "报道的事件关键词（≤20字中文）",
+  "comparison": "≤100字对比分析：指出各源报道角度的关键差异"
+}`,
+            },
+            {
+              role: 'user',
+              content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary || '').slice(0, 200)}`).join('\n\n'),
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 512,
+        }),
+      })
+      if (!res?.ok) continue
+
+      const data = (await res.json()) as any
+      const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      if (!raw) continue
+
+      const parsed = JSON.parse(raw)
+      if (parsed.comparison) {
+        results.push({
+          keyword: parsed.keyword || jointTitle.slice(0, 60),
+          sources: sources.map(s => ({ name: s, angle: '' })),
+          comparison: parsed.comparison.slice(0, 200),
+          articleIds: [],
+        })
+      }
+    } catch { /* skip failed group */ }
+  }
+
+  return results.length ? results : null
 }

@@ -127,6 +127,12 @@ export async function detail(env: Env, id: number) {
     if (row.summary) summary = row.summary
   }
 
+  // Parse analysis_detail (keyPoints, significance, controversy, impact)
+  let analysisDetail: any = null
+  if (row.analysis_detail) {
+    try { analysisDetail = JSON.parse(row.analysis_detail) } catch {}
+  }
+
   // Related articles：共享显著词匹配
   const words = [...new Set(tokenize(news.title))]
   let related: any[] = []
@@ -152,7 +158,7 @@ export async function detail(env: Env, id: number) {
       .map(x => mapNews(x.n))
   }
 
-  return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related }
+  return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related, analysisDetail }
 }
 
 export async function briefing(env: Env) {

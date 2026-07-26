@@ -1,25 +1,25 @@
 import type { ExecutionContext } from '@cloudflare/workers-types'
 import { cacheDelete, CACHE_TTL, cacheSet, cacheGet, signalEvent } from './cache.js'
 import { fetchAllRSS, saveArticles } from './rss.js'
-import { extractContent, analyzeWithDeepSeek, translateBatch, generateAnswer } from './analysis.js'
+import { generateAnswer } from './analysis.js'
 import { json, likeEscape, type Env } from './helpers.js'
 import { tokenize } from './tokenize.js'
-import { generateTodayDigest } from './digest.js'
 
+/** Fetch latest RSS articles, save new ones, then launch the full AI agent pipeline. */
 export async function fetchNews(env: Env, ctx: ExecutionContext) {
   const articles = await fetchAllRSS(env.DB)
-  const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY, ctx)
+  const saved = await saveArticles(env.DB, articles)
   if (saved > 0) {
     const deletions = ['trending', 'topics', 'stats', 'categories', 'briefing'].map(k => cacheDelete(k))
     await Promise.allSettled(deletions)
   }
+
+  // Launch the unified intelligence agent as a background task
   ctx.waitUntil((async () => {
-    await analyzeRecentTop(env).catch(() => 0)
-    await generateTodayDigest(env).catch(() => {})
-    // Agent: 叙事追踪（跨周期报道演化）
     const { runAgent } = await import('./agent.js')
     await runAgent(env).catch(() => {})
   })())
+
   // Notify SSE clients
   if (saved > 0) {
     signalEvent('fetch', { count: saved, timestamp: new Date().toISOString() }).catch(() => {})
@@ -27,27 +27,7 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
   return { fetched: saved }
 }
 
-export async function translateMissing(env: Env) {
-  const apiKey = env.DEEPSEEK_API_KEY
-  if (!apiKey) return { translated: 0 }
-  const rows = await env.DB.prepare(
-    "SELECT id, title, summary, description FROM news WHERE lang = 'en' AND title_zh IS NULL ORDER BY score DESC LIMIT 10"
-  ).all()
-  if (!rows.results.length) return { translated: 0 }
-  const translated = await translateBatch(
-    (rows.results as any[]).map(r => ({ id: r.id, title: r.title, summary: r.summary || r.description || '' })),
-    apiKey
-  )
-  if (!translated) return { translated: 0 }
-  let n = 0
-  for (const t of translated) {
-    await env.DB.prepare('UPDATE news SET title_zh = ?, summary_zh = ? WHERE id = ?')
-      .bind(t.title_zh, t.summary_zh || null, t.id).run()
-    n++
-  }
-  return { translated: n }
-}
-
+/** Manually save AI analysis for an article (admin POST /api/news/:id/detail). */
 export async function saveAnalysis(env: Env, id: number, body: any) {
   try {
     const { summary, category, entities, sentiment } = body
@@ -60,58 +40,8 @@ export async function saveAnalysis(env: Env, id: number, body: any) {
   }
 }
 
-// 对给定文章逐条跑 AI 分析（提取正文→DeepSeek→写回），返回成功数。
-async function analyzeRows(env: Env, rows: any[], apiKey: string): Promise<number> {
-  let done = 0
-  for (const row of rows) {
-    await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
-    try {
-      const { content: extracted } = await extractContent(row.url)
-      const content = (extracted || row.description || row.title).slice(0, 2000)
-      const result = await analyzeWithDeepSeek(row.title, content, apiKey)
-      if (result) {
-        await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?, content), analyzed_at=datetime('now') WHERE id=?")
-          .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', extracted, row.id).run()
-        done++
-      }
-    } catch (e: any) {
-      console.error('AI analysis failed:', e.message)
-    }
-  }
-  return done
-}
+// ─── AI Q&A (standalone, not part of the pipeline) ─────────────
 
-// 抓取后优先分析近 2 天高分新文，保证日报/简报候选文有摘要与情感
-async function analyzeRecentTop(env: Env, limit = 6): Promise<number> {
-  const apiKey = env.DEEPSEEK_API_KEY
-  if (!apiKey) {
-    console.warn('DEEPSEEK_API_KEY not set — AI analysis disabled. Add via: npx wrangler pages secret put DEEPSEEK_API_KEY')
-    return 0
-  }
-  const rows = await env.DB.prepare(
-    "SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days') ORDER BY score DESC LIMIT ?"
-  ).bind(limit).all()
-  return analyzeRows(env, rows.results as any[], apiKey)
-}
-
-export async function fixImages(env: Env) {
-  const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL LIMIT 3").all()
-  let imgFixed = 0
-  await Promise.allSettled(
-    (imgRows.results as any[]).map(async (row: any) => {
-      try {
-        const { image } = await extractContent(row.url)
-        if (image) { await env.DB.prepare('UPDATE news SET image = ? WHERE id = ?').bind(image, row.id).run(); imgFixed++ }
-      } catch {}
-    })
-  )
-  const aiRows = await env.DB.prepare("SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 ORDER BY RANDOM() LIMIT 3").all()
-  const apiKey = env.DEEPSEEK_API_KEY
-  const aiDone = apiKey ? await analyzeRows(env, aiRows.results as any[], apiKey) : 0
-  return { imgFixed, aiDone }
-}
-
-// 问答搜索：近 7 天相关报道 → DeepSeek 综合回答
 export async function ask(env: Env, q: string): Promise<Response> {
   const query = (q || '').trim()
   if (query.length < 2 || query.length > 60) return json({ error: '问题长度需在 2-60 字之间' }, 400)
