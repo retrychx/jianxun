@@ -45,8 +45,8 @@ export function parseHash(hash: string): Route {
     case 'sources':
       return { view: 'sources', newsId: null }
     case 'news': {
-      const id = Number(segs[1])
-      // 刷新/分享直达：回到默认视图（日报）并打开面板
+      // Only accept strictly numeric IDs — reject hex/exp notation
+      const id = /^\d+$/.test(segs[1]) ? Number(segs[1]) : NaN
       return Number.isFinite(id) && id > 0 ? { view: 'briefing', newsId: id } : DEFAULT_ROUTE
     }
     default:
@@ -89,11 +89,12 @@ export function useHashRoute(): Route {
   return route
 }
 
-/** push 一条 hash 历史；replace 时不触发 hashchange（用于搜索输入中同步 URL） */
+/** push 一条 hash 历史；replace 时不触发原生 hashchange，手动派发事件同步 route */
 export function useNavigate() {
   return useCallback((hash: string, replace = false) => {
     if (replace) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search + hash)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
       return
     }
     if (window.location.hash === hash) return

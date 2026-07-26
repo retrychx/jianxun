@@ -1,7 +1,7 @@
 import { RSS_SOURCES, type RssSource } from './sources.js'
 import { keywordClassify } from './classifier.js'
 import { parseRSS, type RssItem } from './parse-rss.js'
-import { extractContent } from './analysis.js'
+import { extractContent, DEEPSEEK_MODEL, fetchWithRetry } from './analysis.js'
 import { normalizeTitle } from './title-norm.js'
 import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 
@@ -40,6 +40,8 @@ export async function fetchAllRSS(DB: D1Database) {
   })
   // Health stats must not break fetching
   await Promise.allSettled(statUpdates)
+  // Age out stale failures: reset fail_count for sources whose last error was >7 days ago
+  await DB.prepare("UPDATE source_stats SET fail_count = 0 WHERE last_error IS NOT NULL AND last_error < datetime('now', '-7 days')").run().catch(() => {})
   return all
 }
 
@@ -129,11 +131,11 @@ async function refineCategories(DB: D1Database, articles: any[], apiKey: string)
     const batch = articles.slice(i, i + batchSize)
     try {
       const texts = batch.map((a, idx) => `[${idx}] ${a.title}`).join('\n')
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
+      const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: 'deepseek-v4-flash',
+          model: DEEPSEEK_MODEL,
           messages: [{
             role: 'system',
             content: '你是新闻分类助手。为每篇新闻分配一个分类：AI/科技/财经/国际/政治/健康/体育/娱乐/游戏/教育/社会。只返回JSON数组：[{"index":0,"category":"AI"},...]'
@@ -145,7 +147,7 @@ async function refineCategories(DB: D1Database, articles: any[], apiKey: string)
           max_tokens: 1024,
         }),
       })
-      if (!res.ok) continue
+      if (!res || !res.ok) continue
       const data = await res.json() as any
       const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       if (!raw) continue

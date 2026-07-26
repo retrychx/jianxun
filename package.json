@@ -13,7 +13,9 @@
     "node": ">=16.20.0"
   },
   "packageManager": "pnpm@10.28.2",
-  "dependencies": {},
+  "dependencies": {
+    "fast-xml-parser": "^5.10.1"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260724.1"
   }

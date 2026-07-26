@@ -1,3 +1,28 @@
+import { tokenize } from './tokenize.js'
+
+/** DeepSeek model used for all AI analysis calls. Override via DEEPSEEK_MODEL env var. */
+export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
+
+/**
+ * Fetch with automatic retry on transient failures (network errors, 5xx, 429).
+ * Does NOT retry on 4xx client errors (they are permanent).
+ */
+export async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response | null> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, options)
+      // 4xx errors are permanent — don't retry
+      if (res.status >= 400 && res.status < 500) return res
+      if (res.ok || i === retries) return res
+    } catch {
+      if (i === retries) return null
+    }
+    // Exponential backoff: 1s, 2s
+    await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+  }
+  return null
+}
+
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null }> {
   try {
     const res = await fetch(url, {
@@ -52,12 +77,12 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
 }`
 
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: 'system', content: prompt },
           { role: 'user', content: `标题: ${title}\n\n正文:\n${content.slice(0, 8000)}` },
@@ -66,7 +91,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
         max_tokens: 1024,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content
@@ -91,12 +116,12 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
 export async function generateTopicLabels(titleGroups: string[][], apiKey: string | undefined): Promise<string[] | null> {
   if (!apiKey || !titleGroups.length) return null
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           {
             role: 'system',
@@ -111,7 +136,7 @@ export async function generateTopicLabels(titleGroups: string[][], apiKey: strin
         max_tokens: 1024,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -150,12 +175,12 @@ export interface DigestResult {
 export async function generateDigest(candidates: DigestCandidate[], apiKey: string | undefined): Promise<DigestResult | null> {
   if (!apiKey || !candidates.length) return null
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           {
             role: 'system',
@@ -178,7 +203,7 @@ items 按重要性排序；extra 是最有趣/最轻松的一条番外，不得�
         max_tokens: 4096,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -213,12 +238,12 @@ items 按重要性排序；extra 是最有趣/最轻松的一条番外，不得�
 export async function translateBatch(articles: { id: number; title: string; summary: string }[], apiKey: string | undefined): Promise<{ id: number; title_zh: string; summary_zh: string }[] | null> {
   if (!apiKey || !articles.length) return null
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           {
             role: 'system',
@@ -233,7 +258,7 @@ export async function translateBatch(articles: { id: number; title: string; summ
         max_tokens: 2048,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -258,12 +283,12 @@ export async function translateBatch(articles: { id: number; title: string; summ
 export async function generateStoryline(articles: { title: string; summary: string }[], apiKey: string | undefined): Promise<string | null> {
   if (!apiKey || !articles.length) return null
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           {
             role: 'system',
@@ -278,7 +303,7 @@ export async function generateStoryline(articles: { title: string; summary: stri
         max_tokens: 512,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content?.trim()
@@ -311,12 +336,12 @@ export interface AskAnswer {
 export async function generateAnswer(question: string, candidates: AskCandidate[], apiKey: string | undefined): Promise<AskAnswer | null> {
   if (!apiKey || !question || !candidates.length) return null
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: DEEPSEEK_MODEL,
         messages: [
           {
             role: 'system',
@@ -334,7 +359,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
         max_tokens: 1024,
       }),
     })
-    if (!res.ok) return null
+    if (!res || !res.ok) return null
 
     const data = await res.json() as any
     const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -353,18 +378,6 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
   } catch {
     return null
   }
-}
-
-// Simple text similarity for related articles
-function tokenize(text: string): string[] {
-  const clean = text.replace(/[^\w一-鿿\s]/g, ' ')
-  const words = clean.split(/\s+/).filter(w => w.length > 1)
-  const cn = clean.replace(/[a-zA-Z0-9]/g, '')
-  for (let i = 0; i < cn.length - 1; i++) {
-    const seg = cn.slice(i, i + 3)
-    if (seg.length >= 2 && seg.trim()) words.push(seg)
-  }
-  return [...new Set(words)].filter(w => w.length > 1)
 }
 
 export function titleSimilarity(a: string, b: string): number {

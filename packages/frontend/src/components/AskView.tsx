@@ -58,9 +58,11 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
   const [current, setCurrent] = useState('')
   const [result, setResult] = useState<AskResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [slow, setSlow] = useState(false)
   const [error, setError] = useState(false)
   const [history, setHistory] = useState<string[]>(loadHistory)
   const seq = useRef(0)
+  const slowTimer = useRef<number | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
 
   const submit = async (raw: string) => {
@@ -71,7 +73,11 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
     setResult(null)
     setError(false)
     setLoading(true)
+    setSlow(false)
     const s = ++seq.current
+    // Show "still processing" hint after 8 seconds
+    if (slowTimer.current) clearTimeout(slowTimer.current)
+    slowTimer.current = window.setTimeout(() => { if (s === seq.current) setSlow(true) }, 8_000)
     // 历史：最新在前、去重、最多 5 条
     setHistory(prev => {
       const next = [q, ...prev.filter(h => h !== q)].slice(0, 5)
@@ -86,7 +92,7 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
       if (s !== seq.current) return
       setError(true)
     } finally {
-      if (s === seq.current) setLoading(false)
+      if (s === seq.current) { setLoading(false); setSlow(false) }
     }
   }
 
@@ -108,6 +114,9 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // Cleanup slow timer on unmount
+  useEffect(() => () => { if (slowTimer.current) clearTimeout(slowTimer.current) }, [])
 
   // 新内容滚到底部
   useEffect(() => {
@@ -154,6 +163,7 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
           {loading && (
             <div className="ask-msg-ai ask-typing" aria-label="正在生成回答">
               <span /><span /><span />
+              {slow && <div className="ask-typing-slow">仍在处理中，请稍候...</div>}
             </div>
           )}
 

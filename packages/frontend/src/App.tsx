@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Sun, Moon, Feather, Newspaper, MessageCircleQuestion } from 'lucide-react'
+import { Newspaper, MessageCircleQuestion } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel, TrendingStrip } from './components/TrendingPanel'
@@ -16,9 +16,11 @@ import { WeeklyView } from './components/WeeklyView'
 import { BottomNav } from './components/BottomNav'
 import { KinkLine } from './components/KinkLine'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
-import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests, searchNews } from './api'
+import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests } from './api'
 import { useFollow } from './hooks/useFollow'
 import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from './hooks/useHashRoute'
+import { useTheme, THEMES, THEME_META } from './hooks/useTheme'
+import { useSearch } from './hooks/useSearch'
 import { boostFollowed, matchesFollow, type Lang } from './utils'
 import './App.css'
 
@@ -36,21 +38,6 @@ function SkeletonCard() {
       </div>
     </div>
   )
-}
-
-type Theme = 'light' | 'dark' | 'retro'
-const THEMES: Theme[] = ['light', 'dark', 'retro']
-const THEME_META: Record<Theme, { label: string; Icon: typeof Sun }> = {
-  light: { label: '浅色', Icon: Sun },
-  dark: { label: '深色', Icon: Moon },
-  retro: { label: '复古', Icon: Feather },
-}
-
-function getTheme(): Theme {
-  if (typeof document === 'undefined') return 'light'
-  const stored = localStorage.getItem('theme') as Theme | null
-  if (stored && THEMES.includes(stored)) return stored
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function getLang(): Lang {
@@ -73,14 +60,17 @@ export default function App() {
   const [msg, setMsg] = useState('')
   const [askOpen, setAskOpen] = useState(false)
   const [askQuery, setAskQuery] = useState('')
-  const [theme, setTheme] = useState<Theme>(getTheme)
+  const { theme, setTheme } = useTheme()
   const [lang, setLang] = useState<Lang>(getLang)
   const [digestDates, setDigestDates] = useState<string[]>([])
   const [scrolled, setScrolled] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<NewsItem[]>([])
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState(false)
+  const {
+    searchQuery, setSearchQuery,
+    searchResults, setSearchResults,
+    searching, setSearching,
+    searchError, setSearchError,
+    searchNavRef, lastViewHashRef,
+  } = useSearch()
   const { follows, isFollowing, toggleFollow } = useFollow()
 
   // Hash 路由：route 为当前 hash 解析结果；baseRoute 为详情覆盖层之下的视图
@@ -101,13 +91,6 @@ export default function App() {
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
-  const lastViewHashRef = useRef('#/')
-
-  // Theme
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('theme', theme)
-  }, [theme])
 
   // Language
   useEffect(() => {
@@ -189,6 +172,36 @@ export default function App() {
     return () => { cancelled = true }
   }, [loadAll, loadStats, loadDigestDates])
 
+  // SSE: 实时推送（新文章抓取完成时自动刷新）
+  const [sseEpoch, setSseEpoch] = useState(0)
+  useEffect(() => {
+    const es = new EventSource('/api/events')
+    let reconnectTimer: number | null = null
+
+    es.addEventListener('new-articles', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        const count = data.count ?? 0
+        showToast(`收到 ${count} 篇新文章，已更新`)
+      } catch {}
+      loadAll().catch(() => {})
+      loadStats().catch(() => {})
+      loadDigestDates().catch(() => {})
+    })
+
+    es.onerror = () => {
+      es.close()
+      reconnectTimer = window.setTimeout(() => {
+        setSseEpoch(e => e + 1)
+      }, 15_000)
+    }
+
+    return () => {
+      es.close()
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+    }
+  }, [sseEpoch, loadAll, loadStats, loadDigestDates, showToast])
+
   // feed 视图：路由驱动加载与分类切换
   const routeView = baseRoute.view
   const routeCat = baseRoute.cat
@@ -206,7 +219,6 @@ export default function App() {
   }, [routeView, routeCat, routeEntity, routeTopic, routeDate])
 
   // 搜索框与路由双向同步；记录最近非搜索视图供清空后返回
-  const searchNavRef = useRef(false) // 本次 search 跳转来自输入框，跳过后续 query 回写
   useEffect(() => {
     if (route.newsId) return
     if (route.view === 'search') {
@@ -223,7 +235,7 @@ export default function App() {
     if (v.trim()) {
       const hash = buildHash({ view: 'search', q: v.trim() })
       if (window.location.hash.startsWith('#/search')) {
-        navigate(hash, true) // 输入中只替换 URL，不刷历史
+        navigate(hash, true)
       } else {
         searchNavRef.current = true
         navCountRef.current++
@@ -255,36 +267,6 @@ export default function App() {
     if (navCountRef.current > 0) window.history.back()
     else navigate('#/')
   }, [navigate])
-
-  // Search: 300ms debounce + 请求序号防竞态
-  const searchSeq = useRef(0)
-  useEffect(() => {
-    const q = searchQuery.trim()
-    if (q.length < 2) {
-      searchSeq.current++
-      setSearchResults([])
-      setSearchError(false)
-      setSearching(false)
-      return
-    }
-    setSearching(true)
-    const seq = ++searchSeq.current
-    const timer = setTimeout(async () => {
-      try {
-        const res = await searchNews(q)
-        if (seq !== searchSeq.current) return
-        setSearchResults(res.items)
-        setSearchError(false)
-      } catch {
-        if (seq !== searchSeq.current) return
-        setSearchResults([])
-        setSearchError(true)
-      } finally {
-        if (seq === searchSeq.current) setSearching(false)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
 
   return (
     <div className="app">

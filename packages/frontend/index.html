@@ -3,15 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f0eb" />
     <meta name="description" content="简讯 - AI 智能新闻聚合：每日简报、热门排行、话题簇与多来源报道分析" />
     <title>简讯 - AI 智能新闻</title>
     <script>
       (function () {
         var themes = ['light', 'dark', 'retro']
         var stored = localStorage.getItem('theme')
-        var theme = themes.indexOf(stored) !== -1 ? stored
-          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        var theme = themes.indexOf(stored) !== -1 ? stored : 'retro'
         document.documentElement.setAttribute('data-theme', theme)
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) {
+          var colors = { light: '#fafafa', dark: '#111111', retro: '#f5f0eb' }
+          meta.setAttribute('content', colors[theme] || '#f5f0eb')
+        }
       })()
     </script>
   </head>

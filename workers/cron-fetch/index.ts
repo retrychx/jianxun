@@ -6,6 +6,9 @@ interface Env {
 }
 
 async function triggerFetch(env: Env): Promise<string> {
+  // Health check before fetch: if SITE_URL or ADMIN_TOKEN is missing, report immediately
+  if (!env.SITE_URL) return 'ERROR: SITE_URL not configured'
+  if (!env.ADMIN_TOKEN) return 'ERROR: ADMIN_TOKEN not configured'
   const res = await fetch(`${env.SITE_URL}/api/news/fetch`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}` },
