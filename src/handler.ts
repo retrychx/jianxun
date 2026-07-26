@@ -330,6 +330,13 @@ export async function topic(env: Env, name: string) {
   return result
 }
 
+// SQLite datetime('now') 输出 "YYYY-MM-DD HH:MM:SS"（UTC 无标记），
+// 前端 new Date() 会误当本地时间——统一补成带 Z 的 ISO
+function isoZ(ts: string | null | undefined): string | null {
+  if (!ts) return null
+  return ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z'
+}
+
 export async function sources(env: Env) {
   { const cached = await cacheGet<any>('sources'); if (cached) return cached }
   const [counts, stats] = await Promise.all([
@@ -348,8 +355,8 @@ export async function sources(env: Env) {
     weight: weightMap.get(name) ?? 1,
     total: countMap.get(name)?.total || 0,
     today: countMap.get(name)?.today || 0,
-    lastOk: statMap.get(name)?.last_ok || null,
-    lastError: statMap.get(name)?.last_error || null,
+    lastOk: isoZ(statMap.get(name)?.last_ok),
+    lastError: isoZ(statMap.get(name)?.last_error),
     failCount: statMap.get(name)?.fail_count || 0,
   }))
   const result = { items }
