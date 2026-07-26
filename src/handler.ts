@@ -1,6 +1,6 @@
 import type { D1Database, KVNamespace, ExecutionContext } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
-import { extractContent, analyzeWithDeepSeek, generateTopicLabels, generateDigest, translateBatch, generateStoryline, generateAnswer, titleSimilarity } from './analysis.js'
+import { extractContent, analyzeWithDeepSeek, generateTopicLabels, generateDigest, translateBatch, generateStoryline, generateAnswer } from './analysis.js'
 import { RSS_SOURCES } from './sources.js'
 
 type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
@@ -149,7 +149,11 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
     await Promise.allSettled(deletions)
   }
   // Digest generation involves a 30s LLM call, so it runs after the response
-  ctx.waitUntil(generateTodayDigest(env).catch(() => {}))
+  // 先分析高分新文（让日报候选有摘要/情感），再生成当天日报
+  ctx.waitUntil((async () => {
+    await analyzeRecentTop(env).catch(() => 0)
+    await generateTodayDigest(env).catch(() => {})
+  })())
   return { fetched: saved }
 }
 
@@ -435,15 +439,32 @@ export async function detail(env: Env, id: number) {
     if (row.summary) summary = row.summary
   }
 
-  // Related articles
-  const words = tokenize(news.title)
+  // Related articles：共享显著词匹配（Jaccard 对"只共享一个实体名"的标题过于苛刻）
+  const words = [...new Set(tokenize(news.title))]
   let related: any[] = []
   if (words.length) {
-    const clauses = words.map((_: string, i: number) => `title LIKE ?`)
-    const params = words.map((w: string) => `%${w}%`)
-    const candidates = await env.DB.prepare(`SELECT * FROM news WHERE id != ? AND (${clauses.join(' OR ')}) ORDER BY score DESC LIMIT 10`).bind(id, ...params).all()
-    related = (candidates.results as any[]).map(mapNews).map((n: any) => ({ ...n, sim: titleSimilarity(news.title, n.title) })).filter((n: any) => n.sim > 0.15).sort((a: any, b: any) => b.sim - a.sim).slice(0, 5)
-    related.forEach((r: any) => delete r.sim)
+    const likes = words.map(w => `%${w}%`)
+    const clauses = words.map(() => `title LIKE ?`)
+    const sumExpr = words.map(() => `(title LIKE ?)`).join(' + ')
+    // SQL 先按命中词数排序，避免短词（to/US）匹配的高分文挤掉真正相关的
+    const candidates = await env.DB.prepare(
+      `SELECT *, (${sumExpr}) AS mc FROM news WHERE id != ? AND (${clauses.join(' OR ')}) ORDER BY mc DESC, score DESC LIMIT 30`
+    ).bind(...likes, id, ...likes).all()
+    const wordSet = new Set(words.map(w => w.toLowerCase()))
+    // 常见英文虚词不算显著共享（after/comments 这类长词也会撞车）
+    const COMMON = new Set(['after', 'about', 'other', 'their', 'there', 'which', 'would', 'could', 'should', 'these', 'those', 'being', 'through', 'between', 'because', 'before', 'while', 'where', 'says', 'said', 'report', 'reports', 'video', 'watch', 'first', 'still', 'never', 'every', 'comments', 'with', 'from', 'into', 'over', 'under', 'again', 'against', 'during', 'without', 'within'])
+    const isSignificant = (w: string) => /[a-zA-Z]/.test(w) ? (w.length >= 5 && !COMMON.has(w)) : w.length >= 3
+    related = (candidates.results as any[])
+      .map((n: any) => {
+        const shared = [...new Set(tokenize(n.title).map(w => w.toLowerCase()))].filter(w => wordSet.has(w) && !COMMON.has(w))
+        const sig = shared.filter(isSignificant)
+        return { n, shared, sig }
+      })
+      // 有 1 个显著共享词（如 DeepSeek）或 2 个以上实义共享词（≥4 字母非虚词 / CJK 词段）即相关
+      .filter(x => x.sig.length >= 1 || x.shared.filter(w => /[a-zA-Z]/.test(w) ? w.length >= 4 : w.length >= 3).length >= 2)
+      .sort((a, b) => (b.sig.length + b.shared.length) - (a.sig.length + a.shared.length))
+      .slice(0, 5)
+      .map(x => mapNews(x.n))
   }
 
   return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related }
@@ -728,6 +749,39 @@ export async function saveAnalysis(env: Env, id: number, body: any) {
   }
 }
 
+// 对给定文章逐条跑 AI 分析（提取正文→DeepSeek→写回），返回成功数。
+// 共用：fixImages（随机补漏）与 analyzeRecentTop（抓取后优先分析高分新文）
+async function analyzeRows(env: Env, rows: any[], apiKey: string): Promise<number> {
+  let done = 0
+  for (const row of rows) {
+    // Count every attempt so unanalyzable articles don't get retried forever
+    await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
+    try {
+      const { content: extracted } = await extractContent(row.url)
+      const content = (extracted || row.description || row.title).slice(0, 2000)
+      const result = await analyzeWithDeepSeek(row.title, content, apiKey)
+      if (result) {
+        await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?, content), analyzed_at=datetime('now') WHERE id=?")
+          .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', extracted, row.id).run()
+        done++
+      }
+    } catch (e: any) {
+      console.error('AI analysis failed:', e.message)
+    }
+  }
+  return done
+}
+
+// 抓取后优先分析近 2 天高分新文，保证日报/简报候选文有摘要与情感
+async function analyzeRecentTop(env: Env, limit = 6): Promise<number> {
+  const apiKey = env.DEEPSEEK_API_KEY
+  if (!apiKey) return 0
+  const rows = await env.DB.prepare(
+    "SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days') ORDER BY score DESC LIMIT ?"
+  ).bind(limit).all()
+  return analyzeRows(env, rows.results as any[], apiKey)
+}
+
 export async function fixImages(env: Env) {
   // Fetch missing images (max 3)
   const imgRows = await env.DB.prepare("SELECT id, url FROM news WHERE image IS NULL LIMIT 3").all()
@@ -742,26 +796,8 @@ export async function fixImages(env: Env) {
   )
   // AI analysis (up to 3 articles, skip ones that already failed 3 times)
   const aiRows = await env.DB.prepare("SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 ORDER BY RANDOM() LIMIT 3").all()
-  let aiDone = 0
   const apiKey = env.DEEPSEEK_API_KEY
-  if (apiKey && aiRows.results.length > 0) {
-    for (const row of (aiRows.results as any[])) {
-      // Count every attempt so unanalyzable articles don't get retried forever
-      await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
-      try {
-        const { content: extracted } = await extractContent(row.url)
-        const content = (extracted || row.description || row.title).slice(0, 2000)
-        const result = await analyzeWithDeepSeek(row.title, content, apiKey)
-        if (result) {
-          await env.DB.prepare("UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?, content), analyzed_at=datetime('now') WHERE id=?")
-            .bind(result.summary, JSON.stringify(result.entities), JSON.stringify(result.sentiment), result.category || '科技', extracted, row.id).run()
-          aiDone++
-        }
-      } catch (e: any) {
-        console.error('AI analysis failed:', e.message)
-      }
-    }
-  }
+  const aiDone = apiKey ? await analyzeRows(env, aiRows.results as any[], apiKey) : 0
   return { imgFixed, aiDone }
 }
 
