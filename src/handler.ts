@@ -67,11 +67,9 @@ export async function listNews(env: Env, url: URL) {
   const offset = (page - 1) * pageSize
   const cacheKey = `list:${category && category !== '全部' ? category : 'all'}:${page}:${pageSize}`
 
-  // Try KV cache
-  if (env.KV) {
-    const cached = await cacheGet<any>(env.KV, cacheKey)
-    if (cached) return cached
-  }
+  // Try edge cache
+  const cached = await cacheGet<any>(cacheKey)
+  if (cached) return cached
 
   let query = 'SELECT * FROM news'
   let countQuery = 'SELECT COUNT(*) as total FROM news'
@@ -91,12 +89,12 @@ export async function listNews(env: Env, url: URL) {
     env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
   ])
   const result = { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
-  if (env.KV) await cacheSet(env.KV, cacheKey, result, CACHE_TTL.list)
+  await cacheSet(cacheKey, result, CACHE_TTL.list)
   return result
 }
 
 export async function trending(env: Env) {
-  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'trending'); if (cached) return cached }
+  { const cached = await cacheGet<any>('trending'); if (cached) return cached }
   // Only articles from the last 3 days, so old high-score items don't stick forever.
   // heat = rows sharing the same normalized title; cross-source follow-ups boost ranking.
   const items = await env.DB.prepare(
@@ -114,45 +112,36 @@ export async function trending(env: Env) {
     return true
   })
   const result = { items: deduped.map((row: any) => ({ ...mapNews(row), heat: row.heat })) }
-  if (env.KV) await cacheSet(env.KV, 'trending', result, CACHE_TTL.trending)
+  await cacheSet('trending', result, CACHE_TTL.trending)
   return result
 }
 
 export async function categories(env: Env) {
-  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'categories'); if (cached) return cached }
+  { const cached = await cacheGet<any>('categories'); if (cached) return cached }
   const result = await env.DB.prepare('SELECT category as name, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC').all()
   const data = { categories: result.results }
-  if (env.KV) await cacheSet(env.KV, 'categories', data, CACHE_TTL.categories)
+  await cacheSet('categories', data, CACHE_TTL.categories)
   return data
 }
 
 export async function stats(env: Env) {
-  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'stats'); if (cached) return cached }
+  { const cached = await cacheGet<any>('stats'); if (cached) return cached }
   const [total, today] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as total FROM news").first<{ total: number }>(),
     env.DB.prepare("SELECT COUNT(*) as total FROM news WHERE created_at >= datetime('now', 'start of day')").first<{ total: number }>(),
   ])
   const data = { total: total?.total || 0, today: today?.total || 0 }
-  if (env.KV) await cacheSet(env.KV, 'stats', data, CACHE_TTL.stats)
+  await cacheSet('stats', data, CACHE_TTL.stats)
   return data
 }
 
 export async function fetchNews(env: Env, ctx: ExecutionContext) {
   const articles = await fetchAllRSS(env.DB)
   const saved = await saveArticles(env.DB, articles, env.DEEPSEEK_API_KEY, ctx)
-  // Invalidate caches: all `list:` pages plus derived endpoints
-  if (env.KV && saved > 0) {
-    try {
-      const deletions: Promise<unknown>[] = []
-      let cursor: string | undefined
-      do {
-        const page = await env.KV.list({ prefix: 'list:', cursor })
-        for (const key of page.keys) deletions.push(env.KV.delete(key.name))
-        cursor = page.list_complete ? undefined : page.cursor
-      } while (cursor)
-      for (const key of ['trending', 'topics', 'stats', 'categories', 'briefing']) deletions.push(env.KV.delete(key))
-      await Promise.allSettled(deletions)
-    } catch {}
+  // Invalidate caches. Cache API 不支持按键名枚举：list:* 靠 60s TTL 自然过期，具名缓存主动失效
+  if (saved > 0) {
+    const deletions = ['trending', 'topics', 'stats', 'categories', 'briefing'].map(k => cacheDelete(k))
+    await Promise.allSettled(deletions)
   }
   return { fetched: saved }
 }
@@ -187,7 +176,7 @@ export async function detail(env: Env, id: number) {
   return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related }
 }
 export async function briefing(env: Env) {
-  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'briefing'); if (cached) return cached }
+  { const cached = await cacheGet<any>('briefing'); if (cached) return cached }
   // Select top 7 articles: diverse sources, recent, high-scoring
   // Prefer the last 48 hours; fall back to all-time if too few fresh articles.
   // heat = rows sharing the same normalized title (roughly how many outlets followed up).
@@ -269,12 +258,12 @@ export async function briefing(env: Env) {
   })
 
   const payload = { items: result }
-  if (env.KV) await cacheSet(env.KV, 'briefing', payload, CACHE_TTL.briefing)
+  await cacheSet('briefing', payload, CACHE_TTL.briefing)
   return payload
 }
 
 export async function topics(env: Env) {
-  if (env.KV) { const cached = await cacheGet<any>(env.KV, 'topics'); if (cached) return cached }
+  { const cached = await cacheGet<any>('topics'); if (cached) return cached }
   const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 80').all()
   const items = all.results as any[]
   const used = new Set<number>()
@@ -329,7 +318,7 @@ export async function topics(env: Env) {
       return { ...rest, label: aiLabels?.[i] || t.label, items: t.items.map(mapNews) }
     })
   }
-  if (env.KV) await cacheSet(env.KV, 'topics', result, CACHE_TTL.topics)
+  await cacheSet('topics', result, CACHE_TTL.topics)
   return result
 }
 
@@ -422,17 +411,33 @@ export async function fixImages(env: Env) {
   return { imgFixed, aiDone }
 }
 
-// KV cache helpers
+// Edge cache helpers（Cache API：按边缘节点缓存，零绑定配置；TTL 由 Cache-Control 控制）
 const CACHE_TTL = {
   list: 60, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
 }
 
-async function cacheGet<T>(kv: KVNamespace, key: string): Promise<T | null> {
-  try { const val = await kv.get(key); return val ? JSON.parse(val) : null } catch { return null }
+const cacheReq = (key: string) => new Request(`https://jianxun-cache.internal/${encodeURIComponent(key)}`)
+
+// DOM lib 的 caches: CacheStorage 没有 default，运行时 Workers 保证存在
+const edgeCache = () => (caches as unknown as { default: Cache }).default
+
+async function cacheGet<T>(key: string): Promise<T | null> {
+  try {
+    const res = await edgeCache().match(cacheReq(key))
+    return res ? ((await res.json()) as T) : null
+  } catch { return null }
 }
 
-async function cacheSet(kv: KVNamespace, key: string, data: any, ttl: number) {
-  try { await kv.put(key, JSON.stringify(data), { expirationTtl: ttl }) } catch {}
+async function cacheSet(key: string, data: any, ttl: number) {
+  try {
+    await edgeCache().put(cacheReq(key), new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${ttl}` },
+    }))
+  } catch {}
+}
+
+async function cacheDelete(key: string) {
+  try { await edgeCache().delete(cacheReq(key)) } catch {}
 }
 
 export function json(data: any, status = 200) {
