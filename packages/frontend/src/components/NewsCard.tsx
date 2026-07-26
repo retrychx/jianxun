@@ -7,13 +7,15 @@ interface Props {
   item: NewsItem
   lang?: Lang
   onClick?: (id: number) => void
+  /** 命中关注实体时显示「关注」小标记 */
+  followed?: boolean
 }
 
 function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
 
-export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick }: Props) {
+export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed }: Props) {
   const [imgError, setImgError] = useState(false)
   const showImage = !!item.image && !imgError
   const summary = displaySummary(item, lang)
@@ -35,6 +37,7 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick }: P
         <div className="card-header">
           <span className="card-source">{item.source}</span>
           <span className="card-time">{item.publishedAt ? formatDate(item.publishedAt) : ''}</span>
+          {followed && <span className="card-followed">关注</span>}
         </div>
         <h3 className="card-title">{displayTitle(item, lang)}</h3>
         {summary && <p className="card-summary">{summary}</p>}

@@ -2,8 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Newspaper } from 'lucide-react'
 import type { DigestResponse } from '../api'
 import { getDigest } from '../api'
+import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
 import { displayTitle, formatDigestDate, type Lang } from '../utils'
+import { FollowWeekly } from './FollowWeekly'
 
 interface ViewProps {
   digest: DigestResponse
@@ -11,6 +13,9 @@ interface ViewProps {
   dates: string[]
   lang: Lang
   onNewsClick: (id: number) => void
+  /** 有关注实体时底部显示「本周关注动态」 */
+  follows?: FollowItem[]
+  onEntityClick?: (name: string) => void
 }
 
 function shortDate(dateStr: string): string {
@@ -39,7 +44,7 @@ function DigestSkeleton() {
   )
 }
 
-export function DigestView({ digest, dates, lang, onNewsClick }: ViewProps) {
+export function DigestView({ digest, dates, lang, onNewsClick, follows, onEntityClick }: ViewProps) {
   const items = Array.isArray(digest.items) ? digest.items : []
   // 日期列表倒序（新→旧）；当前日期不一定在列表里，按大小关系找相邻
   const sorted = [...new Set(dates)].sort().reverse()
@@ -109,6 +114,8 @@ export function DigestView({ digest, dates, lang, onNewsClick }: ViewProps) {
           往期日报 · {shortDate(older)} <ChevronRight size={13} />
         </a>
       )}
+
+      {follows && onEntityClick && <FollowWeekly follows={follows} onEntityClick={onEntityClick} />}
     </div>
   )
 }
@@ -121,9 +128,12 @@ interface LoaderProps {
   onNewsClick: (id: number) => void
   /** 404/失败时的降级视图（主页传 BriefingView；历史页缺省显示空态） */
   fallback?: ReactNode
+  /** 有关注实体时底部显示「本周关注动态」 */
+  follows?: FollowItem[]
+  onEntityClick?: (name: string) => void
 }
 
-export function DigestLoader({ date, dates, lang, onNewsClick, fallback }: LoaderProps) {
+export function DigestLoader({ date, dates, lang, onNewsClick, fallback, follows, onEntityClick }: LoaderProps) {
   const [digest, setDigest] = useState<DigestResponse | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -137,7 +147,7 @@ export function DigestLoader({ date, dates, lang, onNewsClick, fallback }: Loade
     return () => { cancelled = true }
   }, [date])
 
-  if (digest) return <DigestView digest={digest} dates={dates} lang={lang} onNewsClick={onNewsClick} />
+  if (digest) return <DigestView digest={digest} dates={dates} lang={lang} onNewsClick={onNewsClick} follows={follows} onEntityClick={onEntityClick} />
   if (failed) {
     return fallback ? <>{fallback}</> : (
       <div className="empty">

@@ -289,6 +289,72 @@ export async function generateStoryline(articles: { title: string; summary: stri
   }
 }
 
+export interface AskCandidate {
+  id: number
+  title: string
+  titleZh?: string | null
+  summary?: string | null
+  summaryZh?: string | null
+  source?: string
+  publishedAt?: string | null
+}
+
+export interface AskAnswer {
+  answer: string
+  /** 引用的候选数组下标（已按 candidates 范围校验、去重） */
+  refs: number[]
+}
+
+// Answers a reader question in Chinese (<=250字) from up to 12 candidate articles,
+// citing them as [n] where n is the candidate array index.
+// Returns null when the call is unavailable/fails; callers degrade to answer:null.
+export async function generateAnswer(question: string, candidates: AskCandidate[], apiKey: string | undefined): Promise<AskAnswer | null> {
+  if (!apiKey || !question || !candidates.length) return null
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `你是中文科技新闻编辑。根据候选新闻回答读者问题：不超过250字中文，事实必须来自候选新闻，候选里没有的信息就明说"暂无相关报道"。引用候选时在句末用 [n] 标注，n 为候选编号。只返回 JSON（不要其他文字）：
+{ "answer": "≤250字中文回答，含 [n] 引用", "refs": [被引用的候选编号] }`
+          },
+          {
+            role: 'user',
+            content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0, 12).map((c, i) =>
+              `[${i}] ${c.titleZh || c.title}（${c.source || '未知来源'}${c.publishedAt ? '/' + c.publishedAt.slice(0, 10) : ''}）\n${((c.summaryZh || c.summary) || '').slice(0, 200)}`
+            ).join('\n\n')
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1024,
+      }),
+    })
+    if (!res.ok) return null
+
+    const data = await res.json() as any
+    const raw = data.choices?.[0]?.message?.content?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw)
+    const answer = String(parsed.answer || '').trim()
+    if (!answer) return null
+    const rawRefs: any[] = Array.isArray(parsed.refs) ? parsed.refs : []
+    const refs: number[] = [...new Set(
+      rawRefs
+        .map((n: any) => Number(n))
+        .filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length)
+    )]
+    return { answer: answer.slice(0, 500), refs }
+  } catch {
+    return null
+  }
+}
+
 // Simple text similarity for related articles
 function tokenize(text: string): string[] {
   const clean = text.replace(/[^\w一-鿿\s]/g, ' ')

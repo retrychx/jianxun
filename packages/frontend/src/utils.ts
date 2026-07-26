@@ -41,3 +41,18 @@ export function formatDigestDate(dateStr: string): string {
   const weekday = date.toLocaleDateString('zh-CN', { weekday: 'long' })
   return `${day} ${weekday}`
 }
+
+/** 标题或 entities（原始 JSON 字符串）包含任一关注实体名（大小写不敏感） */
+export function matchesFollow(item: { title: string; entities?: string | null }, followedNames: string[]): boolean {
+  if (!followedNames.length) return false
+  const hay = `${item.title} ${item.entities || ''}`.toLowerCase()
+  return followedNames.some(n => n && hay.includes(n.toLowerCase()))
+}
+
+/** 关注加权：匹配的条目稳定置顶，组内与其余条目都保持原顺序 */
+export function boostFollowed<T extends { title: string; entities?: string | null }>(items: T[], followedNames: string[]): T[] {
+  if (!followedNames.length || !items.length) return items
+  const hit = items.filter(it => matchesFollow(it, followedNames))
+  if (!hit.length || hit.length === items.length) return items
+  return [...hit, ...items.filter(it => !matchesFollow(it, followedNames))]
+}

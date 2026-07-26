@@ -2,7 +2,8 @@ import { Newspaper, Hash } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
-import { displaySummary, displayTitle, formatTime, formatDate, type Lang } from '../utils'
+import { boostFollowed, displaySummary, displayTitle, formatTime, formatDate, matchesFollow, type Lang } from '../utils'
+import { FollowWeekly } from './FollowWeekly'
 
 interface Props {
   items: BriefingItem[]
@@ -16,6 +17,9 @@ interface Props {
 
 export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow }: Props) {
   const followedEntities = follows.filter(f => f.type === 'entity')
+  const followedNames = followedEntities.map(f => f.name)
+  // 关注加权：命中关注实体的条目稳定置顶
+  const boosted = boostFollowed(items, followedNames)
 
   return (
     <div className="briefing-view">
@@ -50,7 +54,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
         </div>
       ) : (
         <div className="briefing-list">
-          {items.map((item, i) => {
+          {boosted.map((item, i) => {
             const summary = displaySummary(item, lang)
             return (
             <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)}>
@@ -63,6 +67,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
                   {item.heat != null && item.heat > 1 && (
                     <span className="briefing-heat">{item.heat} 家媒体报道</span>
                   )}
+                  {matchesFollow(item, followedNames) && <span className="briefing-followed">关注</span>}
                 </div>
                 <h3 className="bf-card-title">{displayTitle(item, lang)}</h3>
                 <p className="briefing-summary">{summary ?? item.reason}</p>
@@ -75,6 +80,8 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
           })}
         </div>
       )}
+
+      <FollowWeekly follows={follows} onEntityClick={onEntityClick} />
     </div>
   )
 }

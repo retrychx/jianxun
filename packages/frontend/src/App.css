@@ -106,7 +106,8 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 /* 社论感：logo 与各卡片/视图标题用衬线，正文保持无衬线 */
 .logo, .briefing-title, .bf-card-title, .card-title, .sheet-title, .tph-title,
-.digest-date, .digest-title, .digest-num, .digest-intro, .topic-storyline-text {
+.digest-date, .digest-title, .digest-num, .digest-intro, .topic-storyline-text,
+.ask-answer-text, .weekly-title, .weekly-total-num {
   font-family: var(--font-serif);
 }
 
@@ -861,6 +862,14 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .digest-extra { padding: 14px }
   .topic-persp-source { min-width: 72px; max-width: 100px }
 
+  .ask-input { font-size: 13px }
+  .ask-answer-text { font-size: 14.5px }
+
+  .weekly-card { padding: 20px 16px 16px }
+  .weekly-title { font-size: 22px }
+  .weekly-total-num { font-size: 36px }
+  .weekly-entity-name { min-width: 72px; max-width: 100px }
+
   .scroll-top { bottom: 76px; right: 16px; width: 32px; height: 32px; font-size: 12px }
 
   /* Sheet: full screen on mobile */
@@ -974,6 +983,143 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 /* ===== Entity View ===== */
 .entity-view { animation: fadeUp .5s var(--ease) both }
+
+/* ===== Ask（问答搜索） ===== */
+.ask-view { animation: fadeUp .5s var(--ease) both }
+/* 搜索视图顶部的提问入口 */
+.search-ask-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-bottom: 12px; font-size: 12px; font-weight: 500; color: var(--accent);
+}
+.search-ask-link:hover { color: var(--accent-hover) }
+
+.ask-input-row { display: flex; gap: 8px; margin-bottom: 18px }
+.ask-input {
+  flex: 1; min-width: 0; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font-size: 14px; font-family: inherit; outline: none;
+  transition: border-color .15s;
+}
+.ask-input:focus { border-color: var(--scrollbar) }
+.ask-input::placeholder { color: var(--text-tertiary) }
+.ask-submit {
+  width: 42px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.ask-submit:hover { border-color: var(--scrollbar); color: var(--text) }
+.ask-submit:disabled { opacity: .4; cursor: not-allowed }
+
+.ask-history-list { display: flex; flex-wrap: wrap; gap: 4px }
+.ask-history-item {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text-secondary);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+  transition: all .15s;
+}
+.ask-history-item:hover { border-color: var(--scrollbar); color: var(--text) }
+
+/* 回答正文：衬线（社论感），上标引用可点击 */
+.ask-answer-text { font-size: 15.5px; line-height: 1.85; color: var(--text); margin-bottom: 18px }
+.ask-cite {
+  color: var(--accent); font-size: .72em; font-weight: 600;
+  vertical-align: super; line-height: 0; padding: 0 1px;
+}
+.ask-cite:hover { text-decoration: underline; text-underline-offset: 2px }
+
+.ask-ref-card {
+  display: flex; gap: 10px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer; transition: all .15s;
+}
+.ask-ref-card + .ask-ref-card { margin-top: 6px }
+.ask-ref-card:hover { border-color: var(--scrollbar); background: var(--card-hover) }
+.ask-ref-num {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums; padding-top: 1px; flex-shrink: 0;
+}
+.ask-ref-body { min-width: 0 }
+.ask-ref-title { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.4 }
+.ask-ref-source {
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .04em; margin-top: 2px;
+}
+
+/* ===== 关注加权标记与本周关注动态 ===== */
+.card-followed, .briefing-followed {
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  background: var(--accent-light); border-radius: 3px; padding: 0 5px;
+  line-height: 1.6; white-space: nowrap;
+}
+
+.follow-weekly { margin-top: 20px }
+.follow-weekly-list { display: flex; flex-direction: column; gap: 6px }
+.follow-weekly-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); cursor: pointer; font-family: inherit;
+  transition: all .15s;
+}
+.follow-weekly-row:hover { border-color: var(--scrollbar); background: var(--card-hover) }
+.follow-weekly-name { font-size: 13px; font-weight: 600; color: var(--text) }
+.follow-weekly-count { font-size: 12px; color: var(--text-tertiary) }
+.follow-weekly-arrow { margin-left: auto; color: var(--text-tertiary); flex-shrink: 0 }
+
+/* ===== Weekly（周报卡片，适合截图分享） ===== */
+.weekly-view { animation: fadeUp .5s var(--ease) both; display: flex; justify-content: center }
+.weekly-card {
+  width: 100%; max-width: 520px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px 24px 20px; box-shadow: var(--shadow-lg);
+}
+.weekly-header { text-align: center; margin-bottom: 18px }
+.weekly-title { font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -.01em }
+.weekly-range { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; letter-spacing: .05em }
+.weekly-total { text-align: center; margin-bottom: 22px }
+.weekly-total-num {
+  font-size: 46px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.weekly-total-label {
+  display: block; font-size: 11px; color: var(--text-tertiary);
+  margin-top: 6px; text-transform: uppercase; letter-spacing: .06em;
+}
+
+.weekly-entity-row { display: flex; align-items: center; gap: 10px; padding: 5px 0 }
+.weekly-entity-rank {
+  min-width: 18px; font-size: 11px; font-weight: 700; color: var(--text-tertiary);
+  text-align: center; font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.weekly-entity-rank.top3 { color: var(--accent) }
+.weekly-entity-name {
+  min-width: 90px; max-width: 130px; flex-shrink: 0;
+  font-size: 13px; font-weight: 500; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.weekly-entity-row:hover .weekly-entity-name { color: var(--accent) }
+.weekly-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--skeleton); overflow: hidden }
+.weekly-bar-fill { display: block; height: 100%; border-radius: 4px; background: var(--accent) }
+.weekly-entity-count {
+  min-width: 28px; text-align: right; font-size: 12px;
+  color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+
+.weekly-topic-row { display: flex; align-items: baseline; gap: 8px; padding: 7px 0 }
+.weekly-topic-row + .weekly-topic-row { border-top: 1px solid var(--border-light) }
+.weekly-topic-label {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.weekly-topic-count { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0 }
+
+.weekly-brand {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-light);
+  text-align: center; font-size: 11px; color: var(--text-tertiary); letter-spacing: .05em;
+}
 
 /* ===== Bottom Nav (Mobile) ===== */
 .bottom-nav { display: none }

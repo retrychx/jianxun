@@ -17,6 +17,8 @@ export interface NewsItem {
   titleZh?: string | null
   /** 中文摘要（增量字段，仅英文文章可能有值） */
   summaryZh?: string | null
+  /** 原始 entities JSON 字符串（增量字段；关注加权做包含匹配用，不解析） */
+  entities?: string | null
 }
 
 export interface EntityItem {
@@ -187,4 +189,35 @@ export interface SourceHealth {
 
 export function getSources(): Promise<{ items: SourceHealth[] }> {
   return fetchJson(`${BASE}/news/sources`)
+}
+
+/* ===== 问答搜索 / 周报（增量接口，调用方需处理 answer/totalNew 为空的情况） ===== */
+
+export interface AskRef {
+  /** 候选数组下标，对应回答文本里的 [n] */
+  ref: number
+  id: number
+  title: string
+  titleZh?: string | null
+  source: string
+}
+
+export interface AskResponse {
+  /** LLM 失败或无相关报道时为 null */
+  answer: string | null
+  refs: AskRef[]
+}
+
+export function askNews(q: string): Promise<AskResponse> {
+  return fetchJson(`${BASE}/news/ask?q=${encodeURIComponent(q)}`)
+}
+
+export interface WeeklyResponse {
+  totalNew: number
+  topEntities: { name: string; count: number }[]
+  topTopics: { label: string; count: number }[]
+}
+
+export function getWeekly(): Promise<WeeklyResponse> {
+  return fetchJson(`${BASE}/news/weekly`)
 }

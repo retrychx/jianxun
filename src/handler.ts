@@ -1,6 +1,6 @@
 import type { D1Database, KVNamespace, ExecutionContext } from '@cloudflare/workers-types'
 import { fetchAllRSS, saveArticles } from './rss.js'
-import { extractContent, analyzeWithDeepSeek, generateTopicLabels, generateDigest, translateBatch, generateStoryline, titleSimilarity } from './analysis.js'
+import { extractContent, analyzeWithDeepSeek, generateTopicLabels, generateDigest, translateBatch, generateStoryline, generateAnswer, titleSimilarity } from './analysis.js'
 import { RSS_SOURCES } from './sources.js'
 
 type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
@@ -31,6 +31,8 @@ function mapNews(row: any) {
     summary: row.summary,
     titleZh: row.title_zh || null,
     summaryZh: row.summary_zh || null,
+    // 原始 entities JSON 字符串（不解析）：前端关注加权只需做包含匹配
+    entities: row.entities || null,
     publishedAt: row.published_at,
     createdAt: row.created_at,
   }
@@ -626,6 +628,51 @@ export async function entitySearch(env: Env, name: string) {
   return { items: (items.results as any[]).map(mapNews), entity: name }
 }
 
+// 问答搜索：近 7 天相关报道 → DeepSeek 综合回答（[n] 引用候选）。
+// 返回完整 Response（参数非法要回 400，与 requireAdmin 一样直接构造响应）。
+export async function ask(env: Env, q: string): Promise<Response> {
+  const query = (q || '').trim()
+  if (query.length < 2 || query.length > 60) return json({ error: '问题长度需在 2-60 字之间' }, 400)
+
+  const cacheKey = `ask:${query}`
+  { const cached = await cacheGet<any>(cacheKey); if (cached) return json(cached) }
+
+  const like = `%${query}%`
+  const rows = await env.DB.prepare(
+    `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news
+     WHERE published_at >= datetime('now', '-7 days')
+       AND (title LIKE ? OR summary LIKE ? OR entities LIKE ?)
+     ORDER BY score DESC LIMIT 12`
+  ).bind(like, like, like).all()
+  const candidates = rows.results as any[]
+
+  if (!candidates.length) {
+    const empty = { answer: null, refs: [] }
+    await cacheSet(cacheKey, empty, CACHE_TTL.ask)
+    return json(empty)
+  }
+
+  const answer = await generateAnswer(
+    query,
+    candidates.map(c => ({
+      id: c.id, title: c.title, titleZh: c.title_zh || null,
+      summary: c.summary || null, summaryZh: c.summary_zh || null,
+      source: c.source, publishedAt: c.published_at,
+    })),
+    env.DEEPSEEK_API_KEY
+  )
+
+  // LLM 失败不缓存（下次重试）；refs 映射回候选文章，ref 保留原候选下标供前端对齐 [n]
+  if (!answer) return json({ answer: null, refs: [] })
+  const refs = answer.refs.map(i => {
+    const c = candidates[i]
+    return { ref: i, id: c.id, title: c.title, titleZh: c.title_zh || null, source: c.source }
+  })
+  const result = { answer: answer.answer, refs }
+  await cacheSet(cacheKey, result, CACHE_TTL.ask)
+  return json(result)
+}
+
 // Validate the body of POST /api/news/:id/detail. Returns an error message or null.
 export function validateAnalysisBody(body: any): string | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body must be an object'
@@ -689,7 +736,7 @@ export async function fixImages(env: Env) {
 // Edge cache helpers（Cache API：按边缘节点缓存，零绑定配置；TTL 由 Cache-Control 控制）
 const CACHE_TTL = {
   list: 60, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
-  digest: 600, digests: 600, topic: 600, sources: 300, weekly: 3600,
+  digest: 600, digests: 600, topic: 600, sources: 300, weekly: 3600, ask: 3600,
 }
 
 const cacheReq = (key: string) => new Request(`https://jianxun-cache.internal/${encodeURIComponent(key)}`)

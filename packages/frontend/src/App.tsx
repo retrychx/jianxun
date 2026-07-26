@@ -11,13 +11,15 @@ import { EntityView } from './components/EntityView'
 import { DigestLoader } from './components/DigestView'
 import { TopicView } from './components/TopicView'
 import { SourcesView } from './components/SourcesView'
+import { AskView } from './components/AskView'
+import { WeeklyView } from './components/WeeklyView'
 import { BottomNav } from './components/BottomNav'
 import { KinkLine } from './components/KinkLine'
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests, searchNews } from './api'
 import { useFollow } from './hooks/useFollow'
 import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from './hooks/useHashRoute'
-import type { Lang } from './utils'
+import { boostFollowed, matchesFollow, type Lang } from './utils'
 import './App.css'
 
 const PAGE_SIZE = 50
@@ -89,8 +91,11 @@ export default function App() {
   const selectedNewsId = route.newsId
   const view = baseRoute.view
   const activeCat = view === 'feed' ? (baseRoute.cat ?? '全部') : ''
-  // tab 高亮：历史日报/话题深挖归入「日报」；信源页不高亮任何 tab
+  // tab 高亮：历史日报/话题深挖归入「日报」；信源/问答/周报页不高亮任何 tab
   const navActive: ViewName = view === 'digest' || view === 'topic' ? 'briefing' : view
+  // 关注加权（客户端重排）：命中关注实体的条目稳定置顶并加「关注」标记
+  const followedEntityNames = follows.filter(f => f.type === 'entity').map(f => f.name)
+  const boostedNews = boostFollowed(news, followedEntityNames)
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -352,11 +357,15 @@ export default function App() {
           ) : view === 'entity' && baseRoute.entity ? (
             <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'digest' && baseRoute.date ? (
-            <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} />
+            <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} follows={follows} onEntityClick={openEntity} />
           ) : view === 'topic' && baseRoute.topic ? (
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'sources' ? (
             <SourcesView />
+          ) : view === 'ask' ? (
+            <AskView initialQuestion={baseRoute.q} lang={lang} onNewsClick={openNews} />
+          ) : view === 'weekly' ? (
+            <WeeklyView />
           ) : view === 'feed' ? (
             <>
               <TrendingStrip items={trending} lang={lang} onNewsClick={openNews} />
@@ -373,9 +382,9 @@ export default function App() {
               ) : (
                 <>
                   <div className="card-list">
-                    {news.map((item, i) => (
+                    {boostedNews.map((item, i) => (
                       <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} lang={lang} onClick={openNews} />
+                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} />
                       </div>
                     ))}
                   </div>
@@ -394,6 +403,8 @@ export default function App() {
               dates={digestDates}
               lang={lang}
               onNewsClick={openNews}
+              follows={follows}
+              onEntityClick={openEntity}
               fallback={
                 <BriefingView
                   items={briefingItems}
@@ -415,7 +426,7 @@ export default function App() {
 
       <footer className="footer">
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/sources" className="footer-link">信源</a>
+        <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
       </footer>
 
       <BottomNav active={navActive} />
