@@ -3,29 +3,71 @@ import { generateDigest } from './analysis.js'
 import { DEEPSEEK_MODEL, fetchWithRetry } from './analysis.js'
 import { type Env } from './helpers.js'
 
-// Generate at most one digest per CST day, once the day has enough new articles.
+// Incremental daily digest: first generation creates a full digest from the
+// day's top candidates; subsequent calls only process articles not yet in it,
+// appending new picks.  This saves API cost and keeps selections stable.
 export async function generateTodayDigest(env: Env): Promise<'exists' | 'insufficient' | 'failed' | 'generated'> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 'failed'
   const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<{ d: string }>()
   const date = dateRow?.d
   if (!date) return 'failed'
-  const todayCount = await env.DB.prepare(
-    "SELECT COUNT(*) as n FROM news WHERE created_at >= datetime(date('now', '+8 hours'), '-8 hours')"
-  ).first<{ n: number }>()
-  if ((todayCount?.n || 0) < 10) return 'insufficient'
+
+  // Check whether today already has a digest (for incremental merge)
+  const existing = await env.DB.prepare('SELECT * FROM digests WHERE date = ?').bind(date).first<any>()
+  let existingIds = new Set<number>()
+  let existingItems: any[] = []
+  if (existing) {
+    try {
+      existingItems = JSON.parse(existing.items)
+      if (!Array.isArray(existingItems)) existingItems = []
+      for (const it of existingItems) if (it.news_id) existingIds.add(it.news_id)
+      const extra = existing.extra ? JSON.parse(existing.extra) : null
+      if (extra?.news_id) existingIds.add(extra.news_id)
+    } catch { existingItems = [] }
+  }
+
+  // Full candidate pool for today's window
   const candidates = await env.DB.prepare(
     `SELECT n.id, n.title, n.summary, n.category, n.source,
        (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
      FROM news n
      WHERE published_at >= datetime(date('now', '+8 hours'), '-8 hours', '-24 hours')
        AND published_at < datetime(date('now', '+8 hours'), '-8 hours')
-     ORDER BY n.score DESC LIMIT 30`
+     ORDER BY n.score DESC`
   ).all()
-  const digest = await generateDigest(candidates.results as any[], apiKey)
+  const all = candidates.results as any[]
+  const totalCount = all.length
+
+  if (!existing) {
+    if (totalCount < 10) return 'insufficient'
+    const digest = await generateDigest(all, apiKey)
+    if (!digest) return 'failed'
+    await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')
+      .bind(date, digest.intro, JSON.stringify(digest.items), digest.extra ? JSON.stringify(digest.extra) : null).run()
+    await Promise.allSettled([cacheDelete('digest'), cacheDelete('digests')])
+    return 'generated'
+  }
+
+  // ─── Incremental: only articles not yet in the digest ───
+  const newArticles = all.filter(c => !existingIds.has(c.id))
+  if (newArticles.length < 3) return 'exists'
+
+  const digest = await generateDigest(newArticles, apiKey)
   if (!digest) return 'failed'
-  await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')
-    .bind(date, digest.intro, JSON.stringify(digest.items), digest.extra ? JSON.stringify(digest.extra) : null).run()
+
+  // Merge: keep existing items, append new ones (dedup by news_id)
+  const seen = new Set(existingItems.map((it: any) => it.news_id))
+  for (const it of digest.items) {
+    if (!seen.has(it.news_id)) {
+      existingItems.push(it)
+      seen.add(it.news_id)
+    }
+  }
+  const mergedExtra = digest.extra && !existingIds.has(digest.extra.news_id) ? digest.extra : null
+
+  await env.DB.prepare('UPDATE digests SET items = ?, extra = COALESCE(?, extra) WHERE date = ?')
+    .bind(JSON.stringify(existingItems), mergedExtra ? JSON.stringify(mergedExtra) : null, date).run()
   await Promise.allSettled([cacheDelete('digest'), cacheDelete('digests')])
   return 'generated'
 }
@@ -79,7 +121,7 @@ export async function digest(env: Env, date: string | null) {
   try { extra = row.extra ? JSON.parse(row.extra) : null } catch {}
   if (!Array.isArray(items)) items = []
 
-  const ids = [...items.map(i => i.news_id), extra?.news_id].filter(id => Number.isInteger(id))
+  const ids = [...items.map(i => i.news_id), extra?.news_id].filter((id: any) => Number.isInteger(id))
   const byId = new Map<number, any>()
   if (ids.length) {
     const rows = await env.DB.prepare(
