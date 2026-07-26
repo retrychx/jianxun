@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Newspaper, BarChart3, Tags, FileText, ExternalLink, X } from 'lucide-react'
-import type { NewsDetail, EntityItem, NewsItem } from '../api'
+import type { NewsDetail, EntityItem, NewsItem, SentimentData } from '../api'
 import { getDetail, getByEntity } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
@@ -113,8 +113,12 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
 
   if (!newsId) return null
 
-  const sentiment = detail?.analysis?.sentiment
-  const sentConfig = sentiment ? SENTIMENT_LABELS[sentiment.label] : null
+  // 历史数据里 sentiment 有两种形状：完整对象（fix-images 写入）或纯 label 字符串（Actions 回写），统一归一化
+  const rawSent = detail?.analysis?.sentiment
+  const sentiment: SentimentData | null = rawSent
+    ? (typeof rawSent === 'string' ? { label: rawSent as SentimentData['label'] } : rawSent)
+    : null
+  const sentConfig = sentiment?.label ? SENTIMENT_LABELS[sentiment.label] : null
 
   return (
     <>
@@ -195,11 +199,13 @@ export function DetailPanel({ newsId, onClose, onEntityClick, onNewsClick, isFol
                   报道角度
                 </div>
                 <div className="sheet-sentiment">
-                  <div className="sheet-sentiment-track">
-                    <div className="sheet-sentiment-fill s-positive" style={{ width: `${sentiment.scores.positive * 100}%` }} />
-                    <div className="sheet-sentiment-fill s-neutral" style={{ width: `${sentiment.scores.neutral * 100}%` }} />
-                    <div className="sheet-sentiment-fill s-negative" style={{ width: `${sentiment.scores.negative * 100}%` }} />
-                  </div>
+                  {sentiment.scores && (
+                    <div className="sheet-sentiment-track">
+                      <div className="sheet-sentiment-fill s-positive" style={{ width: `${sentiment.scores.positive * 100}%` }} />
+                      <div className="sheet-sentiment-fill s-neutral" style={{ width: `${sentiment.scores.neutral * 100}%` }} />
+                      <div className="sheet-sentiment-fill s-negative" style={{ width: `${sentiment.scores.negative * 100}%` }} />
+                    </div>
+                  )}
                   {sentConfig && (
                     <span className="sheet-sentiment-label" style={{ color: sentConfig.color }}>
                       {sentConfig.label}

@@ -22,16 +22,16 @@ export interface EntityItem {
 }
 
 export interface SentimentData {
-  label: 'positive' | 'negative' | 'neutral' | 'mixed'
-  scores: { positive: number; negative: number; neutral: number }
-  perspective: string
+  label?: 'positive' | 'negative' | 'neutral' | 'mixed'
+  scores?: { positive: number; negative: number; neutral: number }
+  perspective?: string
 }
 
 export interface NewsDetail extends NewsItem {
   analysis: {
     summary: string
     entities: EntityItem[]
-    sentiment: SentimentData | null
+    sentiment: SentimentData | string | null
     content: string | null
   }
   related: NewsItem[]
