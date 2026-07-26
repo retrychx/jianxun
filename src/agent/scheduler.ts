@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../helpers.js'
-import type { PhaseDef, PhaseResult, AgentRunLog } from './types.js'
+import type { PhaseDef, PhaseResult } from './types.js'
 import { phaseTimeout } from './config.js'
 
 /** Success/failure from a single phase run with timing. */
@@ -18,12 +18,12 @@ async function runOne(name: string, fn: () => Promise<any>, timeoutMs: number): 
       ),
     ])
     const ms = Date.now() - start
-    console.log(\`[agent] \${name} ok \${ms}ms\`)
+    console.log(`[agent] ${name} ok ${ms}ms`)
     return { ok: true, result, ms }
   } catch (err: any) {
     const ms = Date.now() - start
     const msg = err?.message || err?.toString() || 'unknown error'
-    console.error(\`[agent] \${name} FAIL \${ms}ms: \${msg.slice(0, 200)}\`)
+    console.error(`[agent] ${name} FAIL ${ms}ms: ${msg.slice(0, 200)}`)
     return { ok: false, error: msg.slice(0, 200), ms }
   }
 }
@@ -31,7 +31,7 @@ async function runOne(name: string, fn: () => Promise<any>, timeoutMs: number): 
 /**
  * Execute a list of phase definitions with dependency resolution.
  * - Phases without dependencies (or whose dependencies completed) run in parallel.
- * - Phases with \`shouldSkip: true\` are skipped (recorded as ok with zero result).
+ * - Phases with `shouldSkip: true` are skipped (recorded as ok with zero result).
  * - Collects all results into a flat map keyed by phase name.
  */
 export async function runPhases(phases: PhaseDef[], env: Env): Promise<Record<string, PhaseResult>> {
