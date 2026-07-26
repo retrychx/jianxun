@@ -15,6 +15,9 @@ export { listNews, trending, categories, stats, search, entitySearch, detail, br
 // Topic clustering
 export { topics, topic, weekly } from './topics.js'
 
+// News Narrative Agent
+export { runAgent, loadActiveNarratives, loadSingleNarrative } from './agent.js'
+
 // Daily digest
 export { generateTodayDigest, debugDigest, digest, digests } from './digest.js'
 

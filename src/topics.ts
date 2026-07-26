@@ -17,12 +17,12 @@ interface Cluster {
 }
 
 /**
- * Multi-pass greedy clustering:
+ * Multi-pass greedy clustering (exported for agent.ts to reuse seeding logic):
  * 1. Keyword overlap (existing) — articles sharing a token cluster together.
  * 2. Jaccard similarity merge — merge clusters whose aggregate token sets overlap enough.
  * 3. Singleton recovery — unclustered articles join the nearest similar cluster.
  */
-function clusterNews(items: any[]): { words: string[]; items: any[] }[] {
+export function clusterNews(items: any[]): { words: string[]; items: any[] }[] {
   const used = new Set<number>()
   const clusters: Cluster[] = []
 

@@ -16,6 +16,9 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
   ctx.waitUntil((async () => {
     await analyzeRecentTop(env).catch(() => 0)
     await generateTodayDigest(env).catch(() => {})
+    // Agent: 叙事追踪（跨周期报道演化）
+    const { runAgent } = await import('./agent.js')
+    await runAgent(env).catch(() => {})
   })())
   // Notify SSE clients
   if (saved > 0) {
