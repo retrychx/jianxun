@@ -29,7 +29,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
 
   // Full candidate pool for today's window
   const candidates = await env.DB.prepare(
-    `SELECT n.id, n.title, n.summary, n.category, n.source,
+    `SELECT n.id, n.title, n.summary, n.category, n.source, n.analysis_detail,
        (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
      FROM news n
      WHERE published_at >= datetime(date('now', '+8 hours'), '-8 hours', '-24 hours')
@@ -37,6 +37,18 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
      ORDER BY n.score DESC`
   ).all()
   const all = candidates.results as any[]
+
+  // Enrich candidates with parsed analysis_detail for the digest prompt
+  for (const c of all) {
+    if (c.analysis_detail) {
+      try {
+        const d = JSON.parse(c.analysis_detail)
+        c._significance = d.significance || ''
+        c._controversy = d.controversy || false
+      } catch {}
+    }
+  }
+
   const totalCount = all.length
 
   if (!existing) {

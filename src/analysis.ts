@@ -23,32 +23,70 @@ export async function fetchWithRetry(url: string, options: RequestInit, retries 
   return null
 }
 
-export async function extractContent(url: string): Promise<{ content: string | null; image: string | null }> {
+export async function extractContent(url: string): Promise<{ content: string | null; image: string | null; title: string | null }> {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(5_000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(6_000),
     })
-    if (!res.ok) return { content: null, image: null }
+    if (!res.ok) return { content: null, image: null, title: null }
     const html = await res.text()
+
+    // Extract page title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+    const pageTitle = titleMatch?.[1]?.trim() || null
 
     // Extract OG image
     const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/)
     const image = imgMatch?.[1] || null
 
-    // Simple text extraction
-    let text = html
+    // Extract meta description (fallback if no article body found)
+    const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
+    const metaDesc = descMatch?.[1] || null
+
+    // Content extraction: prefer <article>, then <p> blocks, then body fallback
+    let text = ''
+    const stripTags = (s: string) => s
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+      .replace(/<header[\s\S]*?<\/header>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&#?[a-z0-9]+;/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 5_000)
 
-    return { content: text || null, image }
+    // Strategy A: <article> tag content
+    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i)
+    if (articleMatch) {
+      text = stripTags(articleMatch[1])
+    }
+
+    // Strategy B: meaningful <p> blocks (most CMS use <p> for article body)
+    if (text.length < 200) {
+      const paragraphs: string[] = []
+      const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
+      let pMatch
+      while ((pMatch = pRe.exec(html)) !== null) {
+        const clean = stripTags(pMatch[1])
+        if (clean.length > 30) paragraphs.push(clean)
+      }
+      if (paragraphs.length >= 3) {
+        text = paragraphs.join('\n')
+      }
+    }
+
+    // Strategy C: <body> fallback
+    if (text.length < 200) {
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+      text = stripTags(bodyMatch?.[1] || html)
+    }
+
+    const content = (text || metaDesc || null)?.slice(0, 8_000) || null
+    return { content, image, title: pageTitle }
   } catch {
-    return { content: null, image: null }
+    return { content: null, image: null, title: null }
   }
 }
 
@@ -68,7 +106,7 @@ export interface AnalysisDetail {
   impact: 'short' | 'medium' | 'high'
 }
 
-export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string): Promise<{
+export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string, pageTitle?: string | null): Promise<{
   base: DeepSeekResult
   detail: AnalysisDetail
 } | null> {
@@ -106,9 +144,9 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
         model: DEEPSEEK_MODEL,
         messages: [
           { role: 'system', content: prompt },
-          { role: 'user', content: `标题: ${title}\n\n正文:\n${content.slice(0, 8000)}` },
+          { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` },
         ],
-        temperature: 0.01,
+        temperature: 0.3,
         max_tokens: 1024,
       }),
     })
@@ -191,6 +229,9 @@ export interface DigestCandidate {
   category?: string
   source?: string
   heat?: number
+  /** Enriched by caller from analysis_detail */
+  _significance?: string
+  _controversy?: boolean
 }
 
 export interface DigestResult {
@@ -223,9 +264,13 @@ items 按重要性排序，尽可能多选但有价值的才选；extra 是最�
           },
           {
             role: 'user',
-            content: candidates.slice(0, 30).map(c =>
-              `[${c.id}] ${c.title}（${c.source || '未知来源'}/${c.category || '科技'}/热度${c.heat || 1}）\n${(c.summary || '').slice(0, 200)}`
-            ).join('\n\n')
+            content: candidates.slice(0, 30).map(c => {
+              let detail = `[${c.id}] ${c.title}（${c.source || '未知来源'}/${c.category || '科技'}/热度${c.heat || 1}`
+              if (c._significance) detail += `｜${c._significance}`
+              if (c._controversy) detail += '｜有争议'
+              detail += `）\n${(c.summary || '').slice(0, 200)}`
+              return detail
+            }).join('\n\n')
           }
         ],
         temperature: 0.2,

@@ -98,9 +98,9 @@ export async function analyzeNewArticles(env: Env, limit = 6): Promise<number> {
   for (const row of articles) {
     await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
     try {
-      const { content: extracted } = await extractContent(row.url)
+      const { content: extracted, title: pageTitle } = await extractContent(row.url)
       const content = (extracted || row.description || row.title).slice(0, 2000)
-      const result = await analyzeWithDeepSeek(row.title, content, apiKey)
+      const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle)
       if (result) {
         await env.DB.prepare(
           `UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?, content),
