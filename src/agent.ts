@@ -60,24 +60,62 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const apiOk = await pingDeepSeek(apiKey)
   const skipAi = !apiOk
 
-  // Run phases with timeout + structured logging
+  // Run phases with timeout + structured logging.
+  // Independent phases run in parallel groups; dependent phases wait.
   const results: Record<string, any> = {}
 
-  // Phase 1: Images (no AI needed)
-  results.fixMissingImages = await runPhase('fixMissingImages', () => fixMissingImages(env))
+  // ── Group 1: fully independent (no cross-dependencies, no analysis dependency) ──
+  const [
+    r1,    // fixMissingImages
+    r2,    // analyzeNewArticles (critical path — everything downstream needs AI)
+    r3,    // refineCategories
+    r4,    // translateMissing
+    r10,   // tuneSourceWeights
+  ] = await Promise.allSettled([
+    runPhase('fixMissingImages', () => fixMissingImages(env)),
+    skipAi
+      ? Promise.resolve({ ok: true, result: 0, ms: 0 })
+      : runPhase('analyzeNewArticles', () => analyzeNewArticles(env), 45_000),
+    skipAi
+      ? Promise.resolve({ ok: true, result: { refined: 0 }, ms: 0 })
+      : runPhase('refineCategories', () => refineCategories(env), 30_000),
+    skipAi
+      ? Promise.resolve({ ok: true, result: { translated: 0 }, ms: 0 })
+      : runPhase('translateMissing', () => translateMissing(env), 30_000),
+    runPhase('tuneSourceWeights', () => tuneSourceWeights(env), 10_000),
+  ])
 
-  if (!skipAi) {
-    results.analyzeNewArticles = await runPhase('analyzeNewArticles', () => analyzeNewArticles(env), 45_000)
-    results.refineCategories = await runPhase('refineCategories', () => refineCategories(env), 30_000)
-    results.translateMissing = await runPhase('translateMissing', () => translateMissing(env), 30_000)
-    results.crossRefAnalysis = await runPhase('crossRefAnalysis', () => runCrossRefAnalysis(env), 30_000)
+  // Unwrap results
+  for (const [key, r] of [['fixMissingImages', r1], ['analyzeNewArticles', r2], ['refineCategories', r3], ['translateMissing', r4], ['tuneSourceWeights', r10]] as const) {
+    results[key] = r.status === 'fulfilled' ? r.value : { ok: false, error: 'Promise rejected', ms: 0 }
   }
 
-  results.generateDailyDigest = await runPhase('generateDailyDigest', () => generateTodayDigest(env), 30_000)
-  results.updateNarratives = await runPhase('updateNarratives', () => updateNarratives(env), 30_000)
-  results.detectBreakingNews = await runPhase('detectBreakingNews', () => detectBreakingNews(env), 15_000)
-  results.linkEntities = await runPhase('linkEntities', () => linkEntities(env), 15_000)
-  results.tuneSourceWeights = await runPhase('tuneSourceWeights', () => tuneSourceWeights(env), 10_000)
+  // ── Group 2: depend on analyzeNewArticles having completed ──
+  const analysisDone = r2.status === 'fulfilled' && r2.value?.ok !== false
+
+  const [
+    r5,   // crossRefAnalysis
+    r6,   // generateDailyDigest
+    r7,   // updateNarratives
+    r8,   // detectBreakingNews
+    r9,   // linkEntities
+  ] = await Promise.allSettled([
+    analysisDone && !skipAi
+      ? runPhase('crossRefAnalysis', () => runCrossRefAnalysis(env), 30_000)
+      : Promise.resolve({ ok: true, result: { crossRefs: 0 }, ms: 0 }),
+    runPhase('generateDailyDigest', () => generateTodayDigest(env), 30_000),
+    runPhase('updateNarratives', () => updateNarratives(env), 30_000),
+    analysisDone
+      ? runPhase('detectBreakingNews', () => detectBreakingNews(env), 15_000)
+      : Promise.resolve({ ok: true, result: { breaking: 0 }, ms: 0 }),
+    analysisDone
+      ? runPhase('linkEntities', () => linkEntities(env), 15_000)
+      : Promise.resolve({ ok: true, result: { linked: 0 }, ms: 0 }),
+  ])
+
+  for (const [key, r] of [['crossRefAnalysis', r5], ['generateDailyDigest', r6], ['updateNarratives', r7], ['detectBreakingNews', r8], ['linkEntities', r9]] as const) {
+    results[key] = r.status === 'fulfilled' ? r.value : { ok: false, error: 'Promise rejected', ms: 0 }
+  }
 
   // Record agent run log
   const totalMs = Date.now() - start
