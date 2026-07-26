@@ -1,12 +1,12 @@
 -- Full-text search via FTS5 (enables stemming, ranking, fast partial matches).
--- The unicode61 tokenizer with tokenchars treats CJK characters as searchable
--- tokens, improving Chinese search quality over simple LIKE.
+-- D1 supports FTS5 with the unicode61 tokenizer (without tokenchars option,
+-- which is not available in D1's SQLite build).
 
 CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
   title, description,
   content='news',
   content_rowid='id',
-  tokenize='unicode61 tokenchars'
+  tokenize='unicode61'
 );
 
 -- Populate from existing articles
