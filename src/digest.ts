@@ -10,8 +10,6 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
   const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<{ d: string }>()
   const date = dateRow?.d
   if (!date) return 'failed'
-  const existing = await env.DB.prepare('SELECT id FROM digests WHERE date = ?').bind(date).first()
-  if (existing) return 'exists'
   const todayCount = await env.DB.prepare(
     "SELECT COUNT(*) as n FROM news WHERE created_at >= datetime(date('now', '+8 hours'), '-8 hours')"
   ).first<{ n: number }>()

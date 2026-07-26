@@ -170,7 +170,7 @@ export interface DigestResult {
   extra: { news_id: number; why: string } | null
 }
 
-// Picks the day's 5-8 most important AI/tech stories plus one lighthearted extra.
+// Picks the day's 10-20 most important AI/tech stories plus one lighthearted extra.
 // Returns null when the call is unavailable/fails; ids are validated against candidates.
 export async function generateDigest(candidates: DigestCandidate[], apiKey: string | undefined): Promise<DigestResult | null> {
   if (!apiKey || !candidates.length) return null
@@ -184,13 +184,13 @@ export async function generateDigest(candidates: DigestCandidate[], apiKey: stri
         messages: [
           {
             role: 'system',
-            content: `你是中文科技日报主编。从候选新闻中挑出今天最重要的 5-8 条，做成一期"AI/科技行业日报"。只返回 JSON（不要其他文字）：
+            content: `你是中文科技日报主编。从候选新闻中挑出今天最重要的 10-20 条，做成一期"AI/科技行业日报"。只返回 JSON（不要其他文字）：
 {
   "intro": "≤120字中文开场白，总览今日行业动态",
   "items": [{ "news_id": 数字, "why": "≤30字，这条为什么重要", "category": "分类" }],
   "extra": { "news_id": 数字, "why": "≤30字" } 或 null
 }
-items 按重要性排序；extra 是最有趣/最轻松的一条番外，不得与 items 重复。news_id 必须来自候选列表。`
+items 按重要性排序，尽可能多选但有价值的才选；extra 是最有趣/最轻松的一条番外，不得与 items 重复。news_id 必须来自候选列表。`
           },
           {
             role: 'user',
@@ -218,7 +218,7 @@ items 按重要性排序；extra 是最有趣/最轻松的一条番外，不得�
       if (!validIds.has(id) || seen.has(id)) continue
       seen.add(id)
       items.push({ news_id: id, why: String(it.why || '').slice(0, 60), category: String(it.category || '科技') })
-      if (items.length >= 8) break
+      if (items.length >= 20) break
     }
     if (!items.length) return null
 
