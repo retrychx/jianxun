@@ -437,21 +437,7 @@ export default function App() {
           ) : view === 'topics' ? (
             <TopicsView topics={topics} lang={lang} onNewsClick={openNews} />
           ) : (
-            <>
-              {trending.length > 0 && !initialLoading && (
-                <div className="today-focus">
-                  <div className="tf-header">
-                    <span className="tf-label">今日聚焦</span>
-                    <span className="tf-sub">{trending[0]?.category || '科技'}</span>
-                  </div>
-                  <button className="tf-card" onClick={() => openNews(trending[0]?.id)}>
-                    <div className="tf-source">{trending[0]?.source}</div>
-                    <div className="tf-title">{(trending[0] as any)?.titleZh || trending[0]?.title}</div>
-                    {trending[0]?.summary && <div className="tf-summary">{(trending[0] as any)?.summaryZh || trending[0]?.summary}</div>}
-                  </button>
-                </div>
-              )}
-              <DigestLoader
+            <DigestLoader
                 dates={digestDates}
                 lang={lang}
                 onNewsClick={openNews}
