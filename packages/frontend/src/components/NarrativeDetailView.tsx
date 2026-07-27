@@ -36,6 +36,10 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   const followId = `narrative:${keyword}`
   const followed = isFollowing?.(followId) ?? false
 
+  function cleanLabel(label: string): string {
+    return label.replace(/^[🔴⚡📖📍]\s*(?:突发|争议|研究|多源对比):\s*/, '').replace(/^__\w+__/, '')
+  }
+
   if (loading) {
     return (
       <div className="narr-detail">
@@ -69,7 +73,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
       <div className="narr-detail-top">
         <button className="back-btn" onClick={onBack}><ArrowLeft size={18} /></button>
         <div className="narr-detail-info">
-          <h2 className="narr-detail-title">{narrative.label || narrative.keyword}</h2>
+          <h2 className="narr-detail-title">{cleanLabel(narrative.label || narrative.keyword)}</h2>
           <span className={`narr-status narr-${narrative.status}`}>
             {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
           </span>

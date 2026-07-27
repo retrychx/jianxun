@@ -27,6 +27,10 @@ function categorize(n: NarrativeSummary): Category {
   return 'normal'
 }
 
+function cleanLabel(label: string): string {
+  return label.replace(/^[🔴⚡📖📍]\s*(?:突发|争议|研究|多源对比:)\s*/, '').replace(/^__\w+__/, '')
+}
+
 export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate }: Props) {
   const [narratives, setNarratives] = useState<NarrativeSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,7 +102,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
                         <span className={`narr-status narr-${n.status}`}>{n.status === 'active' ? '追踪中' : '已停滞'}</span>
                         <ChevronRight size={14} className="narr-chevron" />
                       </div>
-                      <div className="narr-card-label">{isResearch ? n.label?.replace('📖 研究: ', '') || n.label || n.keyword : n.label || n.keyword}</div>
+                      <div className="narr-card-label">{cleanLabel(n.label || n.keyword)}</div>
                       {n.summary && <div className="narr-card-summary">{n.summary}</div>}
                       <div className="narr-card-meta">
                         <span>{n.articleCount} 篇</span>

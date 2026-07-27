@@ -21,15 +21,26 @@ export function formatTime(d: Date): string {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
+export function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
 export type Lang = 'zh' | 'en'
 
 /** 中文模式优先显示译题，无译文回退原文；EN 始终原文 */
 export function displayTitle(item: { title: string; titleZh?: string | null }, lang: Lang): string {
-  return lang === 'zh' && item.titleZh ? item.titleZh : item.title
+  return decodeEntities(lang === 'zh' && item.titleZh ? item.titleZh : item.title)
 }
 
 export function displaySummary(item: { summary: string | null; summaryZh?: string | null }, lang: Lang): string | null {
-  return lang === 'zh' && item.summaryZh ? item.summaryZh : item.summary
+  const s = lang === 'zh' && item.summaryZh ? item.summaryZh : item.summary
+  return s ? decodeEntities(s) : null
 }
 
 /** 'YYYY-MM-DD' → '2026年7月26日 星期日'（按本地时区构造，避免 UTC 解析偏一天） */
