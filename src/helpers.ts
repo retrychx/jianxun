@@ -94,12 +94,17 @@ export const PERSPECTIVES: Record<string, string> = {
   '量子位': 'AI', '钛媒体': '产业', '雷锋网': '技术',
   '品玩': '趋势', 'Solidot': '开源', 'V2EX 热榜': '社区',
   '开源中国': '开源', '投资界': '创投', '中国新闻网': '综合',
-  '美团技术': '工程', 'Hacker News': '社区', 'GitHub Trending': '开源',
+  '美团技术': '工程', '凤凰网科技': '科技', '动点科技': '科技',
+  'Hacker News': '社区', 'GitHub Trending': '开源',
   'TechCrunch': '创投', 'The Verge': '消费', 'Ars Technica': '深度',
   'Wired': '文化', 'Engadget': '消费', 'Dev.to': '社区',
   'Android Central': '消费', 'New Scientist': '科学',
-  'ScienceDaily': '科学', 'Space.com': '科学', 'MIT Tech Review': 'AI', '机器之心': 'AI', 'arXiv AI': '研究', 'arXiv Robot': '研究', 'OpenAI': 'AI',
+  'ScienceDaily': '科学', 'Space.com': '科学', 'MIT Tech Review': 'AI',
+  '机器之心': 'AI', 'arXiv AI': '研究', 'arXiv Robot': '研究', 'OpenAI': 'AI',
   'NPR': '综合', 'BBC Tech': '综合',
+  'GitHub Blog': '开源', 'Simon Willison': 'AI', 'Quanta Magazine': '科学',
+  'IEEE Spectrum': '工程', 'Nature': '科学', 'Physics World': '科学',
+  'ZDNet': '科技', 'MarketWatch': '财经',
 }
 
 // Validate the body of POST /api/news/:id/detail. Returns an error message or null.
