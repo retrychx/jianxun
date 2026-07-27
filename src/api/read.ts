@@ -186,7 +186,7 @@ export async function briefing(env: Env) {
         }
       }
     }
-  } catch {}
+  } catch (e: any) { console.warn("[briefing] agent_meta error:", e?.message) }
 
   // Fallback: rule-based selection
   { const cached = await cacheGet<any>('briefing'); if (cached) return cached }
@@ -228,9 +228,6 @@ export async function briefing(env: Env) {
   const payload = { items: res }
   await cacheSet('briefing', payload, CACHE_TTL.briefing)
   return payload
-}
-
-  
 }
 
 export async function sources(env: Env) {
