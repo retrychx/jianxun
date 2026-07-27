@@ -324,7 +324,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 
 /* ===== Trending Panel ===== */
-.trending-view { animation: fadeUp .4s var(--ease) both; padding: 0 4px }
+.trending-view { animation: fadeUp .4s var(--ease) both }
 .trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
 .trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
 
@@ -337,14 +337,14 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .panel-subtitle { font-size: 10px; font-weight: 600; color: var(--text-tertiary); margin-left: auto; text-transform: uppercase; letter-spacing: .04em }
 .trending-list { display: flex; flex-direction: column }
 .trending-item {
-  display: flex; align-items: flex-start; gap: 12px; padding: 12px 0;
+  display: flex; align-items: flex-start; gap: 14px; padding: 14px 0;
   transition: background .12s; cursor: pointer;
 }
 .trending-item:hover { background: var(--card-hover) }
 .trending-item + .trending-item { border-top: 1px solid var(--border-light) }
-.trending-rank { font-size: 12px; font-weight: 700; width: 28px; text-align: right; line-height: 1.5; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; padding-right: 4px }
-.trending-rank.top3 { color: var(--accent) }
-.trending-content { min-width: 0; flex: 1 }
+.trending-rank { font-size: 13px; font-weight: 700; width: 28px; text-align: right; line-height: 1.5; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0 }
+.trending-rank.top3 { color: var(--accent); font-weight: 800 }
+.trending-content { min-width: 0; flex: 1; padding-right: 4px }
 .trending-title { font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .trending-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 2px }
 .trending-ext {
@@ -914,6 +914,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 [data-theme="retro"] .logo { font-size: 22px; text-decoration: underline; text-underline-offset: 6px; text-decoration-color: #8b1a1a; text-decoration-thickness: 1.5px }
 [data-theme="retro"] .card-source { font-family: 'Courier New', Courier, monospace; font-size: 10px; letter-spacing: .06em; color: #8b1a1a }
+[data-theme="retro"] .narr-type-badge { font-family: 'Courier New', Courier, monospace; text-transform: uppercase; letter-spacing: .04em; font-weight: 700 }
 
 /* Cards: paper lift instead of shadow */
 [data-theme="retro"] .news-card { box-shadow: none; border-color: #d4c9b8; transition: transform .15s, background .15s }
@@ -942,13 +943,13 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 [data-theme="retro"] .tl-v-item:hover { background: #ede5da }
 
 /* Trending */
-[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both; padding: 0 4px }
+[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both }
 .trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
 .trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
 
 .trending-panel { box-shadow: none; border-color: #d4c9b8 }
 [data-theme="retro"] .panel-title { font-family: Georgia, serif }
-[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both; padding: 0 4px }
+[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both }
 .trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
 .trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
 
@@ -1355,8 +1356,8 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .narr-card:hover .narr-chevron { transform: translateX(2px) }
 
 .narr-status {
-  font-size: 10px; font-weight: 600; border-radius: 3px; padding: 1px 6px;
-  line-height: 1.6;
+  font-size: 10px; font-weight: 500; color: var(--text-tertiary);
+  line-height: 1.5;
 }
 .narr-active { color: #059669; background: #ecfdf5 }
 .narr-stale { color: #d97706; background: #fffbeb }
@@ -1425,8 +1426,9 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 .narr-detail-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px }
 .narr-type-badge {
-  font-size: 10px; font-weight: 600; border-radius: 3px;
-  padding: 1px 6px; line-height: 1.6; white-space: nowrap;
+  font-size: 10px; font-weight: 600;
+  padding: 1px 4px; line-height: 1.5; white-space: nowrap;
+  border-radius: 2px;
 }
 
 .narr-detail-stats {
