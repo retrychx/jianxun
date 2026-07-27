@@ -100,7 +100,12 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .app { max-width: 1180px; margin: 0 auto; padding: 0 20px }
 
 /* ===== Header ===== */
-.header { padding: 12px 0 10px; margin: 0 26px 14px }
+.header { padding: 12px 0 10px; margin-bottom: 14px }
+
+/* Desktop: constrain header width to match content grid */
+@media (min-width: 769px) {
+  .header { margin: 0 26px 14px }
+}
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px }
 .logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
 
@@ -839,7 +844,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 /* ===== Mobile ===== */
 @media (max-width: 768px) {
   .app { padding: 0 14px 68px } /* 底部留出 tab bar 空间 */
-  .header { padding: 10px 0; gap: 8px; margin: 0 0 10px }
+  .header { padding: 10px 0; gap: 8px; margin-bottom: 10px }
   .logo { font-size: 17px }
   .header-search-box { max-width: none }
   .hs-field { font-size: 12px; width: 80px }
@@ -901,7 +906,6 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 [data-theme="retro"] ::selection { background: #d4c9b8; color: #2a2220 }
 
 [data-theme="retro"] .header { border-bottom: 2px double #8b1a1a }
-@media (max-width: 768px) { [data-theme="retro"] .header { margin-left: 0; margin-right: 0 } }
 
 [data-theme="retro"] .logo { font-size: 22px; text-decoration: underline; text-underline-offset: 6px; text-decoration-color: #8b1a1a; text-decoration-thickness: 1.5px }
 [data-theme="retro"] .card-source { font-family: 'Courier New', Courier, monospace; font-size: 10px; letter-spacing: .06em; color: #8b1a1a }
