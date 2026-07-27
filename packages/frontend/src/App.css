@@ -885,6 +885,12 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
   .scroll-top { bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 72px); right: 23px; width: 32px; height: 32px; font-size: 12px }
 
+  /* Trending standalone page on mobile (full-width, no card styling) */
+  .trending-view .trending-panel { border: none; border-radius: 0; position: static; background: transparent }
+  .trending-view .panel-header { padding: 8px 0; margin-bottom: 0 }
+  .trending-view .trending-item { padding: 12px 0 }
+  .trending-view .trending-ext { padding: 2px 6px }
+
   /* Sheet: full screen on mobile */
   .sheet-panel { max-height: 100vh; min-height: 72vh; border-radius: 0 }
   .sheet-image { height: 160px }
@@ -1397,59 +1403,41 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 /* Detail view */
 .narr-detail { animation: fadeUp .4s var(--ease) both }
 .narr-detail-top {
+  display: flex; align-items: flex-start; gap: 10px;
   margin-bottom: 20px; padding-bottom: 20px;
   border-bottom: 2px solid var(--border);
 }
 
-/* Back button row */
-.narr-detail-top-row { display: flex; align-items: center; margin-bottom: 10px }
-
 .back-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px 3px 6px; height: 26px;
-  border: none; border-radius: 13px;
-  background: var(--surface);
-  cursor: pointer; color: var(--text-tertiary);
-  font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin-top: 2px;
+  border: none; border-radius: 8px;
+  background: transparent; cursor: pointer;
+  color: var(--text-tertiary); flex-shrink: 0;
   transition: all .15s;
 }
 .back-btn:hover { background: var(--card-hover); color: var(--text) }
 
-/* Content row: info + actions side by side */
-.narr-detail-top-content {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-}
 .narr-detail-info { flex: 1; min-width: 0 }
 
-.narr-detail-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap }
+.narr-detail-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 1px; flex-wrap: wrap }
 .narr-type-badge {
-  font-size: 10px; font-weight: 700;
-  padding: 2px 7px; line-height: 1.4;
-  border-radius: 4px; letter-spacing: .03em;
-  background: var(--accent); color: var(--accent-fg, #fff);
-}
-.narr-status {
   font-size: 10px; font-weight: 600;
   padding: 2px 7px; line-height: 1.4;
   border-radius: 4px;
-  background: var(--surface);
-  color: var(--text-tertiary);
+  background: var(--accent-light); color: var(--accent);
 }
+.narr-status { font-size: 10px; font-weight: 500; color: var(--text-tertiary) }
 
 .narr-detail-title { font-family: var(--font-serif); font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -.015em; color: var(--text) }
 
-/* Action buttons: grouped as a card */
 .narr-detail-actions {
-  display: flex; gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  background: var(--surface);
-  flex-shrink: 0;
+  display: flex; gap: 2px;
+  flex-shrink: 0; margin-top: 2px;
 }
 .narr-action-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border: none; border-radius: 6px;
+  width: 30px; height: 30px; border: none; border-radius: 6px;
   background: transparent; cursor: pointer;
   color: var(--text-tertiary);
   transition: all .15s;

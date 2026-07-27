@@ -49,14 +49,10 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
     return (
       <div className="narr-detail">
         <div className="narr-detail-top">
-          <div className="narr-detail-top-row">
-            <button className="back-btn" onClick={onBack}><ArrowLeft size={14} />返回</button>
-          </div>
-          <div className="narr-detail-top-content">
-            <div className="narr-detail-info">
-              <div className="skeleton" style={{ height: 12, width: '30%', marginBottom: 6, borderRadius: 4 }} />
-              <div className="skeleton" style={{ height: 22, width: '70%', borderRadius: 4 }} />
-            </div>
+          <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+          <div className="narr-detail-info">
+            <div className="skeleton" style={{ height: 12, width: '30%', marginBottom: 6, borderRadius: 4 }} />
+            <div className="skeleton" style={{ height: 22, width: '70%', borderRadius: 4 }} />
           </div>
         </div>
         <div className="narr-detail-skeleton" style={{ marginTop: 16 }}>
@@ -70,12 +66,8 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
     return (
       <div className="narr-detail">
         <div className="narr-detail-top">
-          <div className="narr-detail-top-row">
-            <button className="back-btn" onClick={onBack}><ArrowLeft size={14} />返回</button>
-          </div>
-          <div className="narr-detail-top-content">
-            <h2 className="narr-detail-title">叙事未找到</h2>
-          </div>
+          <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+          <h2 className="narr-detail-title" style={{ flex: 1 }}>叙事未找到</h2>
         </div>
         <div className="empty" style={{ marginTop: 40 }}>
           <GitBranch size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
@@ -88,31 +80,27 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   return (
     <div className="narr-detail">
       <div className="narr-detail-top">
-        <div className="narr-detail-top-row">
-          <button className="back-btn" onClick={onBack}><ArrowLeft size={14} />返回</button>
+        <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+        <div className="narr-detail-info">
+          <div className="narr-detail-meta">
+            {narrType && <span className="narr-type-badge">{narrType}</span>}
+            <span className="narr-status">
+              {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
+            </span>
+          </div>
+          <h2 className="narr-detail-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h2>
         </div>
-        <div className="narr-detail-top-content">
-          <div className="narr-detail-info">
-            <div className="narr-detail-meta">
-              {narrType && <span className="narr-type-badge">{narrType}</span>}
-              <span className={`narr-status narr-${narrative.status}`}>
-                {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
-              </span>
-            </div>
-            <h2 className="narr-detail-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h2>
-          </div>
-          <div className="narr-detail-actions">
-            {toggleFollow && (
-              <button className="narr-action-btn" onClick={() => toggleFollow(keyword, 'narrative')} title={followed ? '取消关注' : '关注此叙事'}>
-                {followed ? <BellOff size={16} /> : <Bell size={16} />}
-              </button>
-            )}
-            {onResearch && (
-              <button className="narr-action-btn" onClick={() => onResearch(keyword, narrative?.label || keyword)} title="深度研究">
-                <BookOpen size={16} />
-              </button>
-            )}
-          </div>
+        <div className="narr-detail-actions">
+          {toggleFollow && (
+            <button className="narr-action-btn" onClick={() => toggleFollow(keyword, 'narrative')} title={followed ? '取消关注' : '关注此叙事'}>
+              {followed ? <BellOff size={16} /> : <Bell size={16} />}
+            </button>
+          )}
+          {onResearch && (
+            <button className="narr-action-btn" onClick={() => onResearch(keyword, narrative?.label || keyword)} title="深度研究">
+              <BookOpen size={16} />
+            </button>
+          )}
         </div>
       </div>
 
