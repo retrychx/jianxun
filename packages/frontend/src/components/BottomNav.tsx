@@ -7,7 +7,6 @@ const TABS: { view: ViewName; hash: string; label: string; Icon: typeof Sunrise 
   { view: 'feed', hash: '#/feed', label: '新闻', Icon: Newspaper },
   { view: 'topics', hash: '#/topics', label: '话题', Icon: Hash },
   { view: 'narratives', hash: '#/narratives', label: '叙事', Icon: GitBranch },
-  { view: 'trending', hash: '#/trending', label: '热门', Icon: TrendingUp },
 ]
 
 // 移动端底部 tab bar（≤768px 显示，桌面端由 header + sidebar 承担导航）

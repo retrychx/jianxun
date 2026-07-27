@@ -337,12 +337,12 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .panel-subtitle { font-size: 10px; font-weight: 600; color: var(--text-tertiary); margin-left: auto; text-transform: uppercase; letter-spacing: .04em }
 .trending-list { display: flex; flex-direction: column }
 .trending-item {
-  display: flex; align-items: flex-start; gap: 10px; padding: 12px 0;
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 0;
   transition: background .12s; cursor: pointer;
 }
 .trending-item:hover { background: var(--card-hover) }
 .trending-item + .trending-item { border-top: 1px solid var(--border-light) }
-.trending-rank { font-size: 12px; font-weight: 700; width: 24px; text-align: center; line-height: 1.5; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0 }
+.trending-rank { font-size: 12px; font-weight: 700; width: 28px; text-align: right; line-height: 1.5; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; padding-right: 4px }
 .trending-rank.top3 { color: var(--accent) }
 .trending-content { min-width: 0; flex: 1 }
 .trending-title { font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
