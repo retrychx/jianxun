@@ -19,6 +19,7 @@ export const CONFIG = {
   entity: { maxArticles: 100, windowHours: 12, similarityThreshold: 0.6, phaseTimeoutMs: 15_000 },
   health: { maxImages: 3, weightDecay: 0.1, weightFloor: 0.1, recoveryStep: 0.15, phaseTimeoutMs: 10_000 },
   digest: { maxCandidates: 30, minArticles: 10, minNewArticles: 3, phaseTimeoutMs: 30_000 },
+  briefing: { phaseTimeoutMs: 30_000 },
 } as const
 
 /** Resolve phase timeout from config, falling back to agent default. */

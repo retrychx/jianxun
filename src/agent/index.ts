@@ -51,11 +51,10 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
     // ═══ Low priority — skipped when CPU budget tight ═══
     { name: 'linkEntities', run: () => linkEntities(env), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
+    { name: 'curateBriefing', run: () => curateBriefing(env), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
   ]
 
   const results = await runPhases(phases, env)
-  // Phase 11: Curate briefing (runs after analysis-dependent phases)
-  results.curateBriefing = await runPhases([{ name: 'curateBriefing', run: () => curateBriefing(env), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' }], env)
   const totalMs = Date.now() - start
 
   await markAgentRun(env)
