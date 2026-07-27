@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, GitBranch, Newspaper, Bell, BellOff, BookOpen } from 'lucide-react'
+import { ArrowLeft, GitBranch, Bell, BellOff, BookOpen } from 'lucide-react'
 import { decodeEntities } from '../utils'
-import { getNarrative, type NarrativeDetail, type NewsItem } from '../api'
+import { getNarrative, type NarrativeDetail } from '../api'
 import { NewsCard } from './NewsCard'
 
 interface Props {
@@ -9,7 +9,6 @@ interface Props {
   lang: Lang
   onBack: () => void
   onNewsClick: (id: number) => void
-  /** 关注状态（父组件维护，传给 SSE 监听用） */
   isFollowing?: (id: string) => boolean
   toggleFollow?: (name: string, type: 'entity' | 'category' | 'source' | 'narrative') => void
   onResearch?: (keyword: string, label: string) => void
@@ -37,12 +36,10 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   const followId = `narrative:${keyword}`
   const followed = isFollowing?.(followId) ?? false
 
-  // Detect narrative type from keyword prefix
   const narrType = keyword.startsWith('__breaking__') ? '突发' :
     keyword.startsWith('__research__') ? '研究' :
     keyword.startsWith('__debate__') ? '争议' :
     keyword.startsWith('__cross__') ? '多源' : null
-  const typeColors: Record<string, string> = { '突发': '#dc2626', '研究': '#7c3aed', '争议': '#d97706', '多源': '#0891b2' }
 
   function cleanNarrativeTitle(label: string): string {
     return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
@@ -51,7 +48,38 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   if (loading) {
     return (
       <div className="narr-detail">
-              <div className="narr-detail-top">
+        <div className="narr-detail-top">
+          <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+          <div className="narr-detail-info">
+            <div className="skeleton" style={{ height: 14, width: '40%', marginBottom: 8, borderRadius: 3 }} />
+            <div className="skeleton" style={{ height: 20, width: '70%', borderRadius: 3 }} />
+          </div>
+        </div>
+        <div className="narr-detail-skeleton" style={{ marginTop: 16 }}>
+          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 'var(--radius)' }} />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !narrative) {
+    return (
+      <div className="narr-detail">
+        <div className="narr-detail-top">
+          <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+          <h2 className="narr-detail-title" style={{ flex: 1 }}>叙事未找到</h2>
+        </div>
+        <div className="empty" style={{ marginTop: 40 }}>
+          <GitBranch size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+          <p>叙事未找到</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="narr-detail">
+      <div className="narr-detail-top">
         <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
         <div className="narr-detail-info">
           <div className="narr-detail-meta">
@@ -76,21 +104,18 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         </div>
       </div>
 
-      {/* Summary */}
       {narrative.summary && (
         <div className="narr-detail-summary">
           <p>{decodeEntities(narrative.summary)}</p>
         </div>
       )}
 
-      {/* Stats */}
       <div className="narr-detail-stats">
         <div className="nd-stat"><span className="nd-stat-num">{narrative.articleCount}</span> 篇文章</div>
         <div className="nd-stat"><span className="nd-stat-num">{narrative.developmentCount}</span> 条进展</div>
         <div className="nd-stat"><span className="nd-stat-num">{new Date(narrative.firstSeen).toLocaleDateString('zh-CN')}</span> 首次出现</div>
       </div>
 
-      {/* Developments Timeline */}
       {narrative.developments.length > 0 && (
         <div className="nd-dev-section">
           <h3 className="nd-dev-title">关键进展</h3>
@@ -113,7 +138,6 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         </div>
       )}
 
-      {/* Source Breakdown */}
       {Object.keys(narrative.sourceStats).length > 0 && (
         <div className="nd-sources-section">
           <h3 className="nd-dev-title">来源分布</h3>
@@ -137,7 +161,6 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         </div>
       )}
 
-      {/* Related Articles */}
       {narrative.articles.length > 0 && (
         <div className="nd-articles-section">
           <h3 className="nd-dev-title">相关报道</h3>
