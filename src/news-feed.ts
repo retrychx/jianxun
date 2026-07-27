@@ -162,20 +162,73 @@ export async function detail(env: Env, id: number) {
 }
 
 export async function briefing(env: Env) {
+  // Prefer agent-curated briefing if available
+  try {
+    const curated = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'briefing_curated'").first<any>()
+    if (curated?.value) {
+      const data = JSON.parse(curated.value)
+      if (data?.items?.length) {
+        const ids = data.items.map((i: any) => i.id)
+        const rows = await env.DB.prepare(
+          `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+           FROM news n WHERE n.id IN (${ids.map(() => '?').join(',')})`
+        ).bind(...ids).all<any>()
+        const byId = new Map((rows.results || []).map(r => [r.id, r]))
+        const result = data.items.flatMap((cur: any) => {
+          const row = byId.get(cur.id)
+          if (!row) return []
+          return [{ ...mapNews(row), heat: row.heat || 1, reason: cur.reason || '' }]
+        })
+        if (result.length >= 3) {
+          const payload = { items: result }
+          await cacheSet('briefing', payload, CACHE_TTL.briefing)
+          return payload
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback: rule-based selection
   { const cached = await cacheGet<any>('briefing'); if (cached) return cached }
   let items = await env.DB.prepare(
     `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-     FROM news n
-     WHERE published_at >= datetime('now', '-48 hours')
+     FROM news n WHERE published_at >= datetime('now', '-48 hours')
      ORDER BY score DESC, published_at DESC LIMIT 50`
   ).all()
   if ((items.results?.length || 0) < 3) {
     items = await env.DB.prepare(
       `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-       FROM news n
-       ORDER BY score DESC, published_at DESC LIMIT 50`
+       FROM news n ORDER BY score DESC, published_at DESC LIMIT 50`
     ).all()
   }
+  const bySource: Record<string, any[]> = {}
+  for (const row of (items.results as any[])) { const s = row.source; if (!bySource[s]) bySource[s] = []; bySource[s].push(row) }
+  const sel: any[] = []; const used = new Set<string>(); const srcs = Object.keys(bySource)
+  while (sel.length < 7 && used.size < srcs.length) {
+    for (const s of srcs) { if (used.has(s)) continue; const p = bySource[s]; if (!p.length) { used.add(s); continue }; const a = p.shift()!; if (sel.length >= 7) break; sel.push({ ...mapNews(a), heat: a.heat }); used.add(s) }
+  }
+  if (sel.length < 7) { for (const s of srcs) { for (const a of bySource[s] || []) { if (sel.length >= 7) break; if (!sel.find(n => n.id === a.id)) sel.push({ ...mapNews(a), heat: a.heat }) } } }
+  const cats = await env.DB.prepare("SELECT category,COUNT(*) as c FROM news GROUP BY category ORDER BY c DESC").all()
+  const top = (cats.results as any[]).slice(0,3).map((r:any) => r.category)
+  const res = sel.slice(0,7).map((item,i) => {
+    const hot = top.includes(item.category); const h = item.heat || 1
+    const ha = Number.isFinite(item.publishedAt ? new Date(item.publishedAt).getTime() : NaN) ? Math.max(0,Math.round((Date.now()-new Date(item.publishedAt).getTime())/3600000)) : null
+    let r = ''
+    if (i===0) r = '今日头条 · ' + (hot ? item.category+'领域最受关注' : '多源报道热度最高')
+    else if (h>=3) r = h+' 家媒体跟进 · '+item.category+'热点'
+    else if (h===2) r = '2 家媒体报道 · '+item.category+'动向'
+    else if (ha!==null && ha<=6) r = (ha<=1?'刚刚发布':ha+' 小时前')+' · '+item.category+'最新进展'
+    else if (item.score>=70 && hot) r = item.category+'热点 · 热度持续上升'
+    else if (item.score>=70) r = '高关注度 · 读者广泛讨论'
+    else if (hot) r = item.category+'领域 · 近期焦点'
+    else if (ha!==null && ha<=24) r = item.category+' · '+ha+' 小时前的进展'
+    else r = item.category+'领域 · 信息增量'
+    return { ...item, reason: r }
+  })
+  const payload = { items: res }
+  await cacheSet('briefing', payload, CACHE_TTL.briefing)
+  return payload
+}
 
   const bySource: Record<string, any[]> = {}
   for (const row of (items.results as any[])) {

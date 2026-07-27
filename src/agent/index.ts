@@ -18,6 +18,7 @@ import { translateMissing } from './translate.js'
 import { runCrossRefAnalysis } from './crossref.js'
 import { updateNarratives } from './narrative.js'
 import { detectBreakingNews } from './breaking.js'
+import { curateBriefing } from './curate.js'
 import { linkEntities } from './entity.js'
 import { generateTodayDigest } from '../digest.js'
 
@@ -48,6 +49,8 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   ]
 
   const results = await runPhases(phases, env)
+  // Phase 11: Curate briefing (runs after analysis-dependent phases)
+  results.curateBriefing = await runPhases([{ name: 'curateBriefing', run: () => curateBriefing(env), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'] }], env)
   const totalMs = Date.now() - start
 
   await markAgentRun(env)
@@ -55,5 +58,5 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 }
 
 // Re-export all phase functions for admin endpoints
-export { fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights }
+export { fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing }
 export { loadActiveNarratives, loadSingleNarrative } from './narrative.js'
