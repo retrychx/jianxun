@@ -104,6 +104,7 @@ export const PERSPECTIVES: Record<string, string> = {
   'NPR': '综合', 'BBC Tech': '综合',
   'GitHub Blog': '开源', 'Simon Willison': 'AI', 'Quanta Magazine': '科学',
   'IEEE Spectrum': '工程', 'Nature': '科学', 'Physics World': '科学',
+  'IT之家': '科技', '掘金': '技术', '博客园': '社区', '小众软件': '效率',
   'ZDNet': '科技', 'MarketWatch': '财经',
 }
 

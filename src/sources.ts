@@ -21,6 +21,11 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '中国新闻网',  url: 'https://www.chinanews.com.cn/rss/scroll-news.xml', lang: 'zh' },
   { name: '美团技术',    url: 'https://tech.meituan.com/rss.xml',       lang: 'zh' },
   { name: '凤凰网科技',  url: 'https://news.ifeng.com/rss/tech.xml',    lang: 'zh' },
+  { name: 'IT之家',      url: 'https://www.ithome.com/rss/',              lang: 'zh' },
+  { name: '掘金',        url: 'https://juejin.cn/rss',                    lang: 'zh', weight: 0.7 },
+  { name: '博客园',      url: 'https://feed.cnblogs.com/blog/sitehome/rss', lang: 'zh', weight: 0.6 },
+  { name: '小众软件',    url: 'https://www.appinn.com/feed/',             lang: 'zh' },
+
   { name: '动点科技',    url: 'https://technode.com/feed/',             lang: 'en' },
   { name: '开源中国',    url: 'https://www.oschina.net/news/rss',        lang: 'zh' },
   // --- AI ---
