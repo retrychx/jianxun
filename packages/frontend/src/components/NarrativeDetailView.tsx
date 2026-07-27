@@ -74,7 +74,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
             </button>
           )}
         </div>
-      </div></div>
+      </div>
 
       {/* Summary */}
       {narrative.summary && (
