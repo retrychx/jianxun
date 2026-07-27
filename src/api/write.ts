@@ -1,9 +1,9 @@
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { cacheDelete, CACHE_TTL, cacheSet, cacheGet, signalEvent } from './cache.js'
-import { fetchAllRSS, saveArticles } from './rss.js'
-import { generateAnswer } from './analysis.js'
-import { json, likeEscape, type Env } from './helpers.js'
-import { tokenize } from './tokenize.js'
+import { cacheDelete, CACHE_TTL, cacheSet, cacheGet, signalEvent } from '../cache.js'
+import { fetchAllRSS, saveArticles } from '../rss.js'
+import { generateAnswer } from '../analysis.js'
+import { json, likeEscape, type Env } from '../helpers.js'
+import { tokenize } from '../tokenize.js'
 
 /** Fetch latest RSS articles, save new ones, then launch the full AI agent pipeline. */
 export async function fetchNews(env: Env, ctx: ExecutionContext) {
@@ -17,7 +17,7 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
   // Launch the unified intelligence agent as a background task
   ctx.waitUntil((async () => {
     const { runAgent } = await import('./agent/index.js')
-    await runAgent(env).catch(() => {})
+    await runAgent(env).catch((e: any) => console.error('[fetchNews] agent crashed:', e?.message))
   })())
 
   // Notify SSE clients

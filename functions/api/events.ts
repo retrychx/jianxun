@@ -29,13 +29,20 @@ export async function onRequestGet(context: any) {
     send('heartbeat', {})
   }, 30_000)
 
-  // Poll for fetch events every 10s
+  // Poll for fetch + breaking events every 10s
   const pollTimer = setInterval(async () => {
     try {
-      const evt = await pollEvent<{ count: number; timestamp: string }>('fetch', lastEventTs)
-      if (evt) {
-        lastEventTs = evt.ts
-        send('new-articles', evt.data)
+      const [fetchEvt, breakingEvt] = await Promise.all([
+        pollEvent<{ count: number; timestamp: string }>('fetch', lastEventTs),
+        pollEvent<{ title: string; sources: string[]; significance: string }>('breaking', lastEventTs),
+      ])
+      if (fetchEvt) {
+        lastEventTs = fetchEvt.ts
+        send('new-articles', fetchEvt.data)
+      }
+      if (breakingEvt) {
+        lastEventTs = breakingEvt.ts
+        send('breaking', breakingEvt.data)
       }
     } catch { /* best-effort polling */ }
   }, 10_000)

@@ -14,21 +14,19 @@ const META_LAST_LOG = 'last_log'
 
 /** Check if a minimum interval has passed since the last agent run. */
 export async function shouldSkipDueToConcurrency(env: Env): Promise<boolean> {
-  const row = await env.DB.prepare(`SELECT value FROM agent_meta WHERE key = '${META_LAST_RUN}'`).first<any>()
+  const row = await env.DB.prepare('SELECT value FROM agent_meta WHERE key = ?').bind('last_run').first<any>()
   if (!row?.value) return false
   return (Date.now() - new Date(row.value).getTime()) < CONFIG.agent.concurrencyGuardMs
 }
 
 /** Persist the current timestamp as the last agent run. */
 export async function markAgentRun(env: Env): Promise<void> {
-  await env.DB.prepare(`INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('${META_LAST_RUN}', ?)`)
-    .bind(new Date().toISOString()).run()
+  await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_run', ?)").bind(new Date().toISOString()).run()
 }
 
 /** Save a structured agent run log. */
 export async function saveAgentLog(env: Env, log: AgentRunLog): Promise<void> {
-  await env.DB.prepare(`INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('${META_LAST_LOG}', ?)`)
-    .bind(JSON.stringify(log)).run()
+  await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_log', ?)").bind(JSON.stringify(log)).run()
 }
 
 // ─── Circuit breaker ──────────────────────────────────────────

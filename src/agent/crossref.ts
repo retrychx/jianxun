@@ -37,7 +37,7 @@ export async function runCrossRefAnalysis(env: Env) {
         JSON.stringify([{date:new Date().toISOString().slice(0,10),text:ref.comparison,articleCount:ref.sources.length,sources:ref.sources.map(s=>s.name)}]),
         JSON.stringify(ref.articleIds), JSON.stringify(Object.fromEntries(ref.sources.map(s=>[s.name,1])))).run()
       stored++
-    } catch {}
+    } catch (e: any) { console.error('[crossref] insert failed:', e?.message) }
   }
   return { crossRefs: stored }
 }

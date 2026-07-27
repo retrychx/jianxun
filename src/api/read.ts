@@ -1,7 +1,7 @@
-import { cacheGet, cacheSet, CACHE_TTL } from './cache.js'
-import { tokenize } from './tokenize.js'
-import { mapNews, likeEscape, isoZ, type Env } from './helpers.js'
-import { RSS_SOURCES } from './sources.js'
+import { cacheGet, cacheSet, CACHE_TTL } from '../cache.js'
+import { tokenize } from '../tokenize.js'
+import { mapNews, likeEscape, isoZ, type Env } from '../helpers.js'
+import { RSS_SOURCES } from '../sources.js'
 
 export async function listNews(env: Env, url: URL) {
   const category = url.searchParams.get('category')
@@ -230,68 +230,7 @@ export async function briefing(env: Env) {
   return payload
 }
 
-  const bySource: Record<string, any[]> = {}
-  for (const row of (items.results as any[])) {
-    const s = row.source
-    if (!bySource[s]) bySource[s] = []
-    bySource[s].push(row)
-  }
-
-  const selected: any[] = []
-  const usedSources = new Set<string>()
-  const sources = Object.keys(bySource)
-
-  while (selected.length < 7 && usedSources.size < sources.length) {
-    for (const s of sources) {
-      if (usedSources.has(s)) continue
-      const pool = bySource[s]
-      if (!pool.length) { usedSources.add(s); continue }
-      const article = pool.shift()!
-      if (selected.length >= 7) break
-      selected.push({ ...mapNews(article), heat: article.heat })
-      usedSources.add(s)
-    }
-  }
-
-  if (selected.length < 7) {
-    for (const s of sources) {
-      for (const article of bySource[s] || []) {
-        if (selected.length >= 7) break
-        if (!selected.find(n => n.id === article.id)) {
-          selected.push({ ...mapNews(article), heat: article.heat })
-        }
-      }
-    }
-  }
-
-  const topics = await env.DB.prepare(
-    "SELECT category, COUNT(*) as count FROM news GROUP BY category ORDER BY count DESC"
-  ).all()
-  const topCats = (topics.results as any[]).slice(0, 3).map((r: any) => r.category)
-
-  const result = selected.slice(0, 7).map((item, i) => {
-    const isHotCat = topCats.includes(item.category)
-    const heat = item.heat || 1
-    const publishedAt = item.publishedAt ? new Date(item.publishedAt).getTime() : NaN
-    const hoursAgo = Number.isFinite(publishedAt) ? Math.max(0, Math.round((Date.now() - publishedAt) / 3_600_000)) : null
-
-    let reason = ''
-    if (i === 0) reason = '今日头条 · ' + (isHotCat ? `${item.category}领域最受关注` : '多源报道热度最高')
-    else if (heat >= 3) reason = `${heat} 家媒体跟进 · ${item.category}热点`
-    else if (heat === 2) reason = `2 家媒体报道 · ${item.category}动向`
-    else if (hoursAgo !== null && hoursAgo <= 6) reason = `${hoursAgo <= 1 ? '刚刚发布' : hoursAgo + ' 小时前'} · ${item.category}最新进展`
-    else if (item.score >= 70 && isHotCat) reason = `${item.category}热点 · 热度持续上升`
-    else if (item.score >= 70) reason = '高关注度 · 读者广泛讨论'
-    else if (isHotCat) reason = `${item.category}领域 · 近期焦点`
-    else if (hoursAgo !== null && hoursAgo <= 24) reason = `${item.category} · ${hoursAgo} 小时前的进展`
-    else reason = `${item.category}领域 · 信息增量`
-
-    return { ...item, reason }
-  })
-
-  const payload = { items: result }
-  await cacheSet('briefing', payload, CACHE_TTL.briefing)
-  return payload
+  
 }
 
 export async function sources(env: Env) {

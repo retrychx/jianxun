@@ -56,5 +56,5 @@ export const RSS_SOURCES: RssSource[] = [
   // --- 科技商业 ---
   { name: 'ZDNet', weight: 0.9,           url: 'https://www.zdnet.com/news/rss.xml',           lang: 'en' },
   // --- 财经 ---
-  { name: 'MarketWatch', weight: 0.8,     url: 'https://feeds.marketwatch.com/marketwatch/topstories', lang: 'en', weight: 0.8 },
+  { name: 'MarketWatch', url: 'https://feeds.marketwatch.com/marketwatch/topstories', lang: 'en', weight: 0.8 },
 ]

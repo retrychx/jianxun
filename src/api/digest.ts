@@ -1,6 +1,6 @@
-import { cacheGet, cacheSet, cacheDelete, CACHE_TTL } from './cache.js'
-import { generateDigest, DEEPSEEK_MODEL, fetchWithRetry } from './analysis/deepseek.js'
-import { type Env } from './helpers.js'
+import { cacheGet, cacheSet, cacheDelete, CACHE_TTL } from '../cache.js'
+import { generateDigest, DEEPSEEK_MODEL, fetchWithRetry } from '../analysis/deepseek.js'
+import { type Env } from '../helpers.js'
 
 // Incremental daily digest: first generation creates a full digest from the
 // day's top candidates; subsequent calls only process articles not yet in it,
@@ -44,7 +44,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
         const d = JSON.parse(c.analysis_detail)
         c._significance = d.significance || ''
         c._controversy = d.controversy || false
-      } catch {}
+      } catch (e: any) { console.warn('[digest] parse error:', e?.message) }
     }
   }
 
@@ -128,8 +128,8 @@ export async function digest(env: Env, date: string | null) {
 
   let items: any[] = []
   let extra: any = null
-  try { items = JSON.parse(row.items) } catch {}
-  try { extra = row.extra ? JSON.parse(row.extra) : null } catch {}
+  try { items = JSON.parse(row.items) } catch (e: any) { console.warn('[digest] parse error:', e?.message) }
+  try { extra = row.extra ? JSON.parse(row.extra) : null } catch (e: any) { console.warn('[digest] parse error:', e?.message) }
   if (!Array.isArray(items)) items = []
 
   const ids = [...items.map(i => i.news_id), extra?.news_id].filter((id: any) => Number.isInteger(id))

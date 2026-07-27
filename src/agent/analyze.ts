@@ -25,7 +25,7 @@ export async function analyzeNewArticles(env: Env, limit = 6): Promise<number> {
           result.base.category || '科技', extracted, JSON.stringify(result.detail), row.id).run()
         done++
       }
-    } catch {}
+    } catch (e: any) { console.error('[analyze] article analysis failed:', e?.message) }
   }
   return done
 }
@@ -44,7 +44,7 @@ export async function refineCategories(env: Env) {
     try {
       const results = await batchClassify(chunk.map(a => ({ id: a.id, title: a.title })), apiKey)
       for (const r of results) { if (r.index >= 0 && r.index < chunk.length && r.category && chunk[r.index].category !== r.category) { await env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(r.category, chunk[r.index].id).run(); refined++ } }
-    } catch {}
+    } catch (e: any) { console.error('[analyze] article analysis failed:', e?.message) }
   }
   return { refined }
 }

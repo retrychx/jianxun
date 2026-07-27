@@ -12,7 +12,7 @@ export async function detectBreakingNews(env: Env) {
   const articles = (rows.results || [])
   const highSig: any[] = []
   for (const a of articles) {
-    try { const d = JSON.parse(a.analysis_detail); if (d.impact === 'high' || d.significance) highSig.push({ ...a, _detail: d }) } catch {}
+    try { const d = JSON.parse(a.analysis_detail); if (d.impact === 'high' || d.significance) highSig.push({ ...a, _detail: d }) } catch (e: any) { console.error('[breaking] narrative insert failed:', e?.message) }
   }
   if (highSig.length < 2) return { breaking: 0 }
 
@@ -42,7 +42,7 @@ export async function detectBreakingNews(env: Env) {
       ).bind(keyword, `🔴 突发: ${group[0].title.slice(0,40)}`, summary||`${sources.join('/')} 同时报道该事件`, JSON.stringify(ids), JSON.stringify(Object.fromEntries(sources.map(s=>[s, group.filter((a:any)=>a.source===s).length])))).run()
       signalEvent('breaking', { title: group[0].title.slice(0,80), sources, significance: summary.slice(0,100), articleCount: group.length }).catch(() => {})
       brokeCount++
-    } catch {}
+    } catch (e: any) { console.error('[breaking] narrative insert failed:', e?.message) }
   }
   return { breaking: brokeCount }
 }
