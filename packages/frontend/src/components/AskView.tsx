@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, History, MessageCircleQuestion, SearchX, X } from 'lucide-react'
+import { ArrowUp, History, MessageCircleQuestion, SearchX, X, BookOpen } from 'lucide-react'
 import type { AskRef, AskResponse } from '../api'
 import { askNews } from '../api'
 import { displayTitle, type Lang } from '../utils'
