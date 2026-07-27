@@ -101,7 +101,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 /* ===== Header ===== */
 .header { padding: 12px 0 10px; margin-bottom: 14px }
-.header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: calc(760px + 300px + 28px); margin: 0 auto }
 .logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
 
 /* 社论感：logo 与各卡片/视图标题用衬线，正文保持无衬线 */
@@ -179,6 +179,9 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .tab-bar {
   margin-bottom: 24px;
   overflow: hidden;
+  max-width: calc(760px + 300px + 28px);
+  margin-left: auto;
+  margin-right: auto;
 }
 .tab-list {
   display: flex; gap: 6px; overflow-x: auto;
