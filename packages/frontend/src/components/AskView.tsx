@@ -53,7 +53,7 @@ function AnswerText({ text, refs, onNewsClick }: { text: string; refs: AskRef[];
 }
 
 // AI 问答浮窗：对话形态——问题气泡、衬线回答、建议问题、底部输入条
-export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: Props) {
+export function AskView({ open, initialQuestion, lang, onNewsClick, onClose, onResearch }: Props) {
   const [question, setQuestion] = useState('')
   const [current, setCurrent] = useState('')
   const [result, setResult] = useState<AskResponse | null>(null)
