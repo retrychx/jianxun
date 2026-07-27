@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative'
 
 export interface Route {
   view: ViewName
   cat?: string
   entity?: string
   q?: string
+  research?: string
   /** 话题深挖：#/topic/:name（keyword） */
   topic?: string
   /** 历史日报：#/digest/:date（YYYY-MM-DD） */
@@ -36,6 +37,8 @@ export function parseHash(hash: string): Route {
       return segs[1] ? { view: 'entity', entity: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
     case 'search':
       return { view: 'search', q: params.get('q') || '', newsId: null }
+    case 'research':
+      return { view: 'research', research: params.get('q') || '', newsId: null }
     case 'weekly':
       return { view: 'weekly', newsId: null }
     case 'digest':
@@ -60,7 +63,7 @@ export function parseHash(hash: string): Route {
   }
 }
 
-export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string; topic?: string; date?: string; narrative?: string }): string {
+export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?: string; research?: string; topic?: string; date?: string; narrative?: string }): string {
   switch (r.view) {
     case 'feed':
       return `#/feed${r.cat && r.cat !== '全部' ? `?cat=${encodeURIComponent(r.cat)}` : ''}`
@@ -70,6 +73,8 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return `#/entity/${encodeURIComponent(r.entity || '')}`
     case 'search':
       return `#/search?q=${encodeURIComponent(r.q || '')}`
+    case 'research':
+      return `#/research?q=${encodeURIComponent(r.research || '')}`
     case 'weekly':
       return '#/weekly'
     case 'digest':

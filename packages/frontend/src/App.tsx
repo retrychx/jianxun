@@ -12,6 +12,7 @@ import { DigestLoader } from './components/DigestView'
 import { TopicView } from './components/TopicView'
 import { NarrativesView } from './components/NarrativesView'
 import { NarrativeDetailView } from './components/NarrativeDetailView'
+import { ResearchView } from './components/ResearchView'
 import { SourcesView } from './components/SourcesView'
 import { AskView } from './components/AskView'
 import { WeeklyView } from './components/WeeklyView'
@@ -471,6 +472,7 @@ export default function App() {
         lang={lang}
         onNewsClick={(id) => { setAskOpen(false); openNews(id) }}
         onClose={() => setAskOpen(false)}
+        onResearch={(q) => { setAskOpen(false); navigate(`#/research?q=${encodeURIComponent(q)}`) }}
       />
 
       <DetailPanel

@@ -221,6 +221,39 @@ export function askNews(q: string): Promise<AskResponse> {
   return fetchJson(`${BASE}/news/ask?q=${encodeURIComponent(q)}`)
 }
 
+/* ===== Deep Research ===== */
+
+export interface ResearchSection {
+  heading: string
+  body: string
+  refs: number[]
+}
+
+export interface ResearchReport {
+  title: string
+  summary: string
+  sections: ResearchSection[]
+  outlook: string
+}
+
+export interface ResearchRef {
+  ref: number
+  id: number
+  title: string
+  titleZh?: string | null
+  source: string
+}
+
+export interface ResearchResponse {
+  report: ResearchReport | null
+  refs: ResearchRef[]
+  candidateCount: number
+}
+
+export function researchNews(q: string): Promise<ResearchResponse> {
+  return fetchJson(`${BASE}/news/research?q=${encodeURIComponent(q)}`)
+}
+
 export interface WeeklyResponse {
   totalNew: number
   topEntities: { name: string; count: number }[]

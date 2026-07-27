@@ -173,6 +173,11 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose }: P
             result.answer ? (
               <div className="ask-msg-ai">
                 <AnswerText text={result.answer} refs={result.refs} onNewsClick={onNewsClick} />
+            {result.answer && onResearch && (
+              <button className="ask-research-btn" onClick={() => onResearch(inputValue)}>
+                <BookOpen size={13} /> 深度研究这个话题
+              </button>
+            )}
                 {result.refs.length > 0 && (
                   <div className="ask-refs">
                     {result.refs.map(r => (

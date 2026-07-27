@@ -1120,12 +1120,52 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 .ask-cite:hover { text-decoration: underline; text-underline-offset: 2px }
 
+.ask-research-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 8px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--accent-light); color: var(--accent);
+  cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600;
+  transition: all .15s; width: 100%; justify-content: center;
+}
+.ask-research-btn:hover { background: var(--accent-border) }
+
 .ask-ref-card {
   display: flex; gap: 10px; padding: 10px 12px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   cursor: pointer; transition: all .15s;
 }
-.ask-ref-card + .ask-ref-card { margin-top: 6px }
+.ask-research-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 8px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--accent-light); color: var(--accent);
+  cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600;
+  transition: all .15s; width: 100%; justify-content: center;
+}
+.ask-research-btn:hover { background: var(--accent-border) }
+
+.ask-ref-card + .ask-research-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 8px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--accent-light); color: var(--accent);
+  cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600;
+  transition: all .15s; width: 100%; justify-content: center;
+}
+.ask-research-btn:hover { background: var(--accent-border) }
+
+.ask-ref-card { margin-top: 6px }
+.ask-research-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 8px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--accent-light); color: var(--accent);
+  cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600;
+  transition: all .15s; width: 100%; justify-content: center;
+}
+.ask-research-btn:hover { background: var(--accent-border) }
+
 .ask-ref-card:hover { border-color: var(--scrollbar); background: var(--card-hover) }
 .ask-ref-num {
   font-size: 11px; font-weight: 700; color: var(--accent);
@@ -1385,6 +1425,76 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .nd-articles-section .news-card { margin-bottom: 8px; border-width: 1px }
 
 .narr-detail-skeleton { margin-top: 20px }
+
+/* ===== Deep Research ===== */
+.research-view { animation: fadeUp .4s var(--ease) both }
+.research-header { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 16px }
+.research-title { display: flex; align-items: center; gap: 8px; font-family: var(--font-serif); font-size: 18px; font-weight: 700; line-height: 1.2 }
+.research-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4 }
+.research-loading { margin-top: 20px }
+.research-sections { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px }
+
+.research-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+  transition: border-color .15s;
+}
+.research-card.open { border-color: var(--accent-border) }
+.research-card-trigger {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 12px 14px;
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; color: var(--text); font-size: 14px;
+  transition: background .15s;
+}
+.research-card-trigger:hover { background: var(--card-hover) }
+.research-card-heading { display: flex; align-items: center; gap: 10px }
+.research-card-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.research-card-body { padding: 0 14px 14px }
+.research-card-text { font-size: 13px; color: var(--text); line-height: 1.6 }
+.research-card-refs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px }
+.research-ref-tag {
+  font-size: 11px; color: var(--accent); background: var(--accent-light);
+  border: 1px solid var(--accent-border); border-radius: 3px;
+  padding: 4px 8px; cursor: pointer; text-align: left;
+  font-family: inherit; transition: all .15s; max-width: 100%;
+}
+.research-ref-tag:hover { background: var(--accent-border) }
+.research-ref-tag small { color: var(--text-tertiary); display: block; font-size: 10px }
+
+.research-outlook {
+  padding: 14px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); margin-bottom: 16px;
+  background: var(--surface);
+}
+.research-outlook-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--text) }
+.research-outlook p { font-size: 13px; color: var(--text-secondary); line-height: 1.5 }
+
+.research-refs-footer { margin-top: 12px }
+.research-reftoggle {
+  font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  border: none; background: none; font-family: inherit;
+  padding: 4px 0; transition: color .15s;
+}
+.research-reftoggle:hover { color: var(--text) }
+.research-refs-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px }
+.research-ref-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: none; border-radius: 4px;
+  background: var(--surface); cursor: pointer;
+  font-family: inherit; text-align: left; font-size: 12px;
+  transition: background .15s; width: 100%;
+}
+.research-ref-row:hover { background: var(--card-hover) }
+.research-ref-idx { color: var(--accent); font-weight: 600; font-size: 11px; flex-shrink: 0; width: 28px }
+.research-ref-title { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.research-ref-source { color: var(--text-tertiary); flex-shrink: 0; font-size: 10px }
 
 /* ===== Footer ===== */
 .footer { padding: 28px 0 36px; text-align: center; font-size: 12px; color: var(--text-tertiary) }

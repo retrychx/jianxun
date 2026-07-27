@@ -259,3 +259,46 @@ export async function generateNarrativeSummary(
   if (!res?.ok) return null
   return (await res.json() as any).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
 }
+
+
+/** Deep Research — generates a multi-chapter report from candidate articles. */
+export async function generateResearchReport(
+  question: string,
+  candidates: { id: number; title: string; titleZh?: string | null; summary: string; summaryZh?: string | null; source: string; publishedAt?: string | null }[],
+  apiKey: string | undefined,
+): Promise<{ title: string; summary: string; sections: { heading: string; body: string; refs: number[] }[]; outlook: string } | null> {
+  if (!apiKey || !candidates.length) return null
+  const { RESEARCH_PROMPT } = await import('./prompts.js')
+  try {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: `研究问题：${question}\n\n${RESEARCH_PROMPT}` },
+          { role: 'user', content: candidates.slice(0, 40).map((c, i) =>
+            `[${i}] ${c.titleZh || c.title}（${c.source || '未知'}${c.publishedAt ? '/' + c.publishedAt.slice(0, 10) : ''}）\n${((c.summaryZh || c.summary) || '').slice(0, 300)}`
+          ).join('\n\n') },
+        ],
+        temperature: 0.2,
+        max_tokens: 2048,
+      }),
+    })
+    if (!res?.ok) return null
+    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    const validIds = new Set(candidates.map(c => c.id))
+    return {
+      title: (parsed.title || '').slice(0, 40),
+      summary: (parsed.summary || '').slice(0, 100),
+      sections: (Array.isArray(parsed.sections) ? parsed.sections : []).map((s: any) => ({
+        heading: (s.heading || '').slice(0, 30),
+        body: (s.body || '').slice(0, 400),
+        refs: (Array.isArray(s.refs) ? s.refs : []).filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length),
+      })),
+      outlook: (parsed.outlook || '').slice(0, 200),
+    }
+  } catch { return null }
+}
