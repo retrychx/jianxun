@@ -1,7 +1,6 @@
 /** Phase 2+3: AI article analysis and category refinement. */
 
-import { extractContent, analyzeWithDeepSeek, fetchWithRetry } from '../analysis/deepseek.js'
-import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { extractContent, analyzeWithDeepSeek, batchClassify } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
@@ -43,14 +42,7 @@ export async function refineCategories(env: Env) {
   for (let i = 0; i < batch.length; i += 10) {
     const chunk = batch.slice(i, i + 10)
     try {
-      const texts = chunk.map((a: any, idx: number) => `[${idx}] ${a.title}`).join('\n')
-      const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是新闻分类助手。为每篇新闻分配一个分类：AI/科技/财经/国际/政治/健康/体育/娱乐/游戏/教育/社会。只返回JSON数组：[{"index":0,"category":"AI"},...]' }, { role: 'user', content: texts }], temperature: 0.05, max_tokens: 1024 }),
-      })
-      if (!res?.ok) continue
-      const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
-      const results = JSON.parse(raw) as { index: number; category: string }[]
+      const results = await batchClassify(chunk.map(a => ({ id: a.id, title: a.title })), apiKey)
       for (const r of results) { if (r.index >= 0 && r.index < chunk.length && r.category && chunk[r.index].category !== r.category) { await env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(r.category, chunk[r.index].id).run(); refined++ } }
     } catch {}
   }

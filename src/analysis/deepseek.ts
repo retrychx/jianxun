@@ -209,3 +209,53 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
   }
   return results.length ? results : null
 }
+
+/** Batch reclassify low-confidence articles by title. */
+export async function batchClassify(
+  articles: { id: number; title: string }[],
+  apiKey: string,
+): Promise<{ index: number; category: string }[]> {
+  const { CLASSIFY_PROMPT } = await import('./prompts.js')
+  const texts = articles.map((a, idx) => `[${idx}] ${a.title}`).join('\n')
+  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024 }),
+  })
+  if (!res?.ok) return []
+  const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
+  if (!raw) return []
+  try { return JSON.parse(raw) as { index: number; category: string }[] } catch { return [] }
+}
+
+/** Generate a narrative "development" text from new articles for a tracked story. */
+export async function generateNarrativeDevelopment(
+  articles: { source: string; title: string; summary: string }[],
+  label: string,
+  apiKey: string,
+): Promise<string | null> {
+  const { NARRATIVE_PROMPT } = await import('./prompts.js')
+  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
+    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_PROMPT(label) }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
+  })
+  if (!res?.ok) return null
+  const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim()
+  return raw?.replace(/```[a-z]*\n?/g,'').replace(/^["\u201c]|["\u201d]$/g,'').trim().slice(0,200) || null
+}
+
+/** Generate or refresh a narrative summary from all associated articles. */
+export async function generateNarrativeSummary(
+  articles: { title: string; summary: string }[],
+  label: string,
+  apiKey: string,
+): Promise<string | null> {
+  const { NARRATIVE_SUMMARY_PROMPT } = await import('./prompts.js')
+  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
+    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_SUMMARY_PROMPT(label) }, { role: 'user', content: articles.slice(0,20).map(a => `${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
+  })
+  if (!res?.ok) return null
+  return (await res.json() as any).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
+}

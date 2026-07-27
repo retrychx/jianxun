@@ -4,8 +4,7 @@
  */
 
 import { cacheDelete } from '../cache.js'
-import { fetchWithRetry, generateTopicLabels } from '../analysis/deepseek.js'
-import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
 import { fallbackLabel, type Env } from '../helpers.js'
@@ -135,15 +134,10 @@ async function narrSummary(env: Env, narrative: Narrative, existingIds: number[]
   const allIds = [...new Set([...existingIds, ...newBatch.map(a => a.id)])]
   const rows = await env.DB.prepare(`SELECT title,summary,description FROM news WHERE id IN (${allIds.map(()=>'?').join(',')})`).bind(...allIds).all<any>()
   const label = narrative.label || narrative.keyword
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: `你是叙事编辑。给以下报道系列写一个中文摘要（≤120字）：用2-3句话概括"${label}"话题的核心事实和发展脉络。只返回摘要正文，不要JSON。` }, { role: 'user', content: (rows.results||[]).slice(0,20).map((a:any)=>`${a.title}\n${(a.summary||a.description||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 256 }),
-    })
-    if (!res?.ok) return null
-    return (await res.json() as any).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
-  } catch { return null }
+  return generateNarrativeSummary(
+    (rows.results || []).map((a: any) => ({ title: a.title, summary: a.summary || a.description || '' })),
+    label, apiKey
+  )
 }
 
 async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<void> {

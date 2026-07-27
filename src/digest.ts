@@ -1,6 +1,5 @@
 import { cacheGet, cacheSet, cacheDelete, CACHE_TTL } from './cache.js'
-import { generateDigest } from './analysis.js'
-import { DEEPSEEK_MODEL, fetchWithRetry } from './analysis.js'
+import { generateDigest, DEEPSEEK_MODEL, fetchWithRetry } from './analysis/deepseek.js'
 import { type Env } from './helpers.js'
 
 // Incremental daily digest: first generation creates a full digest from the
