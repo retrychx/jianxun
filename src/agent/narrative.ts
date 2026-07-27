@@ -95,17 +95,12 @@ function matchArticles(articles: any[], narratives: Narrative[]): { matched: Rec
 
 async function generateDevelopment(narrative: Narrative, articles: any[], apiKey: string): Promise<string | null> {
   const label = narrative.label || narrative.keyword
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: `你是叙事追踪编辑。跟踪"${label}"话题的报道动态。根据最新一批相关文章，写一条"关键进展"（≤80字中文）：概括这批报道带来了什么新信息。只返回进展正文，不要JSON、不要引号。` }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${(a.summary || a.description || '').slice(0, 200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 256 }),
-    })
-    if (!res?.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim()
-    return raw?.replace(/```[a-z]*\n?/g,'').replace(/^["「]|["」]$/g,'').trim().slice(0,200) || null
-  } catch { return null }
+  return generateNarrativeDevelopment(
+    articles.map(a => ({ source: a.source, title: a.title, summary: a.summary || a.description || '' })),
+    label, apiKey
+  )
 }
+
 
 async function appendDevelopment(env: Env, narrative: Narrative, text: string, articles: any[]): Promise<void> {
   const existing: any[] = JSON.parse(narrative.developments || '[]')
@@ -139,6 +134,7 @@ async function narrSummary(env: Env, narrative: Narrative, existingIds: number[]
     label, apiKey
   )
 }
+
 
 async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<void> {
   const existingKeywords = new Set(existing.map(n => n.keyword))
