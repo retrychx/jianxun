@@ -14,21 +14,28 @@ export async function onRequestGet(context: any) {
     const narrative = await loadSingleNarrative(env, keyword)
     if (!narrative) return json({ error: 'Narrative not found' }, 404)
 
-    const articleIds: number[] = JSON.parse(narrative.article_ids || '[]')
+    const devs: any[] = JSON.parse(narrative.developments || '[]')
+    const ids: number[] = JSON.parse(narrative.article_ids || '[]')
     let articles: any[] = []
-    if (articleIds.length) {
+    if (ids.length) {
       const rows = await env.DB.prepare(
-        `SELECT * FROM news WHERE id IN (${articleIds.map(() => '?').join(',')}) ORDER BY published_at DESC`
-      ).bind(...articleIds).all()
+        `SELECT * FROM news WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY published_at DESC`
+      ).bind(...ids).all()
       articles = (rows.results || []).map(mapNews)
     }
 
     return json({
-      ...narrative,
-      developments: JSON.parse(narrative.developments || '[]'),
-      articleIds,
-      articles,
+      keyword: narrative.keyword,
+      label: narrative.label || narrative.keyword,
+      status: narrative.status,
+      firstSeen: narrative.first_seen,
+      lastUpdated: narrative.last_updated,
+      summary: narrative.summary,
+      articleCount: ids.length,
+      developmentCount: devs.length,
       sourceStats: JSON.parse(narrative.source_stats || '{}'),
+      developments: devs,
+      articles,
     })
   }
 
