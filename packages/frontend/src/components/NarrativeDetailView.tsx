@@ -37,8 +37,8 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   const followId = `narrative:${keyword}`
   const followed = isFollowing?.(followId) ?? false
 
-  function cleanLabel(label: string): string {
-    return label.replace(/^[🔴⚡📖📍]\s*(?:突发|争议|研究|多源对比):\s*/, '').replace(/^__\w+__/, '')
+  function cleanNarrativeTitle(label: string): string {
+    return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
   }
 
   if (loading) {
