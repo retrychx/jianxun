@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, GitBranch, Newspaper, Bell, BellOff, BookOpen } from 'lucide-react'
+import { decodeEntities } from '../utils'
 import { getNarrative, type NarrativeDetail, type NewsItem } from '../api'
 import { NewsCard } from './NewsCard'
 
@@ -73,7 +74,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
       <div className="narr-detail-top">
         <button className="back-btn" onClick={onBack}><ArrowLeft size={18} /></button>
         <div className="narr-detail-info">
-          <h2 className="narr-detail-title">{cleanLabel(narrative.label || narrative.keyword)}</h2>
+          <h2 className="narr-detail-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h2>
           <span className={`narr-status narr-${narrative.status}`}>
             {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
           </span>
@@ -103,7 +104,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
       {/* Summary */}
       {narrative.summary && (
         <div className="narr-detail-summary">
-          <p>{narrative.summary}</p>
+          <p>{decodeEntities(narrative.summary)}</p>
         </div>
       )}
 
@@ -125,7 +126,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
                 {i < narrative.developments.length - 1 && <div className="nd-dev-line" />}
                 <div className="nd-dev-body">
                   <div className="nd-dev-date">{dev.date}</div>
-                  <div className="nd-dev-text">{dev.text}</div>
+                  <div className="nd-dev-text">{decodeEntities(dev.text)}</div>
                   <div className="nd-dev-meta">
                     <span>{dev.articleCount} 篇</span>
                     {dev.sources?.slice(0, 3).join(' · ')}

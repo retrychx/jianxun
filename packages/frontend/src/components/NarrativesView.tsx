@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { GitBranch, ChevronRight, Clock, Hash, AlertTriangle, BookOpen, Flame } from 'lucide-react'
 import { getNarratives, getNarrativesTimeline, type NarrativeSummary } from '../api'
-import { formatDate } from '../utils'
+import { formatDate, decodeEntities } from '../utils'
 
 interface Props {
   onNarrativeClick: (keyword: string) => void
@@ -28,7 +28,11 @@ function categorize(n: NarrativeSummary): Category {
 }
 
 function cleanLabel(label: string): string {
-  return label.replace(/^[🔴⚡📖📍]\s*(?:突发|争议|研究|多源对比:)\s*/, '').replace(/^__\w+__/, '')
+  return label
+    .replace(/^__\w+__/, '')  // __breaking__, __research__, etc.
+    .replace(/^[🔴⚡📖📍]\s*/, '')  // emoji prefix
+    .replace(/^(?:突发|争议|研究|多源对比:)\s*/, '')  // text prefix
+    .trim()
 }
 
 export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate }: Props) {
@@ -103,7 +107,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
                         <ChevronRight size={14} className="narr-chevron" />
                       </div>
                       <div className="narr-card-label">{cleanLabel(n.label || n.keyword)}</div>
-                      {n.summary && <div className="narr-card-summary">{n.summary}</div>}
+                      {n.summary && <div className="narr-card-summary">{decodeEntities(n.summary)}</div>}
                       <div className="narr-card-meta">
                         <span>{n.articleCount} 篇</span>
                         <span>{n.developmentCount} 条</span>
