@@ -12,6 +12,7 @@ interface Props {
   lang: Lang
   onNewsClick: (id: number) => void
   onClose: () => void
+  onResearch?: (query: string) => void
 }
 
 const HISTORY_KEY = 'jianxun_ask_history'
