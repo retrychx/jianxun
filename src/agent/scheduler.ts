@@ -1,11 +1,13 @@
 /**
  * Phase scheduler — registers tool definitions, resolves dependency order,
  * runs independent phases in parallel, collects results with structured logging.
+ * Respects CPU budget: low-priority phases are skipped when time is tight.
  */
 
 import type { Env } from '../helpers.js'
 import type { PhaseDef, PhaseResult } from './types.js'
 import { phaseTimeout } from './config.js'
+import { checkBudget, isBudgetExhausted } from './state.js'
 
 /** Success/failure from a single phase run with timing. */
 async function runOne(name: string, fn: () => Promise<any>, timeoutMs: number): Promise<PhaseResult> {
@@ -30,23 +32,30 @@ async function runOne(name: string, fn: () => Promise<any>, timeoutMs: number): 
 
 /**
  * Execute a list of phase definitions with dependency resolution.
- * - Phases without dependencies (or whose dependencies completed) run in parallel.
+ * - Phases with priority 'critical' always run.
+ * - Phases with priority 'low' skip when the CPU budget is exhausted.
+ * - Other phases run in dependency order, grouping independent ones in parallel.
  * - Phases with `shouldSkip: true` are skipped (recorded as ok with zero result).
- * - Collects all results into a flat map keyed by phase name.
  */
 export async function runPhases(phases: PhaseDef[], env: Env): Promise<Record<string, PhaseResult>> {
   const results: Record<string, PhaseResult> = {}
-
-  // Group phases by dependency depth
   const completed = new Set<string>()
 
-  // Repeatedly run phases whose dependencies are satisfied
   while (completed.size < phases.length) {
-    const batch = phases.filter(p =>
-      !results[p.name] && // not started
-      (!p.dependsOn || p.dependsOn.every(d => completed.has(d))) // deps done
-    )
-    if (!batch.length) break // stuck — probably a dependency cycle
+    // Filter to phases whose dependencies are met AND haven't started
+    const batch = phases.filter(p => {
+      if (results[p.name]) return false
+      // Skip low-priority phases when budget exhausted
+      if (p.priority === 'low' && isBudgetExhausted()) {
+        console.log(`[agent] skipping low-priority phase: ${p.name}`)
+        results[p.name] = { ok: true, result: undefined, ms: 0 }
+        completed.add(p.name)
+        return false
+      }
+      // Check dependencies
+      return !p.dependsOn || p.dependsOn.every(d => completed.has(d))
+    })
+    if (!batch.length) break
 
     const outcomes = await Promise.allSettled(
       batch.map(p =>
@@ -57,11 +66,12 @@ export async function runPhases(phases: PhaseDef[], env: Env): Promise<Record<st
     )
 
     for (let i = 0; i < batch.length; i++) {
-      const p = batch[i]
       const o = outcomes[i]
       const r = o.status === 'fulfilled' ? o.value : { ok: false, error: 'Promise rejected', ms: 0 }
-      results[p.name] = r
-      if (r.ok || p.shouldSkip) completed.add(p.name)
+      results[batch[i].name] = r
+      if (r.ok || batch[i].shouldSkip) completed.add(batch[i].name)
+      // Update budget after each phase
+      checkBudget()
     }
   }
 

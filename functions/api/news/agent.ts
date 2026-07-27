@@ -1,0 +1,22 @@
+import { json } from '../../../src/handler'
+
+// GET /api/news/agent — agent run status and last log
+export async function onRequestGet(context: any) {
+  const { env } = context
+
+  const [lastRun, lastLog] = await Promise.all([
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_log'").first<any>(),
+  ])
+
+  const log = lastLog?.value ? JSON.parse(lastLog.value) : null
+
+  return json({
+    lastRun: lastRun?.value || null,
+    lastRunAgo: lastRun?.value ? Math.round((Date.now() - new Date(lastRun.value).getTime()) / 1000) + 's ago' : null,
+    totalPhases: log?.results ? Object.keys(log.results).length : 0,
+    totalMs: log?.totalMs || null,
+    skipAi: log?.skipAi || false,
+    phases: log?.results || null,
+  })
+}

@@ -10,6 +10,9 @@ export interface PhaseResult {
   ms: number
 }
 
+/** Priority tier — high-priority phases run first and never get skipped. */
+export type PhasePriority = 'critical' | 'normal' | 'low'
+
 /** A phase/tool definition registered with the scheduler. */
 export interface PhaseDef {
   /** Unique phase name (used in logging + results key). */
@@ -22,6 +25,8 @@ export interface PhaseDef {
   dependsOn?: string[]
   /** If true, skip this phase (circuit breaker / dependency failure). */
   shouldSkip?: boolean
+  /** Priority: critical=must run, normal=default, low=skipped when CPU budget tight. */
+  priority?: PhasePriority
 }
 
 /** Full agent run log persisted to agent_meta. */
