@@ -7,17 +7,16 @@ interface Props {
   item: NewsItem
   lang?: Lang
   onClick?: (id: number) => void
-  /** 命中关注实体时显示「关注」小标记 */
   followed?: boolean
-  /** 上次访问后新增的文章显示「新」标记 */
   isNew?: boolean
+  onHide?: (id: number) => void
 }
 
 function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
 
-export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed, isNew }: Props) {
+export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed, isNew, onHide }: Props) {
   const [imgError, setImgError] = useState(false)
   const showImage = !!item.image && !imgError
   const summary = displaySummary(item, lang)
@@ -52,6 +51,7 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
           {item.heat != null && item.heat > 1 && (
             <span className="card-heat">{item.heat} 家媒体报道</span>
           )}
+          {onHide && <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onHide(item.id) }} title="不感兴趣">×</button>}
         </div>
       </div>
     </article>

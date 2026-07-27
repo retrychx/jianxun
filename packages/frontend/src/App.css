@@ -1288,6 +1288,30 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 /* ===== Narratives（叙事追踪） ===== */
 .narratives-view { animation: fadeUp .4s var(--ease) both }
+.nv-section-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-secondary) }
+.nv-section-label { flex: 1 }
+.narr-card-wrap { margin-bottom: 8px }
+.narr-view-btn {
+  font-size: 11px; color: var(--accent); background: transparent;
+  border: none; cursor: pointer; font-family: inherit; padding: 2px 0;
+  transition: color .15s;
+}
+.narr-view-btn:hover { text-decoration: underline }
+.narr-research-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+  cursor: pointer; color: #7c3aed; flex-shrink: 0;
+  transition: all .15s; margin-left: 4px;
+}
+.narr-research-btn:hover { border-color: #7c3aed; background: #f5f3ff }
+.card-hide-btn {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-tertiary); font-size: 16px; line-height: 1;
+  padding: 0 2px; margin-left: auto; transition: color .15s;
+}
+.card-hide-btn:hover { color: var(--accent) }
+
 .nv-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px }
 .nv-title { font-family: var(--font-serif); font-size: 20px; font-weight: 700 }
 .nv-sub { font-size: 12px; color: var(--text-tertiary) }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, GitBranch, Newspaper, Bell, BellOff } from 'lucide-react'
+import { ArrowLeft, GitBranch, Newspaper, Bell, BellOff, BookOpen } from 'lucide-react'
 import { getNarrative, type NarrativeDetail, type NewsItem } from '../api'
 import { NewsCard } from './NewsCard'
 
@@ -11,11 +11,12 @@ interface Props {
   /** 关注状态（父组件维护，传给 SSE 监听用） */
   isFollowing?: (id: string) => boolean
   toggleFollow?: (name: string, type: 'entity' | 'category' | 'source' | 'narrative') => void
+  onResearch?: (keyword: string, label: string) => void
 }
 
 type Lang = 'zh' | 'en'
 
-export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFollowing, toggleFollow }: Props) {
+export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFollowing, toggleFollow, onResearch }: Props) {
   const [narrative, setNarrative] = useState<NarrativeDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -81,6 +82,16 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
             aria-label={followed ? '取消关注' : '关注此叙事'}
           >
             {followed ? <BellOff size={18} /> : <Bell size={18} />}
+          </button>
+        )}
+        {onResearch && (
+          <button
+            className="narr-research-btn"
+            onClick={() => onResearch(keyword, narrative?.label || keyword)}
+            title="深度研究"
+            aria-label="深度研究"
+          >
+            <BookOpen size={16} />
           </button>
         )}
       </div>

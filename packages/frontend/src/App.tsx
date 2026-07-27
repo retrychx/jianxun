@@ -76,6 +76,18 @@ export default function App() {
   } = useSearch()
   const { follows, isFollowing, toggleFollow } = useFollow()
 
+  // ─── 不感兴趣：隐藏的文章 ID ───
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('hiddenNews') || '[]')) } catch { return new Set() }
+  })
+  const hideArticle = (id: number) => {
+    setHiddenIds(prev => {
+      const next = new Set(prev); next.add(id)
+      localStorage.setItem('hiddenNews', JSON.stringify([...next]))
+      return next
+    })
+  }
+
   // ─── 新文章标记：记录上次访问时间 ───
   const saved = localStorage.getItem('lastVisit')
   const now = Date.now()
@@ -97,7 +109,7 @@ export default function App() {
   const navActive: ViewName = view === 'digest' || view === 'topic' ? 'briefing' : view
   // 关注加权（客户端重排）：命中关注实体的条目稳定置顶并加「关注」标记
   const followedEntityNames = follows.filter(f => f.type === 'entity').map(f => f.name)
-  const boostedNews = boostFollowed(news, followedEntityNames)
+  const boostedNews = boostFollowed(news, followedEntityNames).filter(n => !hiddenIds.has(n.id))
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -385,9 +397,9 @@ export default function App() {
           ) : view === 'topic' && baseRoute.topic ? (
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'narratives' ? (
-            <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} />
+            <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'narrative' && baseRoute.narrative ? (
-            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} />
+            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'weekly' ? (
@@ -410,7 +422,7 @@ export default function App() {
                   <div className="card-list">
                     {boostedNews.map((item, i) => (
                       <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} isNew={new Date(item.createdAt).getTime() > lastVisitRef.current} />
+                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} isNew={new Date(item.createdAt).getTime() > lastVisitRef.current} onHide={hideArticle} />
                       </div>
                     ))}
                   </div>
@@ -422,6 +434,18 @@ export default function App() {
                 </>
               )}
             </>
+          ) : view === 'briefing' && trending.length > 0 && !initialLoading ? (
+            <div className="today-focus">
+              <div className="tf-header">
+                <span className="tf-label">今日聚焦</span>
+                <span className="tf-sub">{trending[0]?.category || '科技'}</span>
+              </div>
+              <button className="tf-card" onClick={() => openNews(trending[0]?.id)}>
+                <div className="tf-source">{trending[0]?.source}</div>
+                <div className="tf-title">{(trending[0] as any)?.titleZh || trending[0]?.title}</div>
+                {trending[0]?.summary && <div className="tf-summary">{(trending[0] as any)?.summaryZh || trending[0]?.summary}</div>}
+              </button>
+            </div>
           ) : view === 'topics' ? (
             <TopicsView topics={topics} lang={lang} onNewsClick={openNews} />
           ) : (
