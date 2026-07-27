@@ -51,62 +51,30 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   if (loading) {
     return (
       <div className="narr-detail">
-        <div className="narr-detail-top">
-          <button className="back-btn" onClick={onBack}><ArrowLeft size={18} /></button>
-        </div>
-        <div className="narr-detail-skeleton">
-          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100, marginBottom: 12, borderRadius: 'var(--radius)' }} />)}
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !narrative) {
-    return (
-      <div className="narr-detail">
-        <div className="narr-detail-top">
-          <button className="back-btn" onClick={onBack}><ArrowLeft size={18} /></button>
-          <h2 className="narr-detail-title">叙事详情</h2>
-        </div>
-        <div className="empty" style={{ marginTop: 40 }}>
-          <GitBranch size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-          <p>叙事未找到</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="narr-detail">
-      <div className="narr-detail-top">
-        <button className="back-btn" onClick={onBack}><ArrowLeft size={18} /></button>
+              <div className="narr-detail-top">
+        <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
         <div className="narr-detail-info">
+          <div className="narr-detail-meta">
+            {narrType && <span className="narr-type-badge">{narrType}</span>}
+            <span className={`narr-status narr-${narrative.status}`}>
+              {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
+            </span>
+          </div>
           <h2 className="narr-detail-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h2>
-          <span className={`narr-status narr-${narrative.status}`}>
-            {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
-          </span>
         </div>
-        {toggleFollow && (
-          <button
-            className="narr-follow-btn"
-            onClick={() => toggleFollow(keyword, 'narrative')}
-            title={followed ? '取消关注' : '关注此叙事'}
-            aria-label={followed ? '取消关注' : '关注此叙事'}
-          >
-            {followed ? <BellOff size={18} /> : <Bell size={18} />}
-          </button>
-        )}
-        {onResearch && (
-          <button
-            className="narr-research-btn"
-            onClick={() => onResearch(keyword, narrative?.label || keyword)}
-            title="深度研究"
-            aria-label="深度研究"
-          >
-            <BookOpen size={16} />
-          </button>
-        )}
-      </div>
+        <div className="narr-detail-actions">
+          {toggleFollow && (
+            <button className="narr-action-btn" onClick={() => toggleFollow(keyword, 'narrative')} title={followed ? '取消关注' : '关注此叙事'}>
+              {followed ? <BellOff size={16} /> : <Bell size={16} />}
+            </button>
+          )}
+          {onResearch && (
+            <button className="narr-action-btn" onClick={() => onResearch(keyword, narrative?.label || keyword)} title="深度研究">
+              <BookOpen size={16} />
+            </button>
+          )}
+        </div>
+      </div></div>
 
       {/* Summary */}
       {narrative.summary && (
