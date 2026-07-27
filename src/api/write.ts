@@ -16,7 +16,7 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
 
   // Launch the unified intelligence agent as a background task
   ctx.waitUntil((async () => {
-    const { runAgent } = await import('./agent/index.js')
+    const { runAgent } = await import('../agent/index.js')
     await runAgent(env).catch((e: any) => console.error('[fetchNews] agent crashed:', e?.message))
   })())
 
