@@ -16,7 +16,7 @@ export { listNews, trending, categories, stats, search, entitySearch, detail, br
 export { topics, topic, weekly } from './topics.js'
 
 // News Intelligence Agent (unified AI pipeline)
-export { runAgent, fixMissingImages as fixImages, fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing, detectControversy, loadActiveNarratives, loadSingleNarrative } from './agent/index.js'
+export { runAgent, fixMissingImages as fixImages, fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing, detectControversy, generateResearchBriefs, loadActiveNarratives, loadSingleNarrative } from './agent/index.js'
 
 // Daily digest
 export { generateTodayDigest, debugDigest, digest, digests } from './api/digest.js'

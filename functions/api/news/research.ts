@@ -18,6 +18,20 @@ export async function onRequestGet(context: any) {
     return json({ error: '问题长度需在 2-80 字之间' }, 400)
   }
 
+  // Check if agent pre-computed research for a matching topic
+  const matchedNarr = await env.DB.prepare(
+    "SELECT keyword, summary, developments FROM narratives WHERE keyword LIKE ? AND status = 'active' ORDER BY last_updated DESC LIMIT 1"
+  ).bind(`__research__%${likeEscape(query.slice(0, 20))}%`).first<any>()
+  if (matchedNarr?.summary) {
+    try {
+      const report = JSON.parse(matchedNarr.summary)
+      if (report?.sections?.length) {
+        const devs = matchedNarr.developments ? JSON.parse(matchedNarr.developments) : []
+        return json({ report, refs: [], candidateCount: 0, source: 'agent' })
+      }
+    } catch {}
+  }
+
   const cacheKey = `research:${query}`
   const { cacheGet, cacheSet, CACHE_TTL } = await import('../../../src/cache.js')
   const cached = await cacheGet<any>(cacheKey)

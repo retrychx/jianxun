@@ -20,6 +20,7 @@ import { updateNarratives } from './narrative.js'
 import { detectBreakingNews } from './breaking.js'
 import { curateBriefing } from './curate.js'
 import { detectControversy } from './debate.js'
+import { generateResearchBriefs } from './research.js'
 import { linkEntities } from './entity.js'
 import { generateTodayDigest } from '../api/digest.js'
 
@@ -54,6 +55,7 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
     { name: 'linkEntities', run: () => linkEntities(env), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
     { name: 'curateBriefing', run: () => curateBriefing(env), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
     { name: 'detectControversy', run: () => detectControversy(env), dependsOn: ['analyzeNewArticles'], priority: 'low' },
+    { name: 'generateResearchBriefs', run: () => generateResearchBriefs(env), dependsOn: ['updateNarratives'], priority: 'low' },
   ]
 
   const results = await runPhases(phases, env)
@@ -64,5 +66,5 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 }
 
 // Re-export all phase functions for admin endpoints
-export { fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing, detectControversy }
+export { fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing, detectControversy, generateResearchBriefs }
 export { loadActiveNarratives, loadSingleNarrative } from './narrative.js'
