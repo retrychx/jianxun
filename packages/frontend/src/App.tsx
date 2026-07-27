@@ -47,6 +47,7 @@ function getLang(): Lang {
   return localStorage.getItem('lang') === 'en' ? 'en' : 'zh'
 }
 
+const BUILD = '2026-07-27-v3'
 export default function App() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [newsTotal, setNewsTotal] = useState(0)
@@ -463,7 +464,7 @@ export default function App() {
         </aside>
       </div>
 
-      <footer className="footer">
+      <footer className="footer" data-version={BUILD}>
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
         <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">叙事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
       </footer>
