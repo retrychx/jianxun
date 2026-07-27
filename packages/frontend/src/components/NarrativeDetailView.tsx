@@ -37,6 +37,13 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
   const followId = `narrative:${keyword}`
   const followed = isFollowing?.(followId) ?? false
 
+  // Detect narrative type from keyword prefix
+  const narrType = keyword.startsWith('__breaking__') ? '突发' :
+    keyword.startsWith('__research__') ? '研究' :
+    keyword.startsWith('__debate__') ? '争议' :
+    keyword.startsWith('__cross__') ? '多源' : null
+  const typeColors: Record<string, string> = { '突发': '#dc2626', '研究': '#7c3aed', '争议': '#d97706', '多源': '#0891b2' }
+
   function cleanNarrativeTitle(label: string): string {
     return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
   }
