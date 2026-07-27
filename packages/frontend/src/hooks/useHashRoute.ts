@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative' | 'trending'
 
 export interface Route {
   view: ViewName
@@ -47,6 +47,8 @@ export function parseHash(hash: string): Route {
         : DEFAULT_ROUTE
     case 'topic':
       return segs[1] ? { view: 'topic', topic: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
+    case 'trending':
+      return { view: 'trending', newsId: null }
     case 'narratives':
       return { view: 'narratives', newsId: null }
     case 'narrative':
@@ -81,6 +83,8 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return `#/digest/${r.date || ''}`
     case 'topic':
       return `#/topic/${encodeURIComponent(r.topic || '')}`
+    case 'trending':
+      return '#/trending'
     case 'narratives':
       return '#/narratives'
     case 'narrative':

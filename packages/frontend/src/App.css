@@ -324,6 +324,10 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 
 /* ===== Trending Panel ===== */
+.trending-view { animation: fadeUp .4s var(--ease) both }
+.trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
+.trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
+
 .trending-panel {
   background: var(--surface); border-radius: var(--radius);
   border: 1px solid var(--border); overflow: hidden; position: sticky; top: 20px;
@@ -938,9 +942,17 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 [data-theme="retro"] .tl-v-item:hover { background: #ede5da }
 
 /* Trending */
-[data-theme="retro"] .trending-panel { box-shadow: none; border-color: #d4c9b8 }
+[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both }
+.trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
+.trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
+
+.trending-panel { box-shadow: none; border-color: #d4c9b8 }
 [data-theme="retro"] .panel-title { font-family: Georgia, serif }
-[data-theme="retro"] .trending-panel::before {
+[data-theme="retro"] .trending-view { animation: fadeUp .4s var(--ease) both }
+.trending-view .trending-panel { width: 100%; max-width: 600px; margin: 0 auto; box-shadow: none }
+.trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
+
+.trending-panel::before {
   content: ''; position: absolute; top: -4px; left: 12px; right: 12px; height: 4px;
   background: radial-gradient(circle at 6px 4px, transparent 3px, #d4c9b8 3px);
   background-size: 12px 4px; background-repeat: repeat-x;

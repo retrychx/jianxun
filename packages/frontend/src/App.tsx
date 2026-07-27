@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Newspaper, MessageCircleQuestion } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
-import { TrendingPanel, TrendingStrip } from './components/TrendingPanel'
+import { TrendingPanel } from './components/TrendingPanel'
 import { DetailPanel } from './components/DetailPanel'
 import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
@@ -400,13 +400,14 @@ export default function App() {
             <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'narrative' && baseRoute.narrative ? (
             <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
+          ) : view === 'trending' ? (
+            <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} /></div>
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'weekly' ? (
             <WeeklyView />
           ) : view === 'feed' ? (
             <>
-              <TrendingStrip items={trending} lang={lang} onNewsClick={openNews} />
               {loading ? (
                 <>
                   <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
@@ -464,7 +465,7 @@ export default function App() {
 
       <footer className="footer">
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/narratives" className="footer-link">叙事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
+        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">叙事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
       </footer>
 
       <BottomNav active={navActive} />
