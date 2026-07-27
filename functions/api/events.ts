@@ -32,9 +32,11 @@ export async function onRequestGet(context: any) {
   // Poll for fetch + breaking events every 10s
   const pollTimer = setInterval(async () => {
     try {
-      const [fetchEvt, breakingEvt] = await Promise.all([
+      const [fetchEvt, breakingEvt, narrEvt, debateEvt] = await Promise.all([
         pollEvent<{ count: number; timestamp: string }>('fetch', lastEventTs),
         pollEvent<{ title: string; sources: string[]; significance: string }>('breaking', lastEventTs),
+        pollEvent<{ keyword: string; label: string; text: string; articleCount: number }>('narrative', lastEventTs),
+        pollEvent<{ topic: string; pro: string; con: string }>('debate', lastEventTs),
       ])
       if (fetchEvt) {
         lastEventTs = fetchEvt.ts
@@ -43,6 +45,14 @@ export async function onRequestGet(context: any) {
       if (breakingEvt) {
         lastEventTs = breakingEvt.ts
         send('breaking', breakingEvt.data)
+      }
+      if (narrEvt) {
+        lastEventTs = narrEvt.ts
+        send('narrative-update', narrEvt.data)
+      }
+      if (debateEvt) {
+        lastEventTs = debateEvt.ts
+        send('debate', debateEvt.data)
       }
     } catch { /* best-effort polling */ }
   }, 10_000)

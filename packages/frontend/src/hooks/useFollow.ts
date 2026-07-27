@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 export interface FollowItem {
   id: string
   name: string
-  type: 'entity' | 'category' | 'source'
+  type: 'entity' | 'category' | 'source' | 'narrative'
   addedAt: string
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, GitBranch, Newspaper } from 'lucide-react'
+import { ArrowLeft, GitBranch, Newspaper, Bell, BellOff } from 'lucide-react'
 import { getNarrative, type NarrativeDetail, type NewsItem } from '../api'
 import { NewsCard } from './NewsCard'
 
@@ -8,11 +8,14 @@ interface Props {
   lang: Lang
   onBack: () => void
   onNewsClick: (id: number) => void
+  /** 关注状态（父组件维护，传给 SSE 监听用） */
+  isFollowing?: (id: string) => boolean
+  toggleFollow?: (name: string, type: 'entity' | 'category' | 'source' | 'narrative') => void
 }
 
 type Lang = 'zh' | 'en'
 
-export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick }: Props) {
+export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFollowing, toggleFollow }: Props) {
   const [narrative, setNarrative] = useState<NarrativeDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -28,6 +31,9 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick }: Prop
     })
     return () => { cancelled = true }
   }, [keyword])
+
+  const followId = `narrative:${keyword}`
+  const followed = isFollowing?.(followId) ?? false
 
   if (loading) {
     return (
@@ -67,6 +73,16 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick }: Prop
             {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
           </span>
         </div>
+        {toggleFollow && (
+          <button
+            className="narr-follow-btn"
+            onClick={() => toggleFollow(keyword, 'narrative')}
+            title={followed ? '取消关注' : '关注此叙事'}
+            aria-label={followed ? '取消关注' : '关注此叙事'}
+          >
+            {followed ? <BellOff size={18} /> : <Bell size={18} />}
+          </button>
+        )}
       </div>
 
       {/* Summary */}

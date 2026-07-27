@@ -3,7 +3,7 @@
  * Matches new articles to existing narratives and generates "developments."
  */
 
-import { cacheDelete } from '../cache.js'
+import { cacheDelete, signalEvent } from '../cache.js'
 import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
@@ -122,6 +122,7 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
      source_stats=?, summary=COALESCE(?,summary) WHERE id=?`
   ).bind(JSON.stringify(existing), JSON.stringify(ids), JSON.stringify(existingSources), summary, narrative.id).run()
   cacheDelete(`narrative:${encodeURIComponent(narrative.keyword)}`).catch(() => {})
+  signalEvent('narrative', { keyword: narrative.keyword, label: narrative.label || narrative.keyword, text, articleCount: newIds.length }).catch(() => {})
 }
 
 async function narrSummary(env: Env, narrative: Narrative, existingIds: number[], newBatch: any[]): Promise<string | null> {

@@ -1337,6 +1337,15 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   border-radius: var(--radius-sm); margin-bottom: 16px;
   font-size: 13px; color: var(--text); line-height: 1.5;
 }
+.narr-follow-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+  cursor: pointer; color: var(--text-secondary); flex-shrink: 0;
+  transition: all .15s;
+}
+.narr-follow-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light) }
+
 .narr-detail-stats {
   display: flex; gap: 16px; margin-bottom: 20px;
   padding: 12px 14px; border: 1px solid var(--border-light);

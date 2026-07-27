@@ -208,6 +208,24 @@ export default function App() {
       loadAll().catch(() => {})
     })
 
+    es.addEventListener('narrative-update', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        const label = data.label || ''
+        const text = data.text || ''
+        showToast(`📖 ${label}: ${text}`)
+      } catch {}
+      loadAll().catch(() => {})
+    })
+
+    es.addEventListener('debate', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data)
+        showToast(`⚡ 争议: ${data.topic || ''}`)
+      } catch {}
+      loadAll().catch(() => {})
+    })
+
     es.onerror = () => {
       es.close()
       reconnectTimer = window.setTimeout(() => {
@@ -368,7 +386,7 @@ export default function App() {
           ) : view === 'narratives' ? (
             <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} />
           ) : view === 'narrative' && baseRoute.narrative ? (
-            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} />
+            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} />
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'weekly' ? (
