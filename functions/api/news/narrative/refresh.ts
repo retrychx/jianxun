@@ -9,10 +9,10 @@ export async function onRequestPost(context: any) {
   const { env } = context
 
   // 限频检查
-  const lastRefresh = await env.DB.prepare(
+  const lastRefresh: { value?: string } | null = await env.DB.prepare(
     "SELECT value FROM agent_meta WHERE key = 'narrative_refresh'"
-  ).first<any>()
-  const lastTs = lastRefresh ? parseInt(lastRefresh.value) : 0
+  ).first() as any
+  const lastTs = lastRefresh?.value ? parseInt(lastRefresh.value) : 0
   const now = Date.now()
   if (now - lastTs < MIN_INTERVAL_MS) {
     const remaining = Math.ceil((MIN_INTERVAL_MS - (now - lastTs)) / 1000)

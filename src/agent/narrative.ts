@@ -16,6 +16,20 @@ const MIN_CLUSTER_SIZE = CONFIG.narrative.minClusterSize
 const STALE_DAYS = CONFIG.narrative.staleDays
 const ARCHIVE_DAYS = CONFIG.narrative.archiveDays
 
+// 停用词——这些词出现在关键词里毫无意义
+const STOPWORDS = new Set([
+  'a','an','the','to','in','of','for','on','with','at','by','from','as','is','it','its',
+  'and','or','but','not','this','that','are','was','been','will','has','had','have',
+  'about','into','through','during','before','after','between','under','over',
+  'what','why','how','all','each','their','our','your','new','more','most','some',
+  'any','just','also','very','can','would','could','should','may','might','than',
+  'then','now','up','out','off','down',
+  'ai','app','day','data','one','two','top','big','get','make','use','say','set',
+  'air','ultra','pro','max','mini','lite',
+  '21','22','23','24','25','26','27','28','29','30',
+  '8217','8217;','amp;','lt;','gt;','nbsp;',
+])
+
 export interface Narrative {
   id: number
   keyword: string
@@ -58,9 +72,10 @@ export async function updateNarratives(env: Env) {
   const { matched, unmatched } = matchArticles(newArticles, narratives)
 
   for (const narrativeId of Object.keys(matched)) {
-    const narrative = narratives.find(n => n.id === Number(narrativeId))
+    const id = Number(narrativeId)
+    const narrative = narratives.find(n => n.id === id)
     if (!narrative) continue
-    const articles = matched[narrativeId]
+    const articles = matched[id]
     const dev = await generateDevelopment(narrative, articles, apiKey)
     if (dev) await appendDevelopment(env, narrative, dev, articles)
   }
@@ -169,18 +184,47 @@ async function narrSummary(env: Env, narrative: Narrative, existingIds: number[]
 
 
 async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<void> {
+  // Index existing narratives by their article_ids for overlap dedup
+  const existingArticleIds = new Map<number, Set<number>>()
+  for (const n of existing) {
+    try {
+      const ids: number[] = JSON.parse(n.article_ids || '[]')
+      existingArticleIds.set(n.id, new Set(ids))
+    } catch {}
+  }
   const existingKeywords = new Set(existing.map(n => n.keyword))
+
   const clusters = clusterNews(articles.map(a => ({ id: a.id, title: a.title || '' })))
   for (const cluster of clusters) {
     if (cluster.items.length < MIN_CLUSTER_SIZE) continue
-    const keyword = cluster.words.slice(0,3).join(' · ')
-    if (existingKeywords.has(keyword)) continue
+    const newIds = new Set(cluster.items.map((i: any) => i.id))
+
+    // 去重：检查文章与已有叙事是否有 ≥ 50% 重叠
+    let isDuplicate = false
+    for (const [, existingIds] of existingArticleIds) {
+      let overlap = 0
+      for (const id of newIds) if (existingIds.has(id)) overlap++
+      if (overlap / Math.max(newIds.size, existingIds.size) >= 0.5) { isDuplicate = true; break }
+    }
+    if (isDuplicate) continue
+
+    // 生成关键词：过滤停用词、短词和纯数字
+    const cleanWords = cluster.words.filter(w =>
+      w.length >= 2 && !STOPWORDS.has(w.toLowerCase()) && !/^\d+$/.test(w)
+    )
+    const keyword = cleanWords.slice(0, 3).join(' · ')
+    if (keyword.length < 3 || existingKeywords.has(keyword)) continue
+
     const ids = cluster.items.map((i: any) => i.id)
     const rows = await env.DB.prepare(`SELECT id,title,summary,description,source FROM news WHERE id IN (${ids.map(()=>'?').join(',')})`).bind(...ids).all<any>()
     const ca = rows.results || []
+
+    // 用 AI 生成标签；失败时用第一篇标题的前半段
     const lbl = await generateTopicLabels([ca.slice(0,3).map((a:any)=>a.title)], apiKey).then(l=>l?.[0]||null)
-    const nlbl = lbl || fallbackLabel(cluster.words)
+    const nlbl = lbl || ca[0]?.title?.slice(0, 30) || fallbackLabel(cleanWords)
+
     const srcs: Record<string,number> = {}; for (const a of ca) { const s=a.source||'unknown'; srcs[s]=(srcs[s]||0)+1 }
+
     await env.DB.prepare(
       `INSERT OR IGNORE INTO narratives (keyword,label,first_seen,last_updated,status,summary,developments,article_ids,source_stats)
        VALUES (?,?,date('now'),datetime('now'),'active',?,'[]',?,?)`
