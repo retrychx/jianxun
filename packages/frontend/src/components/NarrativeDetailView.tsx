@@ -12,7 +12,7 @@ interface Props {
   isFollowing?: (id: string) => boolean
   toggleFollow?: (name: string, type: 'entity' | 'category' | 'source' | 'narrative') => void
   onResearch?: (keyword: string, label: string) => void
-  onNarrativeClick?: (keyword: string) => void
+  onNarrativeClick?: (keyword: string, label?: string) => void
 }
 
 type Lang = 'zh' | 'en'

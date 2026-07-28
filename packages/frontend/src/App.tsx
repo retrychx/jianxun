@@ -449,9 +449,15 @@ export default function App() {
           ) : view === 'topic' && baseRoute.topic ? (
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'narratives' ? (
-            <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
+            <NarrativesView onNarrativeClick={(kw, label) => {
+              const clean = (label || kw).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/\s*·\s*/g, '·').trim()
+              navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
+            }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'narrative' && baseRoute.narrative ? (
-            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} />
+            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} onNarrativeClick={(kw: string, label?: string) => {
+              const clean = (label || kw).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/\s*·\s*/g, '·').trim()
+              navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
+            }} />
           ) : view === 'trending' ? (
             <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} /></div>
           ) : view === 'sources' ? (

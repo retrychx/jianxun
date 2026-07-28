@@ -7,7 +7,7 @@ import { getNarratives, type NarrativeSummary } from '../api'
 import { decodeEntities } from '../utils'
 
 interface Props {
-  onNarrativeClick: (keyword: string) => void
+  onNarrativeClick: (keyword: string, label?: string) => void
   onNewsClick: (id: number) => void
   onResearchCreate?: (keyword: string) => void
 }
@@ -211,7 +211,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
               <button
                 key={n.keyword}
                 className="narr-story-card"
-                onClick={() => onNarrativeClick(n.keyword)}
+                onClick={() => onNarrativeClick(n.keyword, n.label)}
               >
                 <div className="nsc-top">
                   <span className="nsc-category" style={{ color: meta.color }}>
@@ -254,7 +254,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
                   <button
                     key={n.keyword}
                     className="narr-story-card stale"
-                    onClick={() => onNarrativeClick(n.keyword)}
+                    onClick={() => onNarrativeClick(n.keyword, n.label)}
                   >
                     <h3 className="nsc-title">{cleanLabel(n.label || n.keyword)}</h3>
                     <div className="nsc-meta">

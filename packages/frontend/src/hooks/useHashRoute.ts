@@ -51,8 +51,12 @@ export function parseHash(hash: string): Route {
       return { view: 'trending', newsId: null }
     case 'narratives':
       return { view: 'narratives', newsId: null }
-    case 'narrative':
-      return segs[1] ? { view: 'narrative', narrative: decodeURIComponent(segs[1]), newsId: null } : DEFAULT_ROUTE
+    case 'narrative': {
+      if (!segs[1]) return DEFAULT_ROUTE
+      const kwMatch = hash.match(/[?&]kw=([^&]+)/)
+      const kw = kwMatch ? decodeURIComponent(kwMatch[1]) : null
+      return { view: 'narrative', narrative: kw || decodeURIComponent(segs[1]), newsId: null }
+    }
     case 'sources':
       return { view: 'sources', newsId: null }
     case 'news': {
