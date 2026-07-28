@@ -281,6 +281,30 @@ export default function App() {
     }
   }, [route])
 
+  // 动态页面标题
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      briefing: '今日简报',
+      feed: '新闻',
+      topics: '话题',
+      narratives: '故事',
+      trending: '热门',
+      search: '搜索',
+      sources: '信源',
+      weekly: '周报',
+    }
+    const base = titles[view] || '简讯'
+    if (view === 'narrative' && baseRoute.narrative) {
+      document.title = `${baseRoute.narrative} - 故事 - 简讯`
+    } else if (view === 'entity' && baseRoute.entity) {
+      document.title = `${baseRoute.entity} - ${base} - 简讯`
+    } else if (view === 'research' && baseRoute.research) {
+      document.title = `研究 - 简讯`
+    } else {
+      document.title = `${base} - 简讯`
+    }
+  }, [view, baseRoute.narrative, baseRoute.entity, baseRoute.research])
+
   const handleSearchChange = (v: string) => {
     setSearchQuery(v)
     if (v.trim()) {
