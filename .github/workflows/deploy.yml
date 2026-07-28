@@ -48,5 +48,7 @@ jobs:
 
       - name: Verify cron-analyze health
         continue-on-error: true
+        env:
+          ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID || '863129776' }}
         run: |
-          curl -s "https://jianxun-cron-analyze.863129776.workers.dev/health" --max-time 10 || echo "health check skipped (expected if cold start)"
+          curl -s "https://jianxun-cron-analyze.${ACCOUNT_ID}.workers.dev/health" --max-time 10 || echo "health check skipped (expected if cold start)"
