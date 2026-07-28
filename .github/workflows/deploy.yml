@@ -42,4 +42,10 @@ jobs:
 
       - name: Set Admin Token for cron-analyze
         working-directory: workers/cron-analyze
-        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
+        run: |
+          echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
+          echo "Admin token set on cron-analyze"
+
+      - name: Verify cron-analyze health
+        run: |
+          curl -s "https://jianxun-cron-analyze.863129776.workers.dev/health" --max-time 10

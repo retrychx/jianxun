@@ -29,8 +29,12 @@ export default {
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
+    // 健康检查：不需要鉴权
+    if (new URL(request.url).pathname === '/health') {
+      return Response.json({ ok: true, hasToken: !!env.ADMIN_TOKEN })
+    }
     if (request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
-      return Response.json({ error: 'unauthorized' }, { status: 401 })
+      return new Response('unauthorized', { status: 401 })
     }
     try {
       return Response.json({ ok: true, result: await triggerAgent(env) })
