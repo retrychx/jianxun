@@ -29,8 +29,8 @@ export const RSS_SOURCES: RssSource[] = [
   { name: '动点科技',    url: 'https://technode.com/feed/',             lang: 'en' },
   { name: '开源中国', weight: 0.8,    url: 'https://www.oschina.net/news/rss',        lang: 'zh' },
   // --- AI ---
-  { name: 'arXiv AI', weight: 1.15,    url: 'https://rss.arxiv.org/rss/cs.AI',        lang: 'en' },
-  { name: 'arXiv Robot', weight: 1.1, url: 'https://arxiv.org/rss/cs.RO',           lang: 'en' },
+  { name: 'arXiv AI', weight: 0.7, limit: 5, url: 'https://rss.arxiv.org/rss/cs.AI', lang: 'en' },
+  { name: 'arXiv Robot', weight: 0.7, limit: 5, url: 'https://arxiv.org/rss/cs.RO', lang: 'en' },
   { name: 'OpenAI', weight: 1.1,      url: 'https://openai.com/news/rss.xml',        lang: 'en' },
   { name: 'MIT Tech Review', weight: 1.05, url: 'https://www.technologyreview.com/feed/', lang: 'en' },
   // ==================== 英文源 ====================

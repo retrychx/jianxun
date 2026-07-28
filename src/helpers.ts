@@ -35,6 +35,10 @@ export function requireAdmin(request: Request, env: Env): Response | null {
 // Map snake_case DB fields to camelCase for frontend
 export function mapNews(row: any) {
   if (!row) return row
+  let sentiment: any = row.sentiment
+  if (typeof sentiment === 'string') { try { sentiment = JSON.parse(sentiment) } catch { sentiment = null } }
+  let analysisDetail: any = row.analysis_detail
+  if (typeof analysisDetail === 'string') { try { analysisDetail = JSON.parse(analysisDetail) } catch { analysisDetail = null } }
   return {
     id: row.id,
     title: row.title,
@@ -49,6 +53,9 @@ export function mapNews(row: any) {
     titleZh: row.title_zh || null,
     summaryZh: row.summary_zh || null,
     entities: row.entities || null,
+    sentiment,
+    impact: analysisDetail?.impact || null,
+    keyPoints: analysisDetail?.keyPoints || null,
     publishedAt: row.published_at,
     createdAt: row.created_at,
   }
