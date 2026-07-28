@@ -25,6 +25,15 @@
           var colors = { light: '#fafafa', dark: '#111111', retro: '#f5f0eb' }
           meta.setAttribute('content', colors[theme] || '#f5f0eb')
         }
+        // PWA安装提示：在 React 加载前捕获 beforeinstallprompt
+        window.__pwaPrompt = null
+        window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); window.__pwaPrompt = e })
+        // Service Worker 注册
+        if ('serviceWorker' in navigator) {
+          setTimeout(function() {
+            navigator.serviceWorker.register('/sw.js').catch(function(){})
+          }, 1000)
+        }
       })()
     </script>
   </head>

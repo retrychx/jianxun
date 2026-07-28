@@ -193,13 +193,6 @@ export default function App() {
     }
     init()
     // 注册 Service Worker（PWA 离线 + 添加到桌面提示）
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(() => {
-        console.log('[pwa] SW registered')
-      }).catch((e) => {
-        console.warn('[pwa] SW failed:', e)
-      })
-    }
     // 首次交互时请求通知权限
     const handleInteraction = () => {
       document.removeEventListener('click', handleInteraction)
@@ -213,13 +206,21 @@ export default function App() {
     return () => { cancelled = true; document.removeEventListener('click', handleInteraction); document.removeEventListener('touchstart', handleInteraction) }
   }, [loadAll, loadStats, loadDigestDates])
 
-  // PWA 安装提示（Chrome beforeinstallprompt）
+  // PWA 安装提示（Chrome beforeinstallprompt + 降级兜底）
   const [installEvent, setInstallEvent] = useState<any>(null)
+  const [installReady, setInstallReady] = useState(false)
   useEffect(() => {
-    const handler = (e: any) => { e.preventDefault(); setInstallEvent(e) }
+    // 检查 inline script 是否已捕获事件
+    const win = window as any
+    if (win.__pwaPrompt) { setInstallEvent(win.__pwaPrompt); setInstallReady(true) }
+    const handler = (e: any) => { e.preventDefault(); setInstallEvent(e); setInstallReady(true) }
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
+    // 降级：10秒后仍无事件，则判断为不支持（iOS/已安装），显示提示
+    const timeout = setTimeout(() => {
+      if (!installEvent) setInstallReady(true) // 显示"浏览器菜单添加"提示
+    }, 10000)
+    return () => { window.removeEventListener('beforeinstallprompt', handler); clearTimeout(timeout) }
+  }, [installEvent])
   const handleInstall = useCallback(() => {
     if (!installEvent) return
     installEvent.prompt()
@@ -555,14 +556,20 @@ export default function App() {
         <MessageCircleQuestion size={21} />
       </button>
 
-      {/* PWA 安装提示按钮（Chrome beforeinstallprompt） */}
-      {installEvent && (
-        <button className="pwa-install-btn" onClick={handleInstall} title="添加到主屏幕">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          安装到桌面
-        </button>
+      {/* PWA 安装提示按钮 */}
+      {installReady && (
+        installEvent ? (
+          <button className="pwa-install-btn" onClick={handleInstall}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            安装到桌面
+          </button>
+        ) : (
+          <div className="pwa-install-tip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Safari分享菜单 → 添加到主屏幕</span>
+            <button className="pwa-tip-close" onClick={() => setInstallReady(false)}>×</button>
+          </div>
+        )
       )}
       <AskView
         open={askOpen}
