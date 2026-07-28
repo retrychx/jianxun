@@ -192,6 +192,10 @@ export default function App() {
       if (!cancelled) setInitialLoading(false)
     }
     init()
+    // 注册 Service Worker（PWA 离线 + 添加到桌面提示）
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
     // 首次交互时请求通知权限
     const handleInteraction = () => {
       document.removeEventListener('click', handleInteraction)
