@@ -36,21 +36,60 @@ export async function listNews(env: Env, url: URL) {
 }
 
 export async function trending(env: Env) {
-  { const cached = await cacheGet<any>('trending'); if (cached) return cached }
-  const items = await env.DB.prepare(
-    `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-     FROM news n
-     WHERE published_at >= datetime('now', '-3 days')
-     ORDER BY (n.score + 6 * heat) DESC LIMIT 30`
-  ).all()
+  const cached = await cacheGet<any>('trending'); if (cached) return cached
+
+  const rows = await env.DB.prepare(
+    `SELECT id, title, title_norm, url, image, source, lang, description, published_at, category, score, summary, entities, sentiment, created_at
+     FROM news WHERE published_at >= datetime('now', '-3 days')
+     ORDER BY score DESC LIMIT 200`
+  ).all<any>()
+  const articles = (rows.results || []) as any[]
+
+  // 解析实体，构建实体→来源 索引
+  const entitySources = new Map<string, Set<string>>()
+  const articleEntities = new Map<number, Set<string>>()
+
+  for (const a of articles) {
+    const entities = new Set<string>()
+    if (a.entities) {
+      try {
+        const parsed = typeof a.entities === 'string' ? JSON.parse(a.entities) : a.entities
+        if (Array.isArray(parsed)) {
+          for (const e of parsed) {
+            const name = e?.name?.trim().toLowerCase()
+            if (name && name.length >= 2) {
+              entities.add(name)
+              if (!entitySources.has(name)) entitySources.set(name, new Set())
+              entitySources.get(name)!.add(a.source || '')
+            }
+          }
+        }
+      } catch {}
+    }
+    articleEntities.set(a.id, entities)
+  }
+
+  // 热度：文章涉及的所有实体中，被最多来源覆盖的那个实体的来源数
+  const heatMap = new Map<number, number>()
+  for (const a of articles) {
+    const entities = articleEntities.get(a.id) || new Set()
+    let maxHeat = 0
+    for (const entity of entities) {
+      const count = entitySources.get(entity)?.size || 0
+      maxHeat = Math.max(maxHeat, count)
+    }
+    heatMap.set(a.id, Math.max(maxHeat, 1))
+  }
+
+  // 去重 + 排序
   const seen = new Set<string>()
-  const deduped = (items.results as any[]).filter((row: any) => {
-    const key = row.title_norm || row.title
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  const result = { items: deduped.map((row: any) => ({ ...mapNews(row), heat: row.heat })) }
+  const scored = articles
+    .filter(a => { const k = a.title_norm || a.title; if (seen.has(k)) return false; seen.add(k); return true })
+    .map(a => ({ ...mapNews(a), heat: heatMap.get(a.id) || 1, trendingScore: (a.score || 50) + 15 * (heatMap.get(a.id) || 1) }))
+    .sort((a, b) => b.trendingScore - a.trendingScore)
+    .slice(0, 30)
+
+  const result = { items: scored }
   await cacheSet('trending', result, CACHE_TTL.trending)
   return result
 }
