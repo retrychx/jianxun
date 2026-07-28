@@ -284,7 +284,8 @@ export async function sources(env: Env) {
   const weightMap = new Map(RSS_SOURCES.map(s => [s.name, s.weight ?? 1]))
   // 计算每个源的类别分布
   const sourceCats = new Map<string, { category: string; count: number }[]>()
-  for (const r of (cats.results || [])) {
+  const catRows = (cats.results || []) as any[]
+  for (const r of catRows) {
     if (!sourceCats.has(r.source)) sourceCats.set(r.source, [])
     sourceCats.get(r.source)!.push({ category: r.category, count: r.c })
   }

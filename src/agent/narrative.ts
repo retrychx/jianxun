@@ -70,7 +70,7 @@ export async function updateNarratives(env: Env) {
   const newArticles = rows.results || []
   if (!newArticles.length && !narratives.length) { await setLastAgentRun(env); return }
 
-  const { matched, unmatched } = matchArticles(newArticles, narratives, apiKey)
+  const { matched, unmatched } = await matchArticles(newArticles, narratives, apiKey)
 
   for (const narrativeId of Object.keys(matched)) {
     const id = Number(narrativeId)
@@ -141,7 +141,7 @@ async function semanticMatch(article: any, narrative: Narrative, apiKey: string)
   } catch { return false }
 }
 
-function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string): { matched: Record<number, any[]>; unmatched: any[] } {
+async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string): Promise<{ matched: Record<number, any[]>; unmatched: any[] }> {
   const matched: Record<number, any[]> = {}; const unmatched: any[] = []
   const narrTokenCache = new Map<number, Set<string>>()
   for (const n of narratives) narrTokenCache.set(n.id, narrTokens(n))
@@ -159,15 +159,14 @@ function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string
         matched[narrative.id].push(article); found = true; break
       }
     }
-    // Pass 2: 未匹配的用 AI 语义匹配（最多 3 个叙事）
-    if (!found && apiKey) {
-      const candidates = narratives.filter(n => jaccard(artTokens, narrTokenCache.get(n.id) || new Set()) >= MATCH_THRESHOLD * 0.5)
-        .slice(0, 3)
+    // Pass 2: 词法匹配未通过的，用 AI 语义判断（5% 采样控制成本）
+    if (!found && apiKey && Math.random() < 0.05) {
+      const candidates = narratives.filter(n => jaccard(artTokens, narrTokenCache.get(n.id) || new Set()) >= MATCH_THRESHOLD * 0.5).slice(0, 2)
       for (const narrative of candidates) {
-        // 异步检查，不要阻塞太长时间
-        // 实际运行时用 Promise.all + 短路逻辑
-        // 这里简化为同步串行避免超时
-        continue // semantic 匹配暂不启用（太耗时），保留框架
+        if (await semanticMatch(article, narrative, apiKey)) {
+          if (!matched[narrative.id]) matched[narrative.id] = []
+          matched[narrative.id].push(article); found = true; break
+        }
       }
     }
     if (!found) unmatched.push(article)

@@ -7,6 +7,10 @@ export function likeEscape(s: string): string {
   return s.replace(/[%_\\]/g, '\\$&')
 }
 
+export async function tryCatch(fn: () => Promise<any>, fallback: any = { ok: false, error: 'Internal error' }): Promise<Response> {
+  try { return json(await fn()) } catch (e: any) { return json(fallback, 500) }
+}
+
 export function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

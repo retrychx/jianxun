@@ -1,6 +1,5 @@
 // 简讯 AI Agent 调度器：Cron Trigger 每 3 小时触发主站 agent pipeline
-// 主站 runAgent() 内部完成分析、翻译、叙事检测等全流程
-// 所需 secret: ADMIN_TOKEN
+import type { ScheduledEvent, ExecutionContext } from '@cloudflare/workers-types'
 
 interface Env {
   SITE_URL: string

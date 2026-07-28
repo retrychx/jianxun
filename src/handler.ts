@@ -4,7 +4,7 @@
 export type { Env } from './helpers.js'
 
 // Common helpers
-export { json, requireAdmin, statusCheck, validateAnalysisBody, isoZ, likeEscape, mapNews } from './helpers.js'
+export { json, tryCatch, requireAdmin, statusCheck, validateAnalysisBody, isoZ, likeEscape, mapNews } from './helpers.js'
 
 // Cache layer
 export { cacheGet, cacheSet, cacheDelete, signalEvent, pollEvent, CACHE_TTL } from './cache.js'

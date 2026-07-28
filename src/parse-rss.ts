@@ -123,8 +123,8 @@ export async function parseRSS(url: string): Promise<RssFeed> {
     const channel = rss.channel
     feedTitle = textNode(channel?.title)
 
-    const rawItems: any[] = channel?.item || []
-    if (!Array.isArray(rawItems)) rawItems.length = 0
+    const rawItems: any[] = (channel?.item as any) || []
+    if (!Array.isArray(rawItems)) (rawItems as any[]).length = 0
 
     for (const entry of rawItems) {
       if (!entry) continue
@@ -200,8 +200,8 @@ export async function parseRSS(url: string): Promise<RssFeed> {
     // ─── Atom ───
     feedTitle = textNode(feed.title)
 
-    const rawItems: any[] = feed.entry || []
-    if (!Array.isArray(rawItems)) rawItems.length = 0
+    const rawItems: any[] = (feed.entry as any) || []
+    if (!Array.isArray(rawItems)) (rawItems as any[]).length = 0
 
     for (const entry of rawItems) {
       if (!entry) continue

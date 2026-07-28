@@ -175,7 +175,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
     const parsed = JSON.parse(raw); const answer = String(parsed.answer||'').trim(); if (!answer) return null
-    const refs: number[] = [...new Set((Array.isArray(parsed.refs) ? parsed.refs : []).map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length))]
+    const refs: number[] = [...new Set((Array.isArray(parsed.refs) ? parsed.refs as any[] : []).map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length))]
     return { answer: answer.slice(0,500), refs }
   } catch { return null }
 }

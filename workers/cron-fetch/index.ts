@@ -1,5 +1,6 @@
 // 简讯内容抓取调度器：Cron Trigger 每 2 小时调一次生产的 /api/news/fetch
-// ADMIN_TOKEN 通过 `wrangler secret put ADMIN_TOKEN --name jianxun-cron` 配置
+import type { ScheduledEvent, ExecutionContext } from '@cloudflare/workers-types'
+
 interface Env {
   SITE_URL: string
   ADMIN_TOKEN: string
