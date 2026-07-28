@@ -58,7 +58,8 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   if (await shouldSkipDueToConcurrency(env)) return
 
   initBudget()
-  const apiOk = await pingDeepSeek(env.DEEPSEEK_API_KEY)
+  // pingDeepSeek 仅用于日志，不影响任何阶段运行（各阶段自己有 API 重试）
+  const apiOk = await pingDeepSeek(env.DEEPSEEK_API_KEY).catch(() => false)
 
   // ═══ Phase 0: 感知 + 决策 ═══
   const memory = await loadMemory(env)
@@ -68,9 +69,10 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const signals = await ingestSignals(env)
 
   // 仅在系统状态满足条件时才运行的阶段
+  // 注意：不根据 pingDeepSeek 跳过 analyzeNewArticles——它自己有重试逻辑
   const filteredPhases = ALL_PHASES.map(p => ({
     ...p,
-    shouldSkip: p.shouldSkip ?? ((p.name === 'analyzeNewArticles' || p.name === 'updateNarratives' || p.name === 'detectBreakingNews' || p.name === 'crossRefAnalysis') ? !apiOk : false),
+    shouldSkip: p.shouldSkip ?? false,
   }))
 
   // 决策引擎选择本周期跑哪些阶段
