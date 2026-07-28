@@ -73,19 +73,50 @@ export async function updateNarratives(env: Env) {
   await setLastAgentRun(env)
 }
 
+function narrTokens(narrative: Narrative): Set<string> {
+  const sources: string[] = [narrative.label || narrative.keyword]
+  // 加入摘要文字作为匹配信号
+  if (narrative.summary) sources.push(narrative.summary)
+  // 加入最新进展文字
+  try {
+    const devs = typeof narrative.developments === 'string' ? JSON.parse(narrative.developments) : narrative.developments
+    if (Array.isArray(devs) && devs.length > 0) {
+      sources.push(devs.slice(-2).map((d: any) => d.text || '').join(' '))
+    }
+  } catch {}
+  const tokens = new Set<string>()
+  for (const src of sources) {
+    if (!src) continue
+    src.split(/[·\s,，、]+/).filter(Boolean).forEach(w => {
+      tokenize(w).forEach(t => tokens.add(t))
+    })
+  }
+  return tokens
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0
+  let intersection = 0
+  for (const t of a) if (b.has(t)) intersection++
+  const union = a.size + b.size - intersection
+  return union > 0 ? intersection / union : 0
+}
+
 function matchArticles(articles: any[], narratives: Narrative[]): { matched: Record<number, any[]>; unmatched: any[] } {
   const matched: Record<number, any[]> = {}; const unmatched: any[] = []
+  const narrTokenCache = new Map<number, Set<string>>()
+  for (const n of narratives) narrTokenCache.set(n.id, narrTokens(n))
+
   for (const article of articles) {
     const artTokens = new Set(tokenize(article.title || ''))
     if (!artTokens.size) { unmatched.push(article); continue }
     let found = false
     for (const narrative of narratives) {
-      const narrTokens = new Set((narrative.label || narrative.keyword || '').split(/[·\s]+/).filter(Boolean).flatMap(w => [...tokenize(w)]))
-      if (!narrTokens.size) continue
-      let intersection = 0
-      for (const t of artTokens) if (narrTokens.has(t)) intersection++
-      if (intersection / Math.max(artTokens.size + narrTokens.size - intersection, 1) >= MATCH_THRESHOLD) {
-        if (!matched[narrative.id]) matched[narrative.id] = []; matched[narrative.id].push(article); found = true; break
+      const tokens = narrTokenCache.get(narrative.id)
+      if (!tokens || !tokens.size) continue
+      if (jaccard(artTokens, tokens) >= MATCH_THRESHOLD) {
+        if (!matched[narrative.id]) matched[narrative.id] = []
+        matched[narrative.id].push(article); found = true; break
       }
     }
     if (!found) unmatched.push(article)
