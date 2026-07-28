@@ -31,6 +31,7 @@ import { generateTodayDigest } from '../api/digest.js'
 import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
 import { checkSystemState, planPhases, allocateBudget } from './decider.js'
+import { evaluateQuality, saveKPI, shouldExplore, getExperimentParams, saveExperiment, estimateAPICost, generateReport, saveReport } from './eval.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
 const ALL_PHASES: PhaseDef[] = [
@@ -85,7 +86,28 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const results = await runPhases(phases, env)
   const totalMs = Date.now() - start
 
-  // ═══ Save memory for next run — 持久化学习成果 ═══
+  // ═══ Self-Evaluation: 评估本轮分析质量 ═══
+  const kpi = await evaluateQuality(env)
+  kpi.totalMs = totalMs
+  kpi.estimatedCost = estimateAPICost(kpi.articlesAnalyzed || 0 + 3) // +3 for narrative/breaking/curation calls
+  // 从 phase results 中提取额外 KPI
+  kpi.qualityFlags = (results as any)?.flagLowQualityAnalyses?.result || 0
+  kpi.narrativesMerged = (results as any)?.mergeOverlappingNarratives?.result || 0
+  kpi.briefingCount = (results as any)?.curateBriefing?.result?.briefing || 0
+
+  await saveKPI(env, kpi)
+
+  // ═══ Exploration: A/B 测试新策略 ═══
+  if (shouldExplore(memory.totalAnalyses)) {
+    const expParams = getExperimentParams(memory)
+    await saveExperiment(env, memory, expParams, kpi)
+  }
+
+  // ═══ Agent Report: 生成人类可读的报告 ═══
+  const report = generateReport(kpi, results)
+  await saveReport(env, report)
+
+  // ═══ Save memory for next run ═══
   memory.totalAnalyses++
   for (const [source, sig] of signals.sourceCTR) {
     if (!memory.sourceMemory[source]) memory.sourceMemory[source] = { ctr: 0, qualityScore: 1.0, totalAnalyses: 0, failedAnalyses: 0 }

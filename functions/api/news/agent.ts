@@ -5,16 +5,22 @@ import { runAgent } from '../../../src/agent/index.js'
 export async function onRequestGet(context: any) {
   const { env } = context
 
-  const [lastRun, lastLog] = await Promise.all([
+  const [lastRun, lastLog, report, kpis] = await Promise.all([
     env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>(),
     env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_log'").first<any>(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_last_report'").first<any>(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_kpis'").first<any>(),
   ])
 
   const log = lastLog?.value ? JSON.parse(lastLog.value) : null
+  const agentReport = report?.value ? JSON.parse(report.value) : null
+  const kpiHistory = kpis?.value ? JSON.parse(kpis.value) : null
 
   return json({
     lastRun: lastRun?.value || null,
     lastRunAgo: lastRun?.value ? Math.round((Date.now() - new Date(lastRun.value).getTime()) / 1000) + 's ago' : null,
+    report: agentReport,
+    kpiHistory: kpiHistory?.slice(-7) || null,
     totalPhases: log?.results ? Object.keys(log.results).length : 0,
     totalMs: log?.totalMs || null,
     skipAi: log?.skipAi || false,
