@@ -1027,7 +1027,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ask-backdrop { position: fixed; inset: 0; z-index: 955; background: rgba(0,0,0,.18); animation: fadeIn .2s ease }
 .ask-widget {
   position: fixed; right: 20px; bottom: 82px; z-index: 960;
-  width: 400px; max-width: calc(100vw - 40px); max-height: min(620px, 78vh);
+  width: 400px; max-width: calc(100vw - 40px); max-height: min(680px, 85vh);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; overflow: hidden;
@@ -1123,7 +1123,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 @media (max-width: 768px) {
   .ask-fab { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 14px) }
   .ask-widget {
-    right: 0; left: 0; bottom: 0; width: auto; max-width: none; max-height: 82vh;
+    right: 0; left: 0; bottom: 0; width: auto; max-width: none; max-height: 92vh;
     border-radius: 16px 16px 0 0; border-bottom: none;
     transform-origin: bottom center;
     animation: sheetUp .35s cubic-bezier(.16,1,.3,1);
