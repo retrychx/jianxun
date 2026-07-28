@@ -148,9 +148,28 @@ export async function topics(env: Env) {
     // 标签：AI 生成优先；失败时取第一篇标题前半段
     const fallbackLabelText = cluster[0]?.title?.slice(0, 30) || fallbackLabel(useWords)
 
+    // 从话题文章中提取实体标签
+    const entityCount = new Map<string, number>()
+    for (const item of cluster) {
+      const raw = item.entities
+      if (raw) {
+        try {
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+          if (Array.isArray(parsed)) {
+            for (const e of parsed) {
+              const name = e?.name?.trim()
+              if (name && name.length >= 2) entityCount.set(name, (entityCount.get(name) || 0) + 1)
+            }
+          }
+        } catch {}
+      }
+    }
+    const topEntities = [...entityCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0])
+
     topicList.push({
       keyword: useWords.slice(0, 3).join(' · '),
       label: fallbackLabelText,
+      entities: topEntities,
       count: cluster.length,
       sources: [...new Set(cluster.map(i => i.source))],
       sourcePerspectives,

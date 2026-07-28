@@ -139,6 +139,12 @@ export function TopicsView({ topics, lang, onNewsClick }: Props) {
                       {topic.sources.length > 3 && ` · +${topic.sources.length - 3}`}
                       {topic.dateRange && <span> · {topic.dateRange}</span>}
                     </div>
+                    {topic.entities && topic.entities.length > 0 && (
+                      <div className="ts-entities">
+                        {topic.entities.slice(0, 4).map(e => <span key={e} className="ts-entity-tag">{e}</span>)}
+                        {topic.entities.length > 4 && <span className="ts-entity-more">+{topic.entities.length - 4}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="ts-trigger-right">

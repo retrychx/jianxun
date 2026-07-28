@@ -85,7 +85,10 @@ export async function trending(env: Env) {
   const seen = new Set<string>()
   const scored = articles
     .filter(a => { const k = a.title_norm || a.title; if (seen.has(k)) return false; seen.add(k); return true })
-    .map(a => ({ ...mapNews(a), heat: heatMap.get(a.id) || 1, trendingScore: (a.score || 50) + 15 * (heatMap.get(a.id) || 1) }))
+    .map(a => {
+      const heat = heatMap.get(a.id) || 1
+      return { ...mapNews(a), heat, trendingScore: (a.score || 50) + 25 * heat }
+    })
     .sort((a, b) => b.trendingScore - a.trendingScore)
     .slice(0, 30)
 

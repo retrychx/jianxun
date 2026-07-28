@@ -110,6 +110,7 @@ export interface TopicCluster {
   dateRange?: string
   narrative?: string
   items: NewsItem[]
+  entities?: string[]
 }
 
 export function getTopics(): Promise<{ topics: TopicCluster[] }> {
