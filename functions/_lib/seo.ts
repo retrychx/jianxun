@@ -26,7 +26,7 @@ ${image ? `<meta property="og:image" content="${escHtml(image)}"/>` : ''}
 <meta name="twitter:title" content="${escHtml(title)}"/>
 <meta name="twitter:description" content="${escHtml(description)}"/>
 ${image ? `<meta name="twitter:image" content="${escHtml(image)}"/>` : ''}
-<script>location.href='${hashUrl}'</script>
+<script>location.href='${escHtml(hashUrl)}'</script>
 </head>
 <body>
 <h1>${escHtml(title)}</h1>
@@ -40,8 +40,4 @@ ${image ? `<meta name="twitter:image" content="${escHtml(image)}"/>` : ''}
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-}
-
-export function notFound(): Response {
-  return new Response('Not Found', { status: 404 })
 }

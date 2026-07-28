@@ -207,11 +207,6 @@ export default function App() {
 
   // 浏览器通知（用于突发/叙事更新）
   const [notifGranted, setNotifGranted] = useState(false)
-  const requestNotif = useCallback(() => {
-    if (!('Notification' in window)) return
-    if (Notification.permission === 'granted') setNotifGranted(true)
-    else if (Notification.permission === 'default') Notification.requestPermission().then(r => setNotifGranted(r === 'granted'))
-  }, [])
   const notifyBrowser = useCallback((title: string, body: string, url?: string) => {
     if (!notifGranted) return
     try {

@@ -1,3 +1,0 @@
-# SEO: clean URLs served by Pages Functions
-/news/*  /seo/news/:splat  200
-/narrative/*  /seo/narrative/:splat  200
