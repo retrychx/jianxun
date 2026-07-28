@@ -337,7 +337,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .panel-subtitle { font-size: 10px; font-weight: 600; color: var(--text-tertiary); margin-left: auto; text-transform: uppercase; letter-spacing: .04em }
 .trending-list { display: flex; flex-direction: column }
 .trending-item {
-  display: flex; align-items: flex-start; gap: 14px; padding: 14px 0;
+  display: flex; align-items: flex-start; gap: 14px; padding: 14px 14px;
   transition: background .12s; cursor: pointer;
 }
 .trending-item:hover { background: var(--card-hover) }
@@ -888,7 +888,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   /* Trending standalone page on mobile (full-width, no card styling) */
   .trending-view .trending-panel { border: none; border-radius: 0; position: static; background: transparent }
   .trending-view .panel-header { padding: 8px 0; margin-bottom: 0 }
-  .trending-view .trending-item { padding: 12px 0 }
+  .trending-view .trending-item { padding: 12px 14px }
   .trending-view .trending-ext { padding: 2px 6px }
 
   /* Sheet: full screen on mobile */
