@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ArrowLeft, GitBranch, Bell, BellOff, BookOpen } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { ArrowLeft, Bell, BellOff, BookOpen, Radio, Globe, Newspaper, Clock, ChevronRight, MapPin, Users } from 'lucide-react'
 import { decodeEntities } from '../utils'
 import { getNarrative, type NarrativeDetail } from '../api'
 import { NewsCard } from './NewsCard'
@@ -16,15 +16,27 @@ interface Props {
 
 type Lang = 'zh' | 'en'
 
+function narrTypeInfo(keyword: string): { label: string; color: string } | null {
+  if (keyword.startsWith('__breaking__')) return { label: '突发', color: '#dc2626' }
+  if (keyword.startsWith('__research__')) return { label: '研究', color: '#7c3aed' }
+  if (keyword.startsWith('__debate__')) return { label: '争议', color: '#d97706' }
+  if (keyword.startsWith('__cross__')) return { label: '多源', color: '#0891b2' }
+  return null
+}
+
+function cleanNarrativeTitle(label: string): string {
+  return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
+}
+
 export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFollowing, toggleFollow, onResearch }: Props) {
   const [narrative, setNarrative] = useState<NarrativeDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [expandedPhase, setExpandedPhase] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(false)
+    setLoading(true); setError(false)
     getNarrative(keyword).then(n => {
       if (!cancelled) { setNarrative(n); setLoading(false) }
     }).catch(() => {
@@ -33,17 +45,22 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
     return () => { cancelled = true }
   }, [keyword])
 
+  // Group developments by phase (day)
+  const phases = useMemo(() => {
+    if (!narrative) return []
+    const groups = new Map<string, typeof narrative.developments>()
+    for (const dev of narrative.developments) {
+      const day = dev.date.slice(0, 10) // "2026-07-28"
+      if (!groups.has(day)) groups.set(day, [])
+      groups.get(day)!.push(dev)
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [narrative])
+
   const followId = `narrative:${keyword}`
   const followed = isFollowing?.(followId) ?? false
-
-  const narrType = keyword.startsWith('__breaking__') ? '突发' :
-    keyword.startsWith('__research__') ? '研究' :
-    keyword.startsWith('__debate__') ? '争议' :
-    keyword.startsWith('__cross__') ? '多源' : null
-
-  function cleanNarrativeTitle(label: string): string {
-    return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
-  }
+  const typeInfo = narrTypeInfo(keyword)
+  const isResearch = keyword.startsWith('__research__')
 
   if (loading) {
     return (
@@ -67,107 +84,162 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
       <div className="narr-detail">
         <div className="narr-detail-top">
           <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
-          <h2 className="narr-detail-title" style={{ flex: 1 }}>叙事未找到</h2>
+          <h2 className="nd-hero-title" style={{ flex: 1 }}>叙事未找到</h2>
         </div>
         <div className="empty" style={{ marginTop: 40 }}>
-          <GitBranch size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+          <Radio size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
           <p>叙事未找到</p>
         </div>
       </div>
     )
   }
 
+  const sourceCount = Object.keys(narrative.sourceStats).length
+  const sources = Object.entries(narrative.sourceStats).sort(([, a], [, b]) => b - a)
+  const maxSourceCount = sources.length > 0 ? sources[0][1] : 0
+  const today = new Date().toISOString().slice(0, 10)
+  const daysRunning = Math.max(1, Math.round((new Date(today).getTime() - new Date(narrative.firstSeen).getTime()) / 86400000))
+
   return (
     <div className="narr-detail">
-      <div className="narr-detail-top">
-        <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
-        <div className="narr-detail-info">
-          <div className="narr-detail-meta">
-            {narrType && <span className="narr-type-badge">{narrType}</span>}
-            <span className={`narr-status narr-${narrative.status}`}>
-              {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
-            </span>
+      {/* Hero */}
+      <div className="nd-hero">
+        <div className="narr-detail-top">
+          <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
+          <div className="narr-detail-info">
+            <div className="narr-detail-meta">
+              {typeInfo && (
+                <span className="nd-type-badge" style={{ color: typeInfo.color, background: `${typeInfo.color}1a` }}>
+                  {typeInfo.label}
+                </span>
+              )}
+              <span className={`nd-status-badge ${narrative.status}`}>
+                {narrative.status === 'active' ? '追踪中' : '已停滞'}
+              </span>
+            </div>
+            <h1 className="nd-hero-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h1>
           </div>
-          <h2 className="narr-detail-title">{cleanNarrativeTitle(narrative.label || narrative.keyword)}</h2>
+          <div className="narr-detail-actions">
+            {toggleFollow && (
+              <button className="narr-action-btn" onClick={() => toggleFollow(keyword, 'narrative')} title={followed ? '取消关注' : '关注此叙事'}>
+                {followed ? <BellOff size={16} /> : <Bell size={16} />}
+              </button>
+            )}
+            {onResearch && (
+              <button className="narr-action-btn" onClick={() => onResearch(keyword, narrative?.label || keyword)} title="深度研究">
+                <BookOpen size={16} />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="narr-detail-actions">
-          {toggleFollow && (
-            <button className="narr-action-btn" onClick={() => toggleFollow(keyword, 'narrative')} title={followed ? '取消关注' : '关注此叙事'}>
-              {followed ? <BellOff size={16} /> : <Bell size={16} />}
-            </button>
-          )}
-          {onResearch && (
-            <button className="narr-action-btn" onClick={() => onResearch(keyword, narrative?.label || keyword)} title="深度研究">
-              <BookOpen size={16} />
-            </button>
-          )}
+
+        {/* Coverage bar */}
+        <div className="nd-cover-bar">
+          <div className="nd-cover-stat">
+            <Globe size={14} />
+            <span className="nd-cover-num">{sourceCount}</span>
+            <span className="nd-cover-label">家媒体</span>
+          </div>
+          <div className="nd-cover-divider" />
+          <div className="nd-cover-stat">
+            <Newspaper size={14} />
+            <span className="nd-cover-num">{narrative.articleCount}</span>
+            <span className="nd-cover-label">篇报道</span>
+          </div>
+          <div className="nd-cover-divider" />
+          <div className="nd-cover-stat">
+            <MapPin size={14} />
+            <span className="nd-cover-num">{daysRunning}</span>
+            <span className="nd-cover-label">天</span>
+          </div>
+          <div className="nd-cover-divider" />
+          <div className="nd-cover-stat">
+            <Clock size={14} />
+            <span className="nd-cover-num">{narrative.developmentCount}</span>
+            <span className="nd-cover-label">条进展</span>
+          </div>
         </div>
+
+        {narrative.summary && (
+          <p className="nd-hero-summary">{decodeEntities(narrative.summary)}</p>
+        )}
       </div>
 
-      {narrative.summary && (
-        <div className="narr-detail-summary">
-          <p>{decodeEntities(narrative.summary)}</p>
-        </div>
+      {/* Timeline: developments grouped by day */}
+      {phases.length > 0 && (
+        <section className="nd-timeline-section">
+          <h3 className="nd-section-title">演变时间线</h3>
+          <div className="nd-timeline">
+            {phases.map(([day, devs], phaseIdx) => {
+              const isExpanded = expandedPhase === day || phases.length <= 3 || phaseIdx >= phases.length - 2
+              return (
+                <div key={day} className={`nd-phase ${isExpanded ? '' : 'collapsed'}`}>
+                  <button
+                    className="nd-phase-header"
+                    onClick={() => setExpandedPhase(isExpanded ? null : day)}
+                  >
+                    <span className="nd-phase-date">{day}</span>
+                    <span className="nd-phase-count">{devs.length} 条进展</span>
+                    <ChevronRight size={14} className={`nd-phase-chevron ${isExpanded ? 'open' : ''}`} />
+                  </button>
+                  {isExpanded && (
+                    <div className="nd-phase-body">
+                      {devs.map((dev, i) => (
+                        <div key={i} className="nd-dev-item">
+                          <div className="nd-dev-marker">
+                            <div className={`nd-dev-dot ${phaseIdx === phases.length - 1 && i === devs.length - 1 ? 'latest' : ''}`} />
+                            {i < devs.length - 1 && <div className="nd-dev-line" />}
+                          </div>
+                          <div className="nd-dev-body">
+                            <p className="nd-dev-text">{decodeEntities(dev.text)}</p>
+                            <div className="nd-dev-footer">
+                              <span className="nd-dev-articles">{dev.articleCount} 篇报道</span>
+                              {dev.sources?.length > 0 && (
+                                <span className="nd-dev-sources">
+                                  <Users size={11} />
+                                  {dev.sources.slice(0, 4).join(' · ')}
+                                  {dev.sources.length > 4 && ` +${dev.sources.length - 4}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
       )}
 
-      <div className="narr-detail-stats">
-        <div className="nd-stat"><span className="nd-stat-num">{narrative.articleCount}</span> 篇文章</div>
-        <div className="nd-stat"><span className="nd-stat-num">{narrative.developmentCount}</span> 条进展</div>
-        <div className="nd-stat"><span className="nd-stat-num">{new Date(narrative.firstSeen).toLocaleDateString('zh-CN')}</span> 首次出现</div>
-      </div>
-
-      {narrative.developments.length > 0 && (
-        <div className="nd-dev-section">
-          <h3 className="nd-dev-title">关键进展</h3>
-          <div className="nd-dev-timeline">
-            {narrative.developments.map((dev, i) => (
-              <div key={i} className="nd-dev-item">
-                <div className={`nd-dev-dot ${i === narrative.developments.length - 1 ? 'latest' : ''}`} />
-                {i < narrative.developments.length - 1 && <div className="nd-dev-line" />}
-                <div className="nd-dev-body">
-                  <div className="nd-dev-date">{dev.date}</div>
-                  <div className="nd-dev-text">{decodeEntities(dev.text)}</div>
-                  <div className="nd-dev-meta">
-                    <span>{dev.articleCount} 篇</span>
-                    {dev.sources?.slice(0, 3).join(' · ')}
-                  </div>
-                </div>
+      {/* Source distribution */}
+      {sources.length > 0 && (
+        <section className="nd-sources-section">
+          <h3 className="nd-section-title">信源覆盖</h3>
+          <div className="nd-source-grid">
+            {sources.slice(0, 12).map(([src, count]) => (
+              <div key={src} className="nd-source-chip">
+                <span className="nd-source-chip-name">{src}</span>
+                <span className="nd-source-chip-bar">
+                  <span className="nd-source-chip-fill" style={{ width: `${(count / maxSourceCount) * 100}%` }} />
+                </span>
+                <span className="nd-source-chip-count">{count}</span>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {Object.keys(narrative.sourceStats).length > 0 && (
-        <div className="nd-sources-section">
-          <h3 className="nd-dev-title">来源分布</h3>
-          <div className="nd-sources-list">
-            {Object.entries(narrative.sourceStats)
-              .sort(([, a], [, b]) => b - a)
-              .map(([src, count]) => {
-                const max = Math.max(...Object.values(narrative.sourceStats))
-                const pct = (count / max) * 100
-                return (
-                  <div key={src} className="nd-source-row">
-                    <span className="nd-source-name">{src}</span>
-                    <div className="nd-source-bar-wrap">
-                      <div className="nd-source-bar" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="nd-source-count">{count}</span>
-                  </div>
-                )
-              })}
-          </div>
-        </div>
-      )}
-
+      {/* Related articles */}
       {narrative.articles.length > 0 && (
-        <div className="nd-articles-section">
-          <h3 className="nd-dev-title">相关报道</h3>
-          {narrative.articles.map(item => (
+        <section className="nd-articles-section">
+          <h3 className="nd-section-title">相关报道</h3>
+          {narrative.articles.slice(0, 20).map(item => (
             <NewsCard key={item.id} item={item} lang={lang} onClick={onNewsClick} />
           ))}
-        </div>
+        </section>
       )}
     </div>
   )
