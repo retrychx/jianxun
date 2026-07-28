@@ -4,6 +4,7 @@
  */
 import type { Env } from '../helpers.js'
 import type { AgentMemory, SignalSummary } from './types.js'
+import { CONFIG } from './config.js'
 
 const MEMORY_KEY = 'agent_memory'
 
