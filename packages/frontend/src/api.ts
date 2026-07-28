@@ -19,6 +19,10 @@ export interface NewsItem {
   summaryZh?: string | null
   /** 原始 entities JSON 字符串（增量字段；关注加权做包含匹配用，不解析） */
   entities?: string | null
+  /** AI 分析关键要点（分析后才会有） */
+  keyPoints?: string[]
+  /** AI 分析影响级别（分析后才会有） */
+  impact?: 'short' | 'medium' | 'high'
 }
 
 export interface EntityItem {
