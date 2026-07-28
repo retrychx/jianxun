@@ -192,8 +192,33 @@ export default function App() {
       if (!cancelled) setInitialLoading(false)
     }
     init()
-    return () => { cancelled = true }
+    // 首次交互时请求通知权限
+    const handleInteraction = () => {
+      document.removeEventListener('click', handleInteraction)
+      document.removeEventListener('touchstart', handleInteraction)
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(r => setNotifGranted(r === 'granted'))
+      }
+    }
+    document.addEventListener('click', handleInteraction)
+    document.addEventListener('touchstart', handleInteraction)
+    return () => { cancelled = true; document.removeEventListener('click', handleInteraction); document.removeEventListener('touchstart', handleInteraction) }
   }, [loadAll, loadStats, loadDigestDates])
+
+  // 浏览器通知（用于突发/叙事更新）
+  const [notifGranted, setNotifGranted] = useState(false)
+  const requestNotif = useCallback(() => {
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'granted') setNotifGranted(true)
+    else if (Notification.permission === 'default') Notification.requestPermission().then(r => setNotifGranted(r === 'granted'))
+  }, [])
+  const notifyBrowser = useCallback((title: string, body: string, url?: string) => {
+    if (!notifGranted) return
+    try {
+      const n = new Notification(title, { body, icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="90" font-size="90">📰</text></svg>' })
+      if (url) n.onclick = () => { window.focus(); window.location.hash = url }
+    } catch {}
+  }, [notifGranted])
 
   // SSE: 实时推送（新文章抓取完成时自动刷新）
   const [sseEpoch, setSseEpoch] = useState(0)
@@ -218,6 +243,7 @@ export default function App() {
         const title = data.title || ''
         const sources = data.sources || []
         showToast(`🔴 突发: ${title}（${sources.join('/')}）`)
+        notifyBrowser('🔴 突发新闻', `${title} - ${sources.join('/')}`, `#/news/${data.articleId || ''}`)
       } catch {}
       loadAll().catch(() => {})
     })
@@ -228,6 +254,7 @@ export default function App() {
         const label = data.label || ''
         const text = data.text || ''
         showToast(`📖 ${label}: ${text}`)
+        notifyBrowser('📖 叙事更新', `${label}: ${text.slice(0, 80)}`, `#/narrative/${encodeURIComponent(data.keyword || '')}`)
       } catch {}
       loadAll().catch(() => {})
     })
@@ -236,6 +263,7 @@ export default function App() {
       try {
         const data = JSON.parse(e.data)
         showToast(`⚡ 争议: ${data.topic || ''}`)
+        notifyBrowser('⚡ 争议话题', data.topic || '')
       } catch {}
       loadAll().catch(() => {})
     })
@@ -424,7 +452,7 @@ export default function App() {
           ) : view === 'narratives' ? (
             <NarrativesView onNarrativeClick={(kw) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'narrative' && baseRoute.narrative ? (
-            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
+            <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} />
           ) : view === 'trending' ? (
             <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} /></div>
           ) : view === 'sources' ? (

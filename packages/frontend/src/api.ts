@@ -278,9 +278,23 @@ export interface NarrativeSummary {
   sourceStats: Record<string, number>
 }
 
+export interface NarrativeEntity {
+  name: string
+  type: string
+}
+
+export interface RelatedNarrative {
+  keyword: string
+  label: string
+  overlap: number
+  articleCount: number
+}
+
 export interface NarrativeDetail extends NarrativeSummary {
   developments: { date: string; text: string; articleCount: number; sources: string[] }[]
   articles: NewsItem[]
+  entities: NarrativeEntity[]
+  related: RelatedNarrative[]
 }
 
 export interface NarrativesTimeline {

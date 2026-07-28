@@ -1518,6 +1518,87 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .nd-articles-section { margin-bottom: 24px }
 .nd-articles-section .news-card { margin-bottom: 8px; border-width: 1px }
 
+/* Entity strip in hero */
+.nd-entity-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px }
+.nd-entity-chip {
+  font-size: 11px; font-weight: 500; padding: 3px 8px;
+  border-radius: 4px; line-height: 1.3;
+}
+.nd-entity-chip.person { background: #fef2f2; color: #b91c1c }
+.nd-entity-chip.company { background: #ecfdf5; color: #047857 }
+.nd-entity-chip.product { background: #fffbeb; color: #b45309 }
+.nd-entity-chip.technology { background: #f5f5f4; color: #525252 }
+.nd-entity-chip.concept { background: #f0f9ff; color: #0369a1 }
+.nd-entity-more {
+  font-size: 11px; color: var(--text-tertiary); background: none;
+  border: 1px dashed var(--border-light); border-radius: 4px;
+  padding: 3px 8px; cursor: pointer; font-family: inherit;
+}
+
+/* Entity evolution timeline */
+.nd-et-section { margin-bottom: 28px }
+.nd-section-sub { font-size: 12px; font-weight: 400; color: var(--text-tertiary); margin-left: 6px }
+.nd-et-track { display: flex; gap: 0; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch }
+.nd-et-track::-webkit-scrollbar { display: none }
+.nd-et-phase { display: flex; flex-direction: column; gap: 6px; min-width: 120px; flex-shrink: 0 }
+.nd-et-phase-top { display: flex; align-items: center; gap: 6px }
+.nd-et-day { font-size: 11px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap }
+.nd-et-connector { flex: 1; height: 1px; background: var(--border-light) }
+.nd-et-entities { display: flex; flex-direction: column; gap: 3px }
+.nd-et-entity {
+  font-size: 11px; padding: 3px 6px; border-radius: 4px;
+  display: flex; justify-content: space-between; gap: 4px;
+}
+.nd-et-entity.person { background: #fef2f2 }
+.nd-et-entity.company { background: #ecfdf5 }
+.nd-et-entity.product { background: #fffbeb }
+.nd-et-entity.technology { background: #f5f5f4 }
+.nd-et-entity.concept { background: #f0f9ff }
+.nd-et-entity-name { font-weight: 500; color: var(--text) }
+.nd-et-entity-type { font-size: 9px; color: var(--text-tertiary); text-transform: uppercase }
+
+/* Source angle comparison */
+.nd-sa-section { margin-bottom: 28px }
+.nd-sa-grid { display: flex; flex-direction: column; gap: 8px }
+.nd-sa-card {
+  padding: 10px 12px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); background: var(--surface);
+}
+.nd-sa-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px }
+.nd-sa-source { font-size: 12px; font-weight: 600; color: var(--text) }
+.nd-sa-angle {
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 3px; background: var(--accent-light); color: var(--accent);
+}
+.nd-sa-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 4px; gap: 1px }
+.nd-sa-bar-seg { border-radius: 0; transition: width .5s var(--ease) }
+.nd-sa-bar-seg.type-person { background: #b91c1c }
+.nd-sa-bar-seg.type-company { background: #047857 }
+.nd-sa-bar-seg.type-product { background: #b45309 }
+.nd-sa-bar-seg.type-technology { background: #737373 }
+.nd-sa-bar-seg.type-concept { background: #0369a1 }
+.nd-sa-types { display: flex; gap: 6px; flex-wrap: wrap }
+.nd-sa-type { font-size: 10px; color: var(--text-tertiary) }
+
+/* Related narratives */
+.nd-related-section { margin-bottom: 28px }
+.nd-related-list { display: flex; flex-direction: column; gap: 6px }
+.nd-related-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); background: var(--surface);
+  text-align: left; font-family: inherit; width: 100%; cursor: default;
+  transition: all .15s;
+}
+.nd-related-card.clickable { cursor: pointer }
+.nd-related-card.clickable:hover { border-color: var(--accent-border); background: var(--accent-light) }
+.nd-related-card:disabled { opacity: 1 }
+.nd-related-top { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0 }
+.nd-related-icon { flex-shrink: 0; color: var(--text-tertiary) }
+.nd-related-label { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3 }
+.nd-related-meta { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; display: flex; align-items: center; gap: 2px }
+.nd-related-arrow { flex-shrink: 0; color: var(--text-tertiary); opacity: .4 }
+
 .narr-detail-skeleton { margin-top: 20px }
 
 @media (max-width: 768px) {
