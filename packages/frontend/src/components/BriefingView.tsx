@@ -71,6 +71,11 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
                 </div>
                 <h3 className="bf-card-title">{displayTitle(item, lang)}</h3>
                 <p className="briefing-summary">{summary ?? item.reason}</p>
+                {item.keyPoints && item.keyPoints.length > 0 && (
+                  <div className="card-keypoints" style={{ marginTop: 2 }}>
+                    {item.keyPoints.slice(0, 1).map((kp, i) => <span key={i} className="card-kp">· {kp}</span>)}
+                  </div>
+                )}
                 {summary && item.reason && item.reason !== summary && (
                   <div className="briefing-reason"><span className="briefing-reason-dot" />{item.reason}</div>
                 )}

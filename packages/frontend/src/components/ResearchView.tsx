@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Search, BookOpen, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
-import { researchNews, type ResearchReport, type ResearchRef } from '../api'
-import { displayTitle, type Lang } from '../utils'
+import { Search, BookOpen, ExternalLink, ChevronDown, ChevronRight, Hash, GitBranch, Newspaper } from 'lucide-react'
+import { researchNews, getNarratives, type ResearchReport, type ResearchRef, type NarrativeSummary } from '../api'
+import { displayTitle, decodeEntities, type Lang } from '../utils'
 
 interface Props {
   query: string
@@ -17,15 +17,30 @@ export function ResearchView({ query, lang, onNewsClick, onBack }: Props) {
   const [error, setError] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]))
   const [showRefs, setShowRefs] = useState(false)
+  const [relatedNarratives, setRelatedNarratives] = useState<NarrativeSummary[]>([])
+  const followUps = [
+    '核心风险是什么？',
+    '未来 6 个月趋势预测',
+    '主要玩家优劣势对比',
+  ]
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(false)
-    researchNews(query).then(res => {
+    Promise.all([
+      researchNews(query),
+      getNarratives().catch(() => ({ narratives: [] })),
+    ]).then(([res, narrData]) => {
       if (cancelled) return
       setReport(res.report)
       setRefs(res.refs || [])
+      // 查找与研究主题相关的叙事
+      const q = query.toLowerCase()
+      const related = (narrData.narratives || []).filter(n =>
+        (n.label || n.keyword || '').toLowerCase().includes(q)
+      ).slice(0, 4)
+      setRelatedNarratives(related)
       setLoading(false)
     }).catch(() => {
       if (!cancelled) { setError(true); setLoading(false) }
@@ -127,6 +142,33 @@ export function ResearchView({ query, lang, onNewsClick, onBack }: Props) {
           <p>{report.outlook}</p>
         </div>
       )}
+
+      {/* 关联故事 */}
+      {relatedNarratives.length > 0 && (
+        <div className="nd-related-section" style={{ marginTop: 20 }}>
+          <h3 className="nd-section-title">关联故事</h3>
+          <div className="nd-related-list">
+            {relatedNarratives.map(n => (
+              <a key={n.keyword} href={`#/narrative/${encodeURIComponent(n.keyword)}`} className="nd-related-card clickable">
+                <div className="nd-related-top"><GitBranch size={14} className="nd-related-icon" /><span className="nd-related-label">{decodeEntities((n.label || n.keyword).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').trim())}</span></div>
+                <div className="nd-related-meta"><span>{n.articleCount} 篇</span></div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 继续研究 */}
+      <div className="research-followups">
+        <h3 className="nd-section-title">继续研究</h3>
+        <div className="research-followup-grid">
+          {followUps.map(suggestion => (
+            <a key={suggestion} href={`#/research?q=${encodeURIComponent(suggestion)}`} className="research-followup-chip">
+              <Search size={12} /> {suggestion}
+            </a>
+          ))}
+        </div>
+      </div>
 
       {/* References footer */}
       {refs.length > 0 && (

@@ -175,8 +175,8 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose, onR
               <div className="ask-msg-ai">
                 <AnswerText text={result.answer} refs={result.refs} onNewsClick={onNewsClick} />
             {result.answer && onResearch && (
-              <button className="ask-research-btn" onClick={() => onResearch(question)}>
-                <BookOpen size={13} /> 深度研究这个话题
+              <button className="ask-research-btn" onClick={() => onResearch(current)}>
+                <BookOpen size={13} /> 深度研究
               </button>
             )}
                 {result.refs.length > 0 && (
@@ -192,6 +192,12 @@ export function AskView({ open, initialQuestion, lang, onNewsClick, onClose, onR
                     ))}
                   </div>
                 )}
+                {/* 追问建议 */}
+                <div className="ask-followups">
+                  {['详细说说', '时间线如何？', '主要分歧在哪？', '未来趋势？'].map(s => (
+                    <button key={s} className="ask-suggestion ask-history-item" onClick={() => submit(`${current}，${s}`)} style={{ fontSize: 11.5 }}>{s}</button>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="ask-msg-ai ask-msg-error">

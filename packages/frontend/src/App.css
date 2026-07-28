@@ -1753,6 +1753,15 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   font-size: 11px; font-weight: 700; flex-shrink: 0;
 }
 .research-card-body { padding: 0 14px 14px }
+.research-followups { margin-top: 24px; margin-bottom: 24px }
+.research-followup-grid { display: flex; flex-wrap: wrap; gap: 6px }
+.research-followup-chip {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 12px; border: 1px solid var(--border-light); border-radius: 16px;
+  background: var(--surface); cursor: pointer; font-size: 12px; color: var(--text-secondary);
+  text-decoration: none; transition: all .15s;
+}
+.research-followup-chip:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-light) }
 .research-card-text { font-size: 13px; color: var(--text); line-height: 1.6 }
 .research-card-refs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px }
 .research-ref-tag {
