@@ -298,6 +298,19 @@ export default function App() {
     }
   }, [sseEpoch, loadAll, loadStats, loadDigestDates, showToast])
 
+  // SW 无感刷新：Service Worker 后台缓存更新后通知页面静默刷新
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'SW_UPDATE') {
+        loadAll().catch(() => {})
+        loadStats().catch(() => {})
+        loadDigestDates().catch(() => {})
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', handler)
+    return () => navigator.serviceWorker?.removeEventListener('message', handler)
+  }, [loadAll, loadStats, loadDigestDates])
+
   // feed 视图：路由驱动加载与分类切换
   const routeView = baseRoute.view
   const routeCat = baseRoute.cat

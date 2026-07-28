@@ -1,23 +1,10 @@
-// 简讯 Service Worker — 性能优化 + 离线策略
-// 版本递增强制更新缓存
+// 简讯 Service Worker — 性能优化 + 无感刷新
 var CACHE = 'jianxun-v2'
 var STATIC_CACHE = 'jianxun-static-v2'
 var API_CACHE = 'jianxun-api-v2'
 
-// 预缓存：首页、图标、核心样式（构建后生成，手动维护关键资源）
-var PRECACHE_URLS = [
-  '/',
-  '/manifest.json',
-  '/icon-192.svg',
-]
-
-// 需要缓存的 API 路径规则
-var API_PATTERNS = [
-  '/api/news?',
-  '/api/news/trending',
-  '/api/news/topics',
-  '/api/news/categories',
-]
+var PRECACHE_URLS = ['/', '/manifest.json', '/icon-192.svg']
+var API_PATTERNS = ['/api/news?', '/api/news/trending', '/api/news/topics', '/api/news/categories']
 
 self.addEventListener('install', function(e) {
   self.skipWaiting()
@@ -27,99 +14,91 @@ self.addEventListener('install', function(e) {
 })
 
 self.addEventListener('activate', function(e) {
-  // 清除旧版本缓存
   e.waitUntil(
     caches.keys().then(function(keys) {
-      return Promise.all(
-        keys.filter(function(k) { return k !== STATIC_CACHE && k !== API_CACHE && k !== CACHE })
-          .map(function(k) { return caches.delete(k) })
-      )
+      return Promise.all(keys.filter(function(k) { return k !== STATIC_CACHE && k !== API_CACHE && k !== CACHE }).map(function(k) { return caches.delete(k) }))
     }).then(function() { return clients.claim() })
   )
 })
 
-function shouldCacheAPI(url) {
-  var path = url.pathname + (url.search || '')
-  return API_PATTERNS.some(function(p) { return path.indexOf(p) >= 0 })
-}
+function isSameOrigin(url) { return url.origin === location.origin }
+function isAPI(url) { return API_PATTERNS.some(function(p) { return (url.pathname + url.search).indexOf(p) >= 0 }) }
+function isStatic(url) { return url.pathname.match(/\/assets\//) || url.pathname.match(/\.(js|css|woff2?|svg|png|jpg)$/) }
 
-function isSameOrigin(url) {
-  return url.origin === location.origin
+// 通知所有页面有新数据
+function notifyClients(data) {
+  self.clients.matchAll().then(function(clients) {
+    clients.forEach(function(c) { c.postMessage({ type: 'SW_UPDATE', data: data }) })
+  })
 }
 
 self.addEventListener('fetch', function(e) {
   var url = new URL(e.request.url)
-
-  // ── 非本域请求直接透传 ──
   if (!isSameOrigin(url)) return
 
-  // ── API 请求：网络优先，超时降级到缓存 ──
-  if (shouldCacheAPI(url)) {
-    e.respondWith(apiStrategy(e.request))
-    return
+  if (isAPI(url)) {
+    // API：stale-while-revalidate → 秒出缓存，后台静默更新
+    e.respondWith(staleWhileRevalidate(e.request, url))
+  } else if (isStatic(url)) {
+    e.respondWith(cacheFirst(e.request))
+  } else {
+    e.respondWith(networkFirst(e.request))
   }
-
-  // ── 静态资源（JS/CSS/字体/Build产物）：缓存优先 ──
-  if (url.pathname.match(/\/assets\//) || url.pathname.match(/\.(js|css|woff2?|svg|png|jpg)$/)) {
-    e.respondWith(staticStrategy(e.request))
-    return
-  }
-
-  // ── 页面/其他：网络优先，离线时缓存兜底 ──
-  e.respondWith(networkFirst(e.request))
 })
 
-// 命中缓存后立即返回，后台异步更新（适用于静态资源）
-async function staticStrategy(req) {
+// ── 缓存优先（静态资源） ──
+async function cacheFirst(req) {
   var cached = await caches.match(req)
   if (cached) return cached
   var res = await fetch(req)
-  if (res.ok) {
-    var clone = res.clone()
-    caches.open(CACHE).then(function(c) { c.put(req, clone) })
-  }
+  if (res.ok) { var clone = res.clone(); caches.open(CACHE).then(function(c) { c.put(req, clone) }) }
   return res
 }
 
-// 先请求网络，超时或失败时返回缓存（适用于 API/页面）
+// ── 网络优先（页面/其他） ──
 async function networkFirst(req) {
-  var timeout = new Promise(function(_, reject) {
-    setTimeout(reject, 3000) // 3秒超时
-  })
   try {
-    var res = await Promise.race([fetch(req), timeout])
-    if (res && res.ok) {
-      var clone = res.clone()
-      caches.open(API_CACHE).then(function(c) { c.put(req, clone) })
-    }
-    return res || fallbackResponse()
+    var res = await Promise.race([fetch(req), new Promise(function(_, reject) { setTimeout(reject, 3000) })])
+    if (res && res.ok) { var clone = res.clone(); caches.open(CACHE).then(function(c) { c.put(req, clone) }) }
+    return res || fallback()
   } catch (e) {
-    var cached = await caches.match(req)
-    return cached || fallbackResponse()
+    return (await caches.match(req)) || fallback()
   }
 }
 
-// API响应：同 networkFirst，但离线时返回空数据而非错误
-async function apiStrategy(req) {
-  try {
-    var res = await fetch(req, { signal: AbortSignal.timeout(4000) })
-    if (res.ok) {
-      var clone = res.clone()
-      caches.open(API_CACHE).then(function(c) { c.put(req, clone) })
+// ── Stale-While-Revalidate（API：秒出缓存→后台刷新→通知页面） ──
+async function staleWhileRevalidate(req, url) {
+  var cache = await caches.open(API_CACHE)
+  var cached = await cache.match(req)
+
+  // 立即返回缓存（如果有）
+  var response = cached || new Response(JSON.stringify({ items: [] }), { headers: { 'Content-Type': 'application/json' } })
+
+  // 后台发起网络请求，不阻塞页面渲染
+  var fetchPromise = fetchWithTimeout(req, 5000).then(function(res) {
+    if (res && res.ok) {
+      cache.put(req, res.clone())
+      // 通知页面有新数据（仅内容类 API）
+      notifyClients({ url: url.pathname + url.search, type: 'api' })
     }
     return res
-  } catch (e) {
-    var cached = await caches.match(req)
-    if (cached) return cached
-    // 离线 + 无缓存时返回空数据
-    return new Response(JSON.stringify({ items: [] }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
+  }).catch(function() {})
+
+  // 如果没缓存，等待网络（首次加载）；有缓存则直接返回
+  if (!cached) {
+    try { response = await fetchPromise } catch(e) {}
+  } else {
+    // 不等待后台 fetch 完成
+    fetchPromise
   }
+
+  return response
 }
 
-function fallbackResponse() {
-  return new Response('<html><body><p>简讯 offline</p></body></html>', {
-    headers: { 'Content-Type': 'text/html;charset=utf-8' }
-  })
+async function fetchWithTimeout(req, ms) {
+  try { return await fetch(req, { signal: AbortSignal.timeout(ms) }) } catch(e) { return null }
+}
+
+function fallback() {
+  return new Response('<html><body><p>简讯 offline</p></body></html>', { headers: { 'Content-Type': 'text/html;charset=utf-8' } })
 }
