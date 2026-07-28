@@ -418,15 +418,21 @@ export default function App() {
     navigate(buildHash({ view: 'feed', cat }))
   }
 
+  const trackSignal = useCallback((type: string, id: string) => {
+    fetch('/api/signal/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id }) }).catch(() => {})
+  }, [])
+
   const openNews = useCallback((id: number) => {
     navCountRef.current++
+    trackSignal('article', String(id))
     navigate(`#/news/${id}`)
-  }, [navigate])
+  }, [navigate, trackSignal])
 
   const openEntity = useCallback((name: string) => {
     navCountRef.current++
+    trackSignal('entity', name)
     navigate(buildHash({ view: 'entity', entity: name }))
-  }, [navigate])
+  }, [navigate, trackSignal])
 
   // 返回键：SPA 内有历史则后退，否则（刷新/分享直达）回到日报
   const goBack = useCallback(() => {
