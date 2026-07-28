@@ -9,17 +9,17 @@ export async function onRequestGet(context: any) {
   const like = `%${name}%`
 
   // 1. 所有提及该实体的文章
-  const rows = await env.DB.prepare(
+  const rows: any = await env.DB.prepare(
     `SELECT * FROM news WHERE entities LIKE ? ORDER BY published_at DESC LIMIT 50`
-  ).bind(like).all<any>()
-  const articles = (rows.results || []).map(mapNews)
+  ).bind(like).all()
+  const articles = ((rows?.results) || []).map(mapNews)
 
   // 2. 提及该实体的活跃叙事
-  const narrRows = await env.DB.prepare(
+  const narrRows: any = await env.DB.prepare(
     `SELECT keyword, label, article_ids, summary FROM narratives
      WHERE status = 'active' AND (keyword LIKE ? OR label LIKE ?)
      ORDER BY last_updated DESC LIMIT 10`
-  ).bind(like, like).all<any>()
+  ).bind(like, like).all()
   const narratives = (narrRows.results || []).map((n: any) => ({
     keyword: n.keyword,
     label: (n.label || n.keyword).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').trim(),
