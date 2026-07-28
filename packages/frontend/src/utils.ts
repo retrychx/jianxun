@@ -22,13 +22,17 @@ export function formatTime(d: Date): string {
 }
 
 export function decodeEntities(s: string): string {
-  return s
+  // 先替换常见命名实体
+  let r = s
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+  // 替换所有 &#数字; 实体（如 &#8217; → '）
+  r = r.replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(parseInt(n)))
+  return r
 }
 
 export type Lang = 'zh' | 'en'
