@@ -298,18 +298,51 @@ export default function App() {
     }
   }, [sseEpoch, loadAll, loadStats, loadDigestDates, showToast])
 
-  // SW 无感刷新：Service Worker 后台缓存更新后通知页面静默刷新
+  // SW 消息：无感刷新 + 离线提示
+  const [isOffline, setIsOffline] = useState(false)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === 'SW_UPDATE') {
-        loadAll().catch(() => {})
-        loadStats().catch(() => {})
-        loadDigestDates().catch(() => {})
+        loadAll().catch(() => {}); loadStats().catch(() => {}); loadDigestDates().catch(() => {})
+      } else if (e.data?.type === 'SW_OFFLINE') {
+        setIsOffline(true)
       }
     }
+    // 也监听原生 online/offline 事件
+    const onlineHandler = () => setIsOffline(false)
+    const offlineHandler = () => setIsOffline(true)
+    window.addEventListener('online', onlineHandler)
+    window.addEventListener('offline', offlineHandler)
     navigator.serviceWorker?.addEventListener('message', handler)
-    return () => navigator.serviceWorker?.removeEventListener('message', handler)
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handler)
+      window.removeEventListener('online', onlineHandler)
+      window.removeEventListener('offline', offlineHandler)
+    }
   }, [loadAll, loadStats, loadDigestDates])
+
+  // 预加载：用户可能在当前页面停留时提前加载下一个 tab 的数据
+  const prefetched = useRef(new Set<string>())
+  useEffect(() => {
+    if (initialLoading) return
+    const prefetch = (url: string) => {
+      if (prefetched.current.has(url)) return
+      prefetched.current.add(url)
+      fetch(url).catch(() => {})
+    }
+    // 按当前视图预判下一步
+    const timer = setTimeout(() => {
+      if (view === 'briefing') {
+        prefetch('/api/news/trending')
+        prefetch('/api/news/topics')
+      } else if (view === 'feed') {
+        prefetch('/api/news/trending')
+      } else if (view === 'trending') {
+        prefetch('/api/news/news?pageSize=10')
+      }
+    }, 2000) // 页面加载 2 秒后静默预取
+    return () => clearTimeout(timer)
+  }, [view, initialLoading])
 
   // feed 视图：路由驱动加载与分类切换
   const routeView = baseRoute.view
@@ -403,6 +436,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {isOffline && <div className="offline-banner">网络已断开，部分内容可能不可用</div>}
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">

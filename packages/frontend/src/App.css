@@ -172,6 +172,15 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 @keyframes spin { to { transform: rotate(360deg) } }
 
 /* ===== Toast ===== */
+.offline-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+  padding: 6px 14px; text-align: center;
+  background: #dc2626; color: #fff;
+  font-size: 12px; font-weight: 500;
+  animation: slideDown .3s var(--ease);
+}
+@keyframes slideDown { from { transform: translateY(-100%) } to { transform: translateY(0) } }
+
 .toast {
   position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 999;
   background: var(--toast-bg); color: var(--toast-text);
