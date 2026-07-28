@@ -30,6 +30,26 @@ import { linkEntities } from './entity.js'
 import { generateTodayDigest } from '../api/digest.js'
 import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
+import { checkSystemState, planPhases, allocateBudget } from './decider.js'
+
+// 所有阶段的定义（作为模板供决策引擎选择）
+const ALL_PHASES: PhaseDef[] = [
+  { name: 'flagLowQualityAnalyses', run: (e: Env) => flagLowQualityAnalyses(e), priority: 'critical' },
+  { name: 'mergeOverlappingNarratives', run: (e: Env) => mergeOverlappingNarratives(e), priority: 'critical' },
+  { name: 'fixMissingImages', run: (e: Env) => fixMissingImages(e), priority: 'critical' },
+  { name: 'analyzeNewArticles', run: (e: Env) => analyzeNewArticles(e, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, priority: 'critical' },
+  { name: 'updateNarratives', run: (e: Env) => updateNarratives(e), priority: 'critical' },
+  { name: 'generateDailyDigest', run: (e: Env) => generateTodayDigest(e), priority: 'critical' },
+  { name: 'refineCategories', run: (e: Env) => refineCategories(e) },
+  { name: 'translateMissing', run: (e: Env) => translateMissing(e) },
+  { name: 'crossRefAnalysis', run: (e: Env) => runCrossRefAnalysis(e), dependsOn: ['analyzeNewArticles'] },
+  { name: 'detectBreakingNews', run: (e: Env) => detectBreakingNews(e), timeout: CONFIG.breaking.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
+  { name: 'tuneSourceWeights', run: (e: Env) => tuneSourceWeights(e) },
+  { name: 'linkEntities', run: (e: Env) => linkEntities(e), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
+  { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
+  { name: 'detectControversy', run: (e: Env) => detectControversy(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
+  { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low' },
+]
 
 export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const start = Date.now()
@@ -39,36 +59,28 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   initBudget()
   const apiOk = await pingDeepSeek(env.DEEPSEEK_API_KEY)
 
-  // ═══ Phase 0: Load memory + ingest signals ═══
+  // ═══ Phase 0: 感知 + 决策 ═══
   const memory = await loadMemory(env)
+  const state = await checkSystemState(env)
+  state.apiOk = apiOk
+
   const signals = await ingestSignals(env)
 
-  const phases: PhaseDef[] = [
-    // ═══ Phase 1: Feedback ingestion — 优先处理用户信号 ═══
-    { name: 'flagLowQualityAnalyses', run: () => flagLowQualityAnalyses(env), priority: 'critical' },
-    { name: 'mergeOverlappingNarratives', run: () => mergeOverlappingNarratives(env), priority: 'critical' },
-    { name: 'fixMissingImages', run: () => fixMissingImages(env), priority: 'critical' },
+  // 仅在系统状态满足条件时才运行的阶段
+  const filteredPhases = ALL_PHASES.map(p => ({
+    ...p,
+    shouldSkip: p.shouldSkip ?? ((p.name === 'analyzeNewArticles' || p.name === 'updateNarratives' || p.name === 'detectBreakingNews' || p.name === 'crossRefAnalysis') ? !apiOk : false),
+  }))
 
-    // ═══ Phase 2: Analysis — 核心 AI 任务 ═══
-    { name: 'analyzeNewArticles', run: () => analyzeNewArticles(env, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, shouldSkip: !apiOk, priority: 'critical' },
-    { name: 'generateDailyDigest', run: () => generateTodayDigest(env), priority: 'critical' },
-    { name: 'updateNarratives', run: () => updateNarratives(env), priority: 'critical' },
+  // 决策引擎选择本周期跑哪些阶段
+  const phases = planPhases(state, filteredPhases)
+  // 自适应预算分配
+  const budget = allocateBudget(phases.length, state.remainingBudget)
 
-    // ═══ Phase 3: Enhancement — 提升已分析数据质量 ═══
-    { name: 'refineCategories', run: () => refineCategories(env), shouldSkip: !apiOk },
-    { name: 'translateMissing', run: () => translateMissing(env), shouldSkip: !apiOk },
-    { name: 'crossRefAnalysis', run: () => runCrossRefAnalysis(env), dependsOn: ['analyzeNewArticles'], shouldSkip: !apiOk },
-    { name: 'detectBreakingNews', run: () => detectBreakingNews(env), timeout: CONFIG.breaking.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
-
-    // ═══ Phase 4: Learning — 自适应调节 ═══
-    { name: 'tuneSourceWeights', run: () => tuneSourceWeights(env) },
-    { name: 'linkEntities', run: () => linkEntities(env), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
-
-    // ═══ Phase 5: Intelligence — 高级推理 ═══
-    { name: 'curateBriefing', run: () => curateBriefing(env), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
-    { name: 'detectControversy', run: () => detectControversy(env), dependsOn: ['analyzeNewArticles'], priority: 'low' },
-    { name: 'generateResearchBriefs', run: () => generateResearchBriefs(env), dependsOn: ['updateNarratives'], priority: 'low' },
-  ]
+  // 把动态超时应用到各阶段
+  for (const p of phases) {
+    if (!p.timeout) p.timeout = budget
+  }
 
   const results = await runPhases(phases, env)
   const totalMs = Date.now() - start

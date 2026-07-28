@@ -25,7 +25,7 @@ export async function saveMemory(env: Env, mem: AgentMemory): Promise<void> {
   } catch {}
 }
 
-/** 消费用户信号 → 计算来源点击率、实体热度 */
+/** 消费用户信号 → 计算来源点击率、实体热度、学习阈值 */
 export async function ingestSignals(env: Env, sinceMinutes = 1440): Promise<SignalSummary> {
   const since = new Date(Date.now() - sinceMinutes * 60000).toISOString()
 
@@ -56,6 +56,44 @@ export async function ingestSignals(env: Env, sinceMinutes = 1440): Promise<Sign
   for (const r of (entityRows.results || [])) entityClicks.set(r.target_id, r.cnt || 0)
 
   return { sourceCTR, entityClicks, categoryEngagement: new Map() }
+}
+
+/** 在线学习：根据分析结果动态调整匹配阈值 */
+export function learnThreshold(memory: AgentMemory, matchSuccess: boolean): number {
+  const currentThreshold = CONFIG.narrative.matchThreshold
+  if (!memory.sourceMemory['_threshold']) {
+    (memory.sourceMemory as any)['_threshold'] = { ctr: currentThreshold, qualityScore: 1.0, totalAnalyses: 0, failedAnalyses: 0 }
+  }
+  const t = memory.sourceMemory['_threshold']
+  t.totalAnalyses++
+  // 如果匹配成功率高，阈值可以微降（召回更多）；失败率高则微升（精确性优先）
+  if (matchSuccess) {
+    t.ctr = Math.max(0.15, t.ctr - 0.01)
+  } else {
+    t.ctr = Math.min(0.6, t.ctr + 0.02)
+  }
+  return t.ctr
+}
+
+/** 在线学习：根据用户点击更新实体热度，影响未来分析优先级 */
+export function learnEntityPopularity(memory: AgentMemory, entityName: string): void {
+  const key = entityName.toLowerCase()
+  const existing = memory.entityHeat[key]
+  if (existing) {
+    existing.clicks++
+    existing.lastSeen = new Date().toISOString()
+  } else {
+    memory.entityHeat[key] = { clicks: 1, lastSeen: new Date().toISOString() }
+  }
+}
+
+/** 获取热门实体列表（用于分析优先级排序） */
+export function getHotEntities(memory: AgentMemory, minClicks = 2): string[] {
+  return Object.entries(memory.entityHeat)
+    .filter(([, v]) => v.clicks >= minClicks)
+    .sort(([, a], [, b]) => b.clicks - a.clicks)
+    .slice(0, 10)
+    .map(([k]) => k)
 }
 
 /** 根据信号计算自适应权重 */
