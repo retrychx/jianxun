@@ -84,7 +84,7 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         <div className="narr-detail-info">
           <div className="narr-detail-meta">
             {narrType && <span className="narr-type-badge">{narrType}</span>}
-            <span className="narr-status">
+            <span className={`narr-status narr-${narrative.status}`}>
               {narrative.status === 'active' ? '追踪中' : narrative.status === 'stale' ? '已停滞' : '已归档'}
             </span>
           </div>
