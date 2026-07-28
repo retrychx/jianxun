@@ -44,10 +44,22 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
         </div>
         <h3 className="card-title">{displayTitle(item, lang)}</h3>
         {summary && <p className="card-summary">{summary}</p>}
+        {item.keyPoints && item.keyPoints.length > 0 && (
+          <div className="card-keypoints">
+            {item.keyPoints.slice(0, 2).map((kp, i) => (
+              <span key={i} className="card-kp">· {kp}</span>
+            ))}
+          </div>
+        )}
         <div className="card-footer">
           <span className="card-category" style={{ backgroundColor: categoryColor(item.category) }}>
             {item.category}
           </span>
+          {item.impact && item.impact !== 'medium' && (
+            <span className={`card-impact card-impact-${item.impact}`}>
+              {item.impact === 'high' ? '重要' : '短讯'}
+            </span>
+          )}
           <span className="card-domain">{getDomain(item.url)}</span>
           {item.heat != null && item.heat > 1 && (
             <span className="card-heat">{item.heat} 家媒体报道</span>

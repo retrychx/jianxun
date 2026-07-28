@@ -4,7 +4,7 @@ import { extractContent, analyzeWithDeepSeek, batchClassify } from '../analysis/
 import type { Env } from '../helpers.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
-export async function analyzeNewArticles(env: Env, limit = 6): Promise<number> {
+export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 0
   const rows = await env.DB.prepare(
@@ -14,7 +14,13 @@ export async function analyzeNewArticles(env: Env, limit = 6): Promise<number> {
   for (const row of (rows.results || [])) {
     await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
     try {
-      const { content: extracted, title: pageTitle } = await extractContent(row.url)
+      // RSS description 足够长时跳过全文抓取（节省 6s/article）
+      let extracted: string | null = null, pageTitle: string | null = null
+      if (!row.description || row.description.length < 100) {
+        const result = await extractContent(row.url)
+        extracted = result.content
+        pageTitle = result.title
+      }
       const content = (extracted || row.description || row.title).slice(0, 2000)
       const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle)
       if (result) {

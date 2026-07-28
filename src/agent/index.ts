@@ -40,7 +40,7 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const phases: PhaseDef[] = [
     // ═══ Critical — must run every cycle ═══
     { name: 'fixMissingImages', run: () => fixMissingImages(env), priority: 'critical' },
-    { name: 'analyzeNewArticles', run: () => analyzeNewArticles(env), timeout: CONFIG.analyze.phaseTimeoutMs, shouldSkip: !apiOk, priority: 'critical' },
+    { name: 'analyzeNewArticles', run: () => analyzeNewArticles(env, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, shouldSkip: !apiOk, priority: 'critical' },
     { name: 'generateDailyDigest', run: () => generateTodayDigest(env), priority: 'critical' },
     { name: 'updateNarratives', run: () => updateNarratives(env), priority: 'critical' },
 
