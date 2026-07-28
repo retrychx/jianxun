@@ -195,6 +195,7 @@ export interface SourceHealth {
   lastError?: string | null
   failCount: number
   topEntities?: { name: string; count: number }[]
+  topCategories?: string[]
 }
 
 export function getSources(): Promise<{ items: SourceHealth[] }> {

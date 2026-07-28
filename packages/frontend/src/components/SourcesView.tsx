@@ -60,6 +60,11 @@ export function SourcesView() {
                 <span className="src-stat"><Globe size={12} /> 总量 <strong>{s.total}</strong></span>
                 <span className="src-stat"><TrendingUp size={12} /> 权重 <strong>{s.weight}</strong></span>
               </div>
+              {s.topCategories && s.topCategories.length > 0 && (
+                <div className="src-categories" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {s.topCategories.map(c => <span key={c} className="src-cat-tag">{c}</span>)}
+                </div>
+              )}
               {entityCount > 0 && (
                 <div className="src-entities">
                   <Hash size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />

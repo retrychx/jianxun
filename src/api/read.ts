@@ -271,13 +271,20 @@ export async function briefing(env: Env) {
 
 export async function sources(env: Env) {
   const cached = await cacheGet<any>('sources'); if (cached) return cached
-  const [counts, stats] = await Promise.all([
+  const [counts, stats, cats] = await Promise.all([
     env.DB.prepare("SELECT source, COUNT(*) as total, SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END) as today FROM news GROUP BY source").all(),
     env.DB.prepare('SELECT * FROM source_stats').all(),
+    env.DB.prepare("SELECT source, category, COUNT(*) as c FROM news WHERE category IS NOT NULL GROUP BY source, category").all(),
   ])
   const countMap = new Map((counts.results as any[]).map(r => [r.source, r]))
   const statMap = new Map((stats.results as any[]).map(r => [r.source, r]))
   const weightMap = new Map(RSS_SOURCES.map(s => [s.name, s.weight ?? 1]))
+  // 计算每个源的类别分布
+  const sourceCats = new Map<string, { category: string; count: number }[]>()
+  for (const r of (cats.results || [])) {
+    if (!sourceCats.has(r.source)) sourceCats.set(r.source, [])
+    sourceCats.get(r.source)!.push({ category: r.category, count: r.c })
+  }
   // 计算每个源的近期实体焦点
   const recentRows = await env.DB.prepare(
     `SELECT source, entities FROM news WHERE entities IS NOT NULL AND entities != '' AND created_at >= datetime('now', '-7 days')`
@@ -301,6 +308,8 @@ export async function sources(env: Env) {
   const items = names.map((name: string) => {
     const emap = sourceEntities.get(name)
     const topEntities = emap ? [...emap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => ({ name: e[0], count: e[1] })) : []
+    const srcCats = sourceCats.get(name) || []
+    const topCats = srcCats.sort((a, b) => b.count - a.count).slice(0, 3).map(c => c.category)
     return {
       name,
       weight: weightMap.get(name) ?? 1,
@@ -310,6 +319,7 @@ export async function sources(env: Env) {
       lastError: isoZ(statMap.get(name)?.last_error),
       failCount: statMap.get(name)?.fail_count || 0,
       topEntities,
+      topCategories: topCats,
     }
   })
   const result = { items }
