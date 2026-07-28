@@ -1,4 +1,5 @@
-import { Newspaper, Hash } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Newspaper, Hash, GitBranch, TrendingUp, Flame } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
@@ -13,9 +14,20 @@ interface Props {
   onNewsClick: (id: number) => void
   onEntityClick: (name: string) => void
   onUnfollow: (name: string) => void
+  onNarrativeClick?: (keyword: string) => void
 }
 
-export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow }: Props) {
+export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow, onNarrativeClick }: Props) {
+  const [narrUpdates, setNarrUpdates] = useState<any[]>([])
+  const [risingSources, setRisingSources] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/news/briefing/updates').then(r => r.json()).then(d => {
+      if (d.updatedNarratives) setNarrUpdates(d.updatedNarratives.slice(0, 4))
+      if (d.risingSources) setRisingSources(d.risingSources.slice(0, 4))
+    }).catch(() => {})
+  }, [])
+
   const followedEntities = follows.filter(f => f.type === 'entity')
   const followedNames = followedEntities.map(f => f.name)
   // 关注加权：命中关注实体的条目稳定置顶
@@ -40,6 +52,35 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
               <span key={f.id} className="bf-follow-tag">
                 <button className="bf-follow-name" onClick={() => onEntityClick(f.name)} title={`查看 ${f.name} 的相关报道`}>{f.name}</button>
                 <button className="bf-follow-x" onClick={() => onUnfollow(f.name)} aria-label={`取消关注 ${f.name}`}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 叙事动态 */}
+      {narrUpdates.length > 0 && (
+        <div className="bf-section">
+          <div className="bf-section-title"><GitBranch size={13} /> 今日故事动态</div>
+          <div className="bf-narr-updates">
+            {narrUpdates.map(n => (
+              <button key={n.keyword} className="bf-narr-update" onClick={() => onNarrativeClick?.(n.keyword)}>
+                <span className="bf-narr-update-label">{n.label}</span>
+                <span className="bf-narr-update-meta">{n.sourceCount} 个信源 · {n.articleCount} 篇</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 升温信源 */}
+      {risingSources.length > 0 && (
+        <div className="bf-section">
+          <div className="bf-section-title"><Flame size={13} /> 今日高产信源</div>
+          <div className="bf-rising-sources">
+            {risingSources.map(s => (
+              <span key={s.name} className="bf-rising-chip" onClick={() => onEntityClick?.(s.name)}>
+                {s.name} <small>{s.count} 篇</small>
               </span>
             ))}
           </div>

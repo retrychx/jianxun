@@ -584,6 +584,7 @@ export default function App() {
                     onNewsClick={openNews}
                     onEntityClick={openEntity}
                     onUnfollow={(name) => toggleFollow(name, 'entity')}
+                    onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)}
                   />
                 }
               />
