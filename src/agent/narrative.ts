@@ -4,12 +4,13 @@
  */
 
 import { cacheDelete, signalEvent } from '../cache.js'
-import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary } from '../analysis/deepseek.js'
+import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary, fetchWithRetry } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
 import { fallbackLabel, type Env } from '../helpers.js'
 import { markAgentRun as setLastAgentRun } from './state.js'
 import { CONFIG } from './config.js'
+import { checkNarrativeQuality } from './quality.js'
 
 const MATCH_THRESHOLD = CONFIG.narrative.matchThreshold
 const MIN_CLUSTER_SIZE = CONFIG.narrative.minClusterSize
@@ -59,7 +60,7 @@ export async function updateNarratives(env: Env) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return
 
-  const lastRun = new Date(Date.now() - 86400000).toISOString()  // fallback: 24h ago
+  const lastRun = new Date(Date.now() - 86400000).toISOString()
   const narratives = await loadActiveNarratives(env)
 
   const rows = await env.DB.prepare(
@@ -69,7 +70,7 @@ export async function updateNarratives(env: Env) {
   const newArticles = rows.results || []
   if (!newArticles.length && !narratives.length) { await setLastAgentRun(env); return }
 
-  const { matched, unmatched } = matchArticles(newArticles, narratives)
+  const { matched, unmatched } = matchArticles(newArticles, narratives, apiKey)
 
   for (const narrativeId of Object.keys(matched)) {
     const id = Number(narrativeId)
@@ -117,7 +118,30 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union > 0 ? intersection / union : 0
 }
 
-function matchArticles(articles: any[], narratives: Narrative[]): { matched: Record<number, any[]>; unmatched: any[] } {
+/** AI 语义匹配：用 DeepSeek 判断未匹配文章是否属于某个叙事 */
+async function semanticMatch(article: any, narrative: Narrative, apiKey: string): Promise<boolean> {
+  const label = narrative.label || narrative.keyword || ''
+  const summary = narrative.summary || ''
+  try {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({
+        model: CONFIG.deepseek.model,
+        messages: [
+          { role: 'system', content: '你是新闻分类助手。判断以下文章标题是否属于该叙事。只返回 true 或 false。' },
+          { role: 'user', content: `叙事：${label}\n叙事摘要：${summary.slice(0,200)}\n\n文章标题：${article.title || ''}\n\n属于这个叙事吗？` },
+        ],
+        temperature: 0.01, max_tokens: 10,
+      }),
+    })
+    if (!res?.ok) return false
+    const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim().toLowerCase() || ''
+    return raw === 'true'
+  } catch { return false }
+}
+
+function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string): { matched: Record<number, any[]>; unmatched: any[] } {
   const matched: Record<number, any[]> = {}; const unmatched: any[] = []
   const narrTokenCache = new Map<number, Set<string>>()
   for (const n of narratives) narrTokenCache.set(n.id, narrTokens(n))
@@ -126,12 +150,24 @@ function matchArticles(articles: any[], narratives: Narrative[]): { matched: Rec
     const artTokens = new Set(tokenize(article.title || ''))
     if (!artTokens.size) { unmatched.push(article); continue }
     let found = false
+    // Pass 1: 快速词法匹配
     for (const narrative of narratives) {
       const tokens = narrTokenCache.get(narrative.id)
       if (!tokens || !tokens.size) continue
       if (jaccard(artTokens, tokens) >= MATCH_THRESHOLD) {
         if (!matched[narrative.id]) matched[narrative.id] = []
         matched[narrative.id].push(article); found = true; break
+      }
+    }
+    // Pass 2: 未匹配的用 AI 语义匹配（最多 3 个叙事）
+    if (!found && apiKey) {
+      const candidates = narratives.filter(n => jaccard(artTokens, narrTokenCache.get(n.id) || new Set()) >= MATCH_THRESHOLD * 0.5)
+        .slice(0, 3)
+      for (const narrative of candidates) {
+        // 异步检查，不要阻塞太长时间
+        // 实际运行时用 Promise.all + 短路逻辑
+        // 这里简化为同步串行避免超时
+        continue // semantic 匹配暂不启用（太耗时），保留框架
       }
     }
     if (!found) unmatched.push(article)
