@@ -27,7 +27,11 @@ export function SourcesView() {
   if (error) return (
     <div className="sources-view">
       <div className="nv-header"><h2 className="nv-title">信源档案</h2></div>
-      <div className="empty"><Rss size={28} style={{ opacity: .3, marginBottom: 8 }} /><p>加载失败</p></div>
+      <div className="empty" style={{ marginTop: 40 }}>
+        <Rss size={28} style={{ opacity: .3, marginBottom: 8 }} />
+        <p>加载失败</p>
+        <button onClick={() => window.location.reload()} style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }}>重试</button>
+      </div>
     </div>
   )
 

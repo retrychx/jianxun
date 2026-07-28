@@ -58,11 +58,17 @@ export function TopicView({ name, lang, onBack, onNewsClick }: Props) {
         <span>返回</span>
       </button>
       {loading ? (
-        <div className="loading">加载中...</div>
+        <div style={{ marginTop: 16 }}>
+          <div className="skeleton" style={{ height: 20, width: '50%', marginBottom: 16, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 80, marginBottom: 12, borderRadius: 'var(--radius)' }} />
+          <div className="skeleton" style={{ height: 14, width: '30%', marginBottom: 10, borderRadius: 4 }} />
+          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 40, marginBottom: 8, borderRadius: 'var(--radius-sm)' }} />)}
+        </div>
       ) : error || !data ? (
-        <div className="empty">
-          <Hash size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-          <p>话题加载失败，请稍后重试</p>
+        <div className="empty" style={{ marginTop: 40 }}>
+          <Hash size={28} style={{ opacity: .3, marginBottom: 8 }} />
+          <p>话题加载失败</p>
+          <button className="search-clear" onClick={() => window.location.reload()} style={{ marginTop: 8, fontSize: 13, color: 'var(--accent)' }}>重试</button>
         </div>
       ) : (
         <>

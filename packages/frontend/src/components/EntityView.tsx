@@ -46,7 +46,11 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
   if (error || !briefing) return (
     <div className="entity-view">
       <button className="browse-back" onClick={onBack}><ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /><span>返回</span></button>
-      <div className="empty" style={{ marginTop: 40 }}><Hash size={28} style={{ opacity: .3 }} /><p>加载失败</p></div>
+      <div className="empty" style={{ marginTop: 40 }}>
+        <Hash size={28} style={{ opacity: .3, marginBottom: 8 }} />
+        <p>加载失败</p>
+        <button style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }} onClick={() => window.location.reload()}>重试</button>
+      </div>
     </div>
   )
 

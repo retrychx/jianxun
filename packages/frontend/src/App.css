@@ -614,7 +614,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden; transition: box-shadow .2s; animation: cardIn .45s var(--ease) both;
 }
-.ts-card:hover { box-shadow: var(--shadow) }
+.ts-card:hover { border-color: var(--accent-border); box-shadow: var(--shadow) }
 .ts-card.open { box-shadow: var(--shadow) }
 
 .ts-trigger {
