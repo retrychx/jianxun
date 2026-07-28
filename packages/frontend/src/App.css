@@ -887,7 +887,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
   /* Trending standalone page on mobile (full-width, no card styling) */
   .trending-view .trending-panel { border: none; border-radius: 0; position: static; background: transparent }
-  .trending-view .panel-header { padding: 8px 0; margin-bottom: 0 }
+  .trending-view .panel-header { padding: 8px 14px; margin-bottom: 0 }
   .trending-view .trending-item { padding: 12px 14px }
   .trending-view .trending-ext { padding: 2px 6px }
 
