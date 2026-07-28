@@ -3,6 +3,20 @@ import { tokenize } from './tokenize.js'
 import { mapNews, likeEscape, fallbackLabel, PERSPECTIVES, type Env } from './helpers.js'
 import { generateStoryline, generateTopicLabels } from './analysis.js'
 
+// 停用词——生成关键词时过滤掉这些无意义的词（与 narrative.ts 同步）
+const STOPWORDS = new Set([
+  'a','an','the','to','in','of','for','on','with','at','by','from','as','is','it','its',
+  'and','or','but','not','this','that','are','was','been','will','has','had','have',
+  'about','into','through','during','before','after','between','under','over',
+  'what','why','how','all','each','their','our','your','new','more','most','some',
+  'any','just','also','very','can','would','could','should','may','might','than',
+  'then','now','up','out','off','down',
+  'ai','app','day','data','one','two','top','big','get','make','use','say','set',
+  'air','ultra','pro','max','mini','lite',
+  '21','22','23','24','25','26','27','28','29','30',
+  '8217','amp;','lt;','gt;','nbsp;',
+])
+
 // Threshold for Jaccard similarity when merging topic clusters (0-1).
 // Lower = more aggressive merging; a value around 0.12 catches semantically
 // related but lexically different articles (e.g. "英伟达发布新GPU" ≈ "NVIDIA新芯片").
@@ -113,6 +127,12 @@ export async function topics(env: Env) {
   const topicList: any[] = []
 
   for (const { words, items: cluster } of clusterNews(items)) {
+    // 过滤关键词：去停用词、短词、纯数字，保留有意义的词
+    const cleanWords = words.filter(w =>
+      w.length >= 3 && !STOPWORDS.has(w.toLowerCase()) && !/^\d+$/.test(w)
+    )
+    const useWords = cleanWords.length >= 2 ? cleanWords : words.filter(w => w.length >= 2)
+
     const dates = cluster.map(i => i.published_at).filter(Boolean).sort()
     const dateRange = dates.length >= 2 ? dates[0].slice(0, 10) + ' ~ ' + dates[dates.length - 1].slice(0, 10) : dates[0]?.slice(0, 10) || ''
     const sourcePerspectives = [...new Set(cluster.map(i => i.source))].map(s => ({
@@ -125,9 +145,12 @@ export async function topics(env: Env) {
       ? bestItem.summary.slice(0, 300)
       : (cluster[0]?.description || '').slice(0, 200) + '...'
 
+    // 标签：AI 生成优先；失败时取第一篇标题前半段
+    const fallbackLabelText = cluster[0]?.title?.slice(0, 30) || fallbackLabel(useWords)
+
     topicList.push({
-      keyword: words.slice(0, 3).join(' · '),
-      label: fallbackLabel(words),
+      keyword: useWords.slice(0, 3).join(' · '),
+      label: fallbackLabelText,
       count: cluster.length,
       sources: [...new Set(cluster.map(i => i.source))],
       sourcePerspectives,
