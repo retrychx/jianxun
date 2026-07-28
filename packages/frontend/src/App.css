@@ -436,12 +436,12 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 .briefing-body { min-width: 0; flex: 1 }
 .briefing-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap }
-.briefing-source { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em }
-.briefing-cat { padding: 0 6px; border-radius: 3px; color: #fff; font-size: 9px; font-weight: 600; line-height: 1.6 }
+.briefing-source { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em }
+.briefing-cat { padding: 0 6px; border-radius: 3px; color: #fff; font-size: 10px; font-weight: 600; line-height: 1.6 }
 .briefing-time { font-size: 11px; color: var(--text-tertiary); white-space: nowrap }
 .briefing-heat { font-size: 11px; color: var(--text-tertiary); white-space: nowrap }
 
-.bf-card-title { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text); transition: color .15s }
+.bf-card-title { font-size: 16px; font-weight: 600; line-height: 1.4; color: var(--text); transition: color .15s }
 .briefing-card:hover .bf-card-title { color: var(--accent) }
 
 .briefing-summary {
@@ -457,7 +457,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 @media (max-width: 768px) {
   .briefing-title { font-size: 18px }
   .briefing-card { padding: 14px; gap: 12px }
-  .bf-card-title { font-size: 14px }
+  .bf-card-title { font-size: 15px }
 }
 
 /* ===== Digest（日报） ===== */
@@ -1502,7 +1502,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 .nsc-title { font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.35; font-family: var(--font-serif) }
 
-.nsc-summary { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.nsc-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 
 .nsc-meta {
   display: flex; align-items: center; gap: 0;
