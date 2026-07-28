@@ -1159,24 +1159,6 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 .pwa-install-btn:hover { background: var(--accent-light); transform: translateY(-2px) }
 
-/* PWA 安装提示（降级：浏览器菜单添加） */
-.pwa-install-tip {
-  position: fixed; right: 20px; bottom: 76px; z-index: 949;
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 14px; border-radius: 10px;
-  background: var(--surface); color: var(--text-secondary);
-  border: 1px solid var(--border); font-size: 12px;
-  box-shadow: var(--shadow-lg); animation: popIn .3s var(--ease);
-  max-width: 260px;
-}
-.pwa-tip-close {
-  flex-shrink: 0; width: 18px; height: 18px; border: none; border-radius: 50%;
-  background: transparent; cursor: pointer; color: var(--text-tertiary);
-  display: flex; align-items: center; justify-content: center; font-size: 12px;
-  margin-left: auto;
-}
-.pwa-tip-close:hover { background: var(--card-hover) }
-
 @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.95) } to { opacity: 1; transform: none } }
 
 .ask-backdrop { position: fixed; inset: 0; z-index: 955; background: rgba(0,0,0,.18); animation: fadeIn .2s ease }
@@ -1278,7 +1260,6 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 @media (max-width: 768px) {
   .ask-fab { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 14px) }
   .pwa-install-btn { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 66px) }
-  .pwa-install-tip { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 66px); max-width: calc(100vw - 32px) }
   .ask-widget {
     right: 0; left: 0; bottom: 0; width: auto; max-width: none; max-height: 92vh;
     border-radius: 16px 16px 0 0; border-bottom: none;
