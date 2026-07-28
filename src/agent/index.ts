@@ -32,6 +32,7 @@ import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
 import { checkSystemState, planPhases, allocateBudget } from './decider.js'
 import { evaluateQuality, saveKPI, shouldExplore, getExperimentParams, saveExperiment, estimateAPICost, generateReport, saveReport } from './eval.js'
+import { cleanup, recordError } from './cleanup.js'
 import { cacheDelete } from '../cache.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
@@ -88,6 +89,16 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   const results = await runPhases(phases, env)
   const totalMs = Date.now() - start
+
+  // ═══ 记录失败阶段到错误日志 ═══
+  for (const [name, r] of Object.entries(results)) {
+    if (!r.ok && r.error) recordError(env, name, r.error).catch(() => {})
+  }
+
+  // ═══ 每 24 小时执行一次数据清理 ═══
+  if (memory.totalAnalyses % 8 === 0) { // ~每天一次（8 × 3h）
+    try { await cleanup(env) } catch {}
+  }
 
   // ═══ Cache invalidation: agent 跑完后清相关缓存 ═══
   // 防止用户看到 agent 更新前的旧数据

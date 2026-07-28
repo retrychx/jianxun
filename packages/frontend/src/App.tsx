@@ -412,8 +412,16 @@ export default function App() {
     navigate(buildHash({ view: 'feed', cat }))
   }
 
+  // 设备 ID（localStorage 持久化，用于信号去重和个性化）
+  const deviceId = useRef('')
+  useEffect(() => {
+    let did = localStorage.getItem('jianxun_device_id')
+    if (!did) { did = crypto.randomUUID?.() || Math.random().toString(36).slice(2, 12); localStorage.setItem('jianxun_device_id', did) }
+    deviceId.current = did
+  }, [])
+
   const trackSignal = useCallback((type: string, id: string) => {
-    fetch('/api/signal/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id }) }).catch(() => {})
+    fetch('/api/signal/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, deviceId: deviceId.current }) }).catch(() => {})
   }, [])
 
   const openNews = useCallback((id: number) => {

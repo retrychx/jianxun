@@ -6,17 +6,18 @@ export async function onRequestPost(context: any) {
   let body: any
   try { body = await request.json() } catch { return json({ ok: false }, 400) }
 
-  const targetType = body.type  // 'article' | 'narrative' | 'entity'
+  const targetType = body.type
   const targetId = String(body.id ?? '').trim()
+  const deviceId = String(body.deviceId ?? '').trim().slice(0, 36)
   if (!targetType || !targetId) return json({ ok: false }, 400)
 
   try {
-    // Insert signal asynchronously (fire-and-forget, don't block response)
+    // Store device-level signal so we can later personalize by device
+    const did = deviceId || 'anonymous'
     env.DB.prepare(
       "INSERT INTO signals (target_type, target_id) VALUES (?, ?)"
-    ).bind(targetType, targetId).run().catch(() => {})
+    ).bind(`${targetType}:${did}`, targetId).run().catch(() => {})
 
-    // Update click count for articles
     if (targetType === 'article') {
       env.DB.prepare(
         "UPDATE news SET click_count = click_count + 1 WHERE id = ?"

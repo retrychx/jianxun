@@ -1,3 +1,5 @@
+import { CONFIG } from '../../../src/config'
+
 export function ogPage(opts: {
   title: string
   description: string
@@ -8,19 +10,20 @@ export function ogPage(opts: {
   const { title, description, image, slug, type = 'article' } = opts
   const url = `/${slug}`
   const hashUrl = `/#/${slug}`
+  const siteUrl = CONFIG.SITE_URL
 
   return new Response(`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>${escHtml(title)} - 简讯</title>
+<title>${escHtml(title)} - ${CONFIG.OG_SITE_NAME}</title>
 <meta name="description" content="${escHtml(description)}"/>
-<meta property="og:site_name" content="简讯"/>
+<meta property="og:site_name" content="${CONFIG.OG_SITE_NAME}"/>
 <meta property="og:title" content="${escHtml(title)}"/>
 <meta property="og:description" content="${escHtml(description)}"/>
 <meta property="og:type" content="${type}"/>
-<meta property="og:url" content="https://jianxun.pages.dev${url}"/>
+<meta property="og:url" content="${siteUrl}${url}"/>
 ${image ? `<meta property="og:image" content="${escHtml(image)}"/>` : ''}
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${escHtml(title)}"/>
