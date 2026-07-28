@@ -1,13 +1,13 @@
-// SEO helper: build HTML page with OG meta tags + redirect to hash route
-export function seoPage(opts: {
+export function ogPage(opts: {
   title: string
   description: string
   image?: string | null
-  url: string
+  slug: string
   type?: string
 }): Response {
-  const { title, description, image, url, type = 'article' } = opts
-  const hashUrl = url.startsWith('/') ? `/#${url}` : url
+  const { title, description, image, slug, type = 'article' } = opts
+  const url = `/${slug}`
+  const hashUrl = `/#/${slug}`
 
   return new Response(`<!DOCTYPE html>
 <html lang="zh-CN">
