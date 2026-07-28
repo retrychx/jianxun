@@ -512,6 +512,8 @@ export default function App() {
               onClear={() => handleSearchChange('')}
               onNewsClick={openNews}
               onAsk={(q) => { setAskQuery(q); setAskOpen(true) }}
+              onEntityClick={(name) => navigate(`#/entity/${encodeURIComponent(name)}`)}
+              onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)}
             />
           ) : view === 'entity' && baseRoute.entity ? (
             <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} />
