@@ -1,0 +1,2 @@
+/news/*  /api/og/news/:splat  301
+/narrative/*  /api/og/narrative/:splat  301
