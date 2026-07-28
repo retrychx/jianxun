@@ -209,6 +209,19 @@ export default function App() {
     return () => { cancelled = true; document.removeEventListener('click', handleInteraction); document.removeEventListener('touchstart', handleInteraction) }
   }, [loadAll, loadStats, loadDigestDates])
 
+  // PWA 安装提示（Chrome beforeinstallprompt）
+  const [installEvent, setInstallEvent] = useState<any>(null)
+  useEffect(() => {
+    const handler = (e: any) => { e.preventDefault(); setInstallEvent(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+  const handleInstall = useCallback(() => {
+    if (!installEvent) return
+    installEvent.prompt()
+    installEvent.userChoice.then(() => setInstallEvent(null))
+  }, [installEvent])
+
   // 浏览器通知（用于突发/叙事更新）
   const [notifGranted, setNotifGranted] = useState(false)
   const notifyBrowser = useCallback((title: string, body: string, url?: string) => {
@@ -537,6 +550,16 @@ export default function App() {
       >
         <MessageCircleQuestion size={21} />
       </button>
+
+      {/* PWA 安装提示按钮（Chrome beforeinstallprompt） */}
+      {installEvent && (
+        <button className="pwa-install-btn" onClick={handleInstall} title="添加到主屏幕">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          安装到桌面
+        </button>
+      )}
       <AskView
         open={askOpen}
         initialQuestion={askQuery}

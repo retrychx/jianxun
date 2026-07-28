@@ -1024,6 +1024,20 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ask-fab:hover { background: var(--accent-hover); transform: translateY(-2px) }
 .ask-fab:active { transform: scale(.94) }
 
+/* PWA 安装按钮 */
+.pwa-install-btn {
+  position: fixed; right: 20px; bottom: 76px; z-index: 949;
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border: none; border-radius: 20px;
+  background: var(--surface); color: var(--accent);
+  border: 1px solid var(--accent-border);
+  cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;
+  box-shadow: var(--shadow); transition: all .18s;
+  animation: popIn .3s var(--ease);
+}
+.pwa-install-btn:hover { background: var(--accent-light); transform: translateY(-2px) }
+@keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.95) } to { opacity: 1; transform: none } }
+
 .ask-backdrop { position: fixed; inset: 0; z-index: 955; background: rgba(0,0,0,.18); animation: fadeIn .2s ease }
 .ask-widget {
   position: fixed; right: 20px; bottom: 82px; z-index: 960;
@@ -1122,6 +1136,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 
 @media (max-width: 768px) {
   .ask-fab { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 14px) }
+  .pwa-install-btn { right: 16px; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 66px) }
   .ask-widget {
     right: 0; left: 0; bottom: 0; width: auto; max-width: none; max-height: 92vh;
     border-radius: 16px 16px 0 0; border-bottom: none;
