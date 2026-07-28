@@ -41,4 +41,5 @@ jobs:
         run: npx wrangler deploy -c workers/cron-analyze/wrangler.toml
 
       - name: Set Admin Token for cron-analyze
-        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN --name jianxun-cron-analyze
+        working-directory: workers/cron-analyze
+        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
