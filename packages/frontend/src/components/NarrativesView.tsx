@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   GitBranch, ChevronRight, Clock, Hash, AlertTriangle,
-  BookOpen, Flame, Radio, Globe, Newspaper,
+  BookOpen, Flame, Radio, Globe, Newspaper, RefreshCw,
 } from 'lucide-react'
 import { getNarratives, type NarrativeSummary } from '../api'
 import { decodeEntities } from '../utils'
@@ -52,22 +52,85 @@ function daysBetween(a: string, b: string): number {
   return Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000))
 }
 
+const REFRESH_COOLDOWN = 300_000 // 5 秒…不对，5 分钟
+
 export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate }: Props) {
   const [narratives, setNarratives] = useState<NarrativeSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null)
   const [showStale, setShowStale] = useState(false)
+  const [pullDist, setPullDist] = useState(0)
+  const [pullPhase, setPullPhase] = useState<'idle' | 'pulling' | 'ready'>('idle')
+  const touchStartY = useRef(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Load narratives
+  const load = useCallback(async () => {
+    try {
+      const n = await getNarratives()
+      setNarratives(n.narratives)
+    } catch {}
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-    getNarratives().then(n => {
-      if (!cancelled) { setNarratives(n.narratives); setLoading(false) }
-    }).catch(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+    setLoading(true)
+    load().finally(() => setLoading(false))
+  }, [load])
+
+  // Pull-to-refresh touch handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (containerRef.current && containerRef.current.scrollTop <= 0) {
+      touchStartY.current = e.touches[0].clientY
+      setPullPhase('idle')
+    }
   }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === 0) return
+    const dist = e.touches[0].clientY - touchStartY.current
+    if (dist > 0 && containerRef.current && containerRef.current.scrollTop <= 0) {
+      const clamped = Math.min(dist * 0.4, 80) // resistance + cap
+      setPullDist(clamped)
+      setPullPhase(clamped > 50 ? 'ready' : 'pulling')
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    touchStartY.current = 0
+    if (pullPhase === 'ready') {
+      triggerRefresh()
+    }
+    setPullDist(0)
+    setPullPhase('idle')
+  }, [pullPhase])
+
+  // Trigger narrative recomputation
+  const triggerRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    setRefreshMsg(null)
+    try {
+      const res = await fetch('/api/news/narrative/refresh', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setRefreshMsg('计算完成')
+        await load()
+      } else if (data.remaining) {
+        setRefreshMsg(`请 ${data.remaining} 秒后再试`)
+      } else {
+        setRefreshMsg(data.error || '刷新失败')
+      }
+    } catch {
+      setRefreshMsg('请求失败')
+    }
+    setRefreshing(false)
+    setTimeout(() => setRefreshMsg(null), 3000)
+  }, [refreshing, load])
 
   if (loading) {
     return (
-      <div className="narratives-view">
+      <div className="narratives-view" ref={containerRef}>
         <div className="nv-header"><h2 className="nv-title">故事脉络</h2></div>
         {[1, 2, 3].map(i => (
           <div key={i} className="narr-story-card skeleton" style={{ height: 120, marginBottom: 10, borderRadius: 'var(--radius)' }} />
@@ -79,7 +142,6 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
   const active = narratives.filter(n => n.status === 'active')
   const stale = narratives.filter(n => n.status !== 'active')
 
-  // Sort active: breaking first, then by lastUpdated desc
   active.sort((a, b) => {
     const catA = categorize(a), catB = categorize(b)
     const order: Category[] = ['breaking', 'debate', 'cross', 'research', 'normal']
@@ -89,10 +151,46 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
   })
   stale.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
 
-  if (!narratives.length) {
-    return (
-      <div className="narratives-view">
-        <div className="nv-header"><h2 className="nv-title">故事脉络</h2></div>
+  return (
+    <div
+      className="narratives-view"
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull indicator */}
+      {pullDist > 0 && (
+        <div className="nv-pull-indicator" style={{ height: pullDist, opacity: Math.min(pullDist / 50, 1) }}>
+          <RefreshCw size={16} className={`nv-pull-icon ${pullPhase === 'ready' ? 'ready' : ''}`} />
+          <span>{pullPhase === 'ready' ? '松开刷新' : '下拉刷新故事'}</span>
+        </div>
+      )}
+
+      {/* Header with refresh */}
+      <div className="nv-header">
+        <div>
+          <h2 className="nv-title">故事脉络</h2>
+          <p className="nv-subtitle">
+            {narratives.length > 0
+              ? `${active.length} 个追踪中 · ${narratives.length} 个故事`
+              : '追踪正在发生的重要话题'}
+          </p>
+        </div>
+        <button
+          className={`nv-refresh-btn ${refreshing ? 'spinning' : ''}`}
+          onClick={triggerRefresh}
+          disabled={refreshing}
+          title="立即刷新"
+        >
+          <RefreshCw size={15} />
+        </button>
+      </div>
+
+      {/* Refresh feedback */}
+      {refreshMsg && <div className="nv-refresh-toast">{refreshMsg}</div>}
+
+      {!narratives.length ? (
         <div className="empty" style={{ marginTop: 40 }}>
           <Radio size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
           <p>暂无追踪中的故事</p>
@@ -100,85 +198,76 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
             Agent 将自动识别并追踪重要话题的进展
           </p>
         </div>
-      </div>
-    )
-  }
+      ) : (
+        <>
+          {active.map(n => {
+            const cat = categorize(n)
+            const meta = CATEGORY_META[cat]
+            const Icon = meta.icon
+            const span = daysBetween(n.firstSeen, n.lastUpdated)
+            const sourceCount = Object.keys(n.sourceStats).length
 
-  return (
-    <div className="narratives-view">
-      <div className="nv-header">
-        <div>
-          <h2 className="nv-title">故事脉络</h2>
-          <p className="nv-subtitle">追踪正在发生的重要话题，看它怎么演变</p>
-        </div>
-      </div>
-
-      {active.map(n => {
-        const cat = categorize(n)
-        const meta = CATEGORY_META[cat]
-        const Icon = meta.icon
-        const span = daysBetween(n.firstSeen, n.lastUpdated)
-        const sourceCount = Object.keys(n.sourceStats).length
-
-        return (
-          <button
-            key={n.keyword}
-            className="narr-story-card"
-            onClick={() => onNarrativeClick(n.keyword)}
-          >
-            <div className="nsc-top">
-              <span className="nsc-category" style={{ color: meta.color }}>
-                <Icon size={14} />
-                {meta.label}
-              </span>
-              <span className="nsc-coverage">
-                <Newspaper size={12} />
-                {sourceCount} 家媒体
-              </span>
-            </div>
-
-            <h3 className="nsc-title">{cleanLabel(n.label || n.keyword)}</h3>
-
-            {n.summary && (
-              <p className="nsc-summary">{decodeEntities(n.summary)}</p>
-            )}
-
-            <div className="nsc-meta">
-              <span><Clock size={12} /> {timeAgo(n.lastUpdated)} 更新</span>
-              <span className="nsc-dot">·</span>
-              <span>持续 {span} 天</span>
-              <span className="nsc-dot">·</span>
-              <span>{n.articleCount} 篇报道</span>
-              <span className="nsc-arrow"><ChevronRight size={14} /></span>
-            </div>
-          </button>
-        )
-      })}
-
-      {stale.length > 0 && (
-        <details className="nv-stale" open={showStale}>
-          <summary className="nv-stale-summary" onClick={e => { e.preventDefault(); setShowStale(!showStale) }}>
-            <Clock size={14} />
-            <span>已停滞 ({stale.length})</span>
-            <ChevronRight size={14} className={`nv-chevron ${showStale ? 'open' : ''}`} />
-          </summary>
-          <div className="nv-stale-list">
-            {stale.map(n => (
+            return (
               <button
                 key={n.keyword}
-                className="narr-story-card stale"
+                className="narr-story-card"
                 onClick={() => onNarrativeClick(n.keyword)}
               >
+                <div className="nsc-top">
+                  <span className="nsc-category" style={{ color: meta.color }}>
+                    <Icon size={14} />
+                    {meta.label}
+                  </span>
+                  <span className="nsc-coverage">
+                    <Newspaper size={12} />
+                    {sourceCount} 家媒体
+                  </span>
+                </div>
+
                 <h3 className="nsc-title">{cleanLabel(n.label || n.keyword)}</h3>
+
+                {n.summary && (
+                  <p className="nsc-summary">{decodeEntities(n.summary)}</p>
+                )}
+
                 <div className="nsc-meta">
-                  <span>{n.articleCount} 篇</span>
+                  <span><Clock size={12} /> {timeAgo(n.lastUpdated)} 更新</span>
                   <span className="nsc-dot">·</span>
-                  <span>{Object.keys(n.sourceStats).length} 个来源</span>
+                  <span>持续 {span} 天</span>
+                  <span className="nsc-dot">·</span>
+                  <span>{n.articleCount} 篇报道</span>
+                  <span className="nsc-arrow"><ChevronRight size={14} /></span>
                 </div>
               </button>
-            ))}
-          </div>
-        </details>
+            )
+          })}
+
+          {stale.length > 0 && (
+            <details className="nv-stale" open={showStale}>
+              <summary className="nv-stale-summary" onClick={e => { e.preventDefault(); setShowStale(!showStale) }}>
+                <Clock size={14} />
+                <span>已停滞 ({stale.length})</span>
+                <ChevronRight size={14} className={`nv-chevron ${showStale ? 'open' : ''}`} />
+              </summary>
+              <div className="nv-stale-list">
+                {stale.map(n => (
+                  <button
+                    key={n.keyword}
+                    className="narr-story-card stale"
+                    onClick={() => onNarrativeClick(n.keyword)}
+                  >
+                    <h3 className="nsc-title">{cleanLabel(n.label || n.keyword)}</h3>
+                    <div className="nsc-meta">
+                      <span>{n.articleCount} 篇</span>
+                      <span className="nsc-dot">·</span>
+                      <span>{Object.keys(n.sourceStats).length} 个来源</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
       )}
     </div>
   )
