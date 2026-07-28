@@ -1,7 +1,0 @@
-name: Daily Image Fix (replaced by cron-analyze Worker)
-
-on:
-  # 由 cron-analyze Worker 每 3h 触发的 agent pipeline 替代
-  # - fixMissingImages  (critical 阶段)
-  # - translateMissing  (normal 阶段)
-  workflow_dispatch:

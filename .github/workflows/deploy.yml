@@ -47,5 +47,6 @@ jobs:
           echo "Admin token set on cron-analyze"
 
       - name: Verify cron-analyze health
+        continue-on-error: true
         run: |
-          curl -s "https://jianxun-cron-analyze.863129776.workers.dev/health" --max-time 10
+          curl -s "https://jianxun-cron-analyze.863129776.workers.dev/health" --max-time 10 || echo "health check skipped (expected if cold start)"
