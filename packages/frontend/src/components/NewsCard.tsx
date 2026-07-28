@@ -35,6 +35,7 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
         </div>
       )}
       <div className="card-body">
+        {onHide && <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onHide(item.id) }} title="不感兴趣">×</button>}
         <div className="card-header">
           <span className="card-source">{item.source}</span>
           <span className="card-time">{item.publishedAt ? formatDate(item.publishedAt) : ''}</span>
@@ -51,7 +52,6 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
           {item.heat != null && item.heat > 1 && (
             <span className="card-heat">{item.heat} 家媒体报道</span>
           )}
-          {onHide && <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onHide(item.id) }} title="不感兴趣">×</button>}
         </div>
       </div>
     </article>
