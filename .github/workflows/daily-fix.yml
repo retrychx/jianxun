@@ -1,23 +1,7 @@
-name: Daily Image Fix
+name: Daily Image Fix (replaced by cron-analyze Worker)
 
 on:
-  schedule:
-    - cron: '0 6 * * *'  # 每天 6:00 UTC = 14:00 CST
+  # 由 cron-analyze Worker 每 3h 触发的 agent pipeline 替代
+  # - fixMissingImages  (critical 阶段)
+  # - translateMissing  (normal 阶段)
   workflow_dispatch:
-
-jobs:
-  fix-images:
-    runs-on: ubuntu-latest
-    env:
-      SITE_URL: ${{ vars.SITE_URL || 'https://jianxun.pages.dev' }}
-    steps:
-      - name: Trigger image fix
-        run: |
-          curl -s --max-time 180 -X POST \
-            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
-            "$SITE_URL/api/news/fix-images"
-      - name: Translate English articles
-        run: |
-          curl -s --max-time 120 -X POST \
-            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
-            "$SITE_URL/api/news/translate"
