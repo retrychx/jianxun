@@ -1,44 +1,35 @@
 /**
  * 数据清理 + 系统健康度 — agent 周期性维护
+ * 注意：不删除 articles（agent 训练数据 + 叙事引用）
+ * 只清理 signals（增长最快）和深度归档叙事
  */
 import type { Env } from '../helpers.js'
 import { cacheDelete } from '../cache.js'
 
-/** 清理过期数据：30 天前的文章 + 14 天前的叙事 + 7 天前的信号 */
-export async function cleanup(env: Env): Promise<{ deletedArticles: number; archivedNarratives: number; deletedSignals: number }> {
-  const result = { deletedArticles: 0, archivedNarratives: 0, deletedSignals: 0 }
+export async function cleanup(env: Env): Promise<{ archivedNarratives: number; deletedSignals: number }> {
+  const result = { archivedNarratives: 0, deletedSignals: 0 }
 
-  // 清理 30 天前的旧文章
-  try {
-    const del = await env.DB.prepare(
-      "DELETE FROM news WHERE created_at < datetime('now', '-30 days')"
-    ).run()
-    result.deletedArticles = del.meta.changes || 0
-  } catch (e: any) { console.error('[cleanup] delete articles:', e?.message) }
-
-  // 归档 14 天无更新的叙事
+  // 归档 30 天无更新的叙事（标记为 archived，数据保留）
   try {
     const arch = await env.DB.prepare(
-      "UPDATE narratives SET status = 'archived' WHERE status = 'stale' AND last_updated < datetime('now', '-14 days')"
+      "UPDATE narratives SET status = 'archived' WHERE status = 'stale' AND last_updated < datetime('now', '-30 days')"
     ).run()
     result.archivedNarratives = arch.meta.changes || 0
   } catch (e: any) { console.error('[cleanup] archive narratives:', e?.message) }
 
-  // 清理 7 天前的信号
+  // 清理 14 天前的信号（增长最快的数据，14天足够分析趋势）
   try {
     const sig = await env.DB.prepare(
-      "DELETE FROM signals WHERE created_at < datetime('now', '-7 days')"
+      "DELETE FROM signals WHERE created_at < datetime('now', '-14 days')"
     ).run()
     result.deletedSignals = sig.meta.changes || 0
   } catch (e: any) { console.error('[cleanup] delete signals:', e?.message) }
 
-  // 清理缓存
   cacheDelete('weekly').catch(() => {})
 
   return result
 }
 
-/** 系统健康检查 */
 export async function systemHealth(env: Env): Promise<any> {
   const [articleCount, narrCount, signalCount, lastRun, errorCount] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as c FROM news").first<any>(),
@@ -60,7 +51,6 @@ export async function systemHealth(env: Env): Promise<any> {
   }
 }
 
-/** 记录系统错误 */
 export async function recordError(env: Env, source: string, message: string): Promise<void> {
   try {
     const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key='agent_errors'").first<any>()

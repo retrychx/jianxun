@@ -8,10 +8,9 @@ export const CONFIG = {
   OG_SITE_NAME: '简讯',
   /** Cloudflare 账户 ID（用于 worker URL） */
   CLOUDFLARE_ACCOUNT_ID: '863129776',
-  /** 数据保留天数 */
+  /** 数据保留天数（注：articles 永远不删，agent 训练依赖历史数据） */
   RETENTION: {
-    ARTICLES_DAYS: 30,
-    SIGNALS_DAYS: 7,
-    NARRATIVE_STALE_DAYS: 14,
+    SIGNALS_DAYS: 14,
+    NARRATIVE_ARCHIVE_DAYS: 30,
   },
 } as const
