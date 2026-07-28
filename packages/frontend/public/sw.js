@@ -1,23 +1,27 @@
 // 简讯 Service Worker — PWA 离线策略
-const CACHE = 'jianxun-v1'
-const ASSETS = ['/', '/manifest.json', '/icon-192.svg', '/robots.txt', '/sitemap.xml']
+var CACHE = 'jianxun-v1'
+var ASSETS = ['/', '/manifest.json', '/icon-192.svg', '/robots.txt', '/sitemap.xml']
 
-self.addEventListener('install', (e: any) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => (self as any).skipWaiting()))
+self.addEventListener('install', function(e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function(c) { return c.addAll(ASSETS) }).then(function() { return self.skipWaiting() })
+  )
 })
 
-self.addEventListener('activate', (e: any) => {
+self.addEventListener('activate', function(e) {
   e.waitUntil(clients.claim())
 })
 
-self.addEventListener('fetch', (e: any) => {
+self.addEventListener('fetch', function(e) {
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-      if (res.ok && res.type === 'basic') {
-        const clone = res.clone()
-        caches.open(CACHE).then(c => c.put(e.request, clone))
-      }
-      return res
-    }))
+    caches.match(e.request).then(function(r) {
+      return r || fetch(e.request).then(function(res) {
+        if (res.ok && res.type === 'basic') {
+          var clone = res.clone()
+          caches.open(CACHE).then(function(c) { c.put(e.request, clone) })
+        }
+        return res
+      })
+    })
   )
 })

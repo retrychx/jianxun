@@ -194,7 +194,11 @@ export default function App() {
     init()
     // 注册 Service Worker（PWA 离线 + 添加到桌面提示）
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
+      navigator.serviceWorker.register('/sw.js').then(() => {
+        console.log('[pwa] SW registered')
+      }).catch((e) => {
+        console.warn('[pwa] SW failed:', e)
+      })
     }
     // 首次交互时请求通知权限
     const handleInteraction = () => {
