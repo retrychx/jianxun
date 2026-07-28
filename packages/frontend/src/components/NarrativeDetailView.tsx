@@ -224,6 +224,41 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         )}
       </div>
 
+      {/* ═══ 信源对比（跨源叙事专用） ═══ */}
+      {typeInfo?.label === '多源' && phases.length > 0 && (
+        <section className="nd-crossref-section">
+          <h3 className="nd-section-title">信源角度对比</h3>
+          <div className="nd-cr-grid">
+            {sourceAngles.slice(0, 6).map(sa => {
+              const total = Object.values(sa.types).reduce((s, v) => s + v, 0)
+              return (
+                <div key={sa.source} className="nd-cr-card">
+                  <div className="nd-cr-header">
+                    <span className="nd-cr-source">{sa.source}</span>
+                    <span className="nd-cr-angle">{sa.label}</span>
+                  </div>
+                  <div className="nd-cr-bar">
+                    {Object.entries(sa.types).map(([type, count]) => (
+                      <div key={type} className={`nd-sa-bar-seg type-${type}`} style={{ width: `${(count / total) * 100}%` }} />
+                    ))}
+                  </div>
+                  <div className="nd-cr-types">
+                    {Object.entries(sa.types).slice(0, 3).map(([type, count]) => (
+                      <span key={type} className="nd-sa-type">{TYPE_LABELS[type] || type} {count}</span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {phases[0]?.[1]?.[0]?.text && (
+            <div className="nd-cr-summary">
+              <p>{decodeEntities(phases[0][1][0].text)}</p>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ═══ ① Entity Evolution Timeline ═══ */}
       {entityTimeline.length > 1 && (
         <section className="nd-et-section">

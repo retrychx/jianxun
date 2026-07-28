@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Rss } from 'lucide-react'
+import { Rss, Globe, Newspaper, TrendingUp, AlertCircle, CheckCircle, Hash } from 'lucide-react'
 import type { SourceHealth } from '../api'
 import { getSources } from '../api'
-import { formatDate } from '../utils'
 
 export function SourcesView() {
   const [items, setItems] = useState<SourceHealth[]>([])
@@ -18,57 +17,62 @@ export function SourcesView() {
     return () => { cancelled = true }
   }, [])
 
+  if (loading) return (
+    <div className="sources-view">
+      <div className="nv-header"><h2 className="nv-title">信源档案</h2></div>
+      {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 80, marginBottom: 10, borderRadius: 'var(--radius)' }} />)}
+    </div>
+  )
+
+  if (error) return (
+    <div className="sources-view">
+      <div className="nv-header"><h2 className="nv-title">信源档案</h2></div>
+      <div className="empty"><Rss size={28} style={{ opacity: .3, marginBottom: 8 }} /><p>加载失败</p></div>
+    </div>
+  )
+
   const sorted = [...items].sort((a, b) => (b.today ?? 0) - (a.today ?? 0))
 
   return (
     <div className="sources-view">
-      <div className="briefing-header">
-        <div className="briefing-title-row">
-          <Rss size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <h2 className="briefing-title">信源健康度</h2>
+      <div className="nv-header">
+        <div>
+          <h2 className="nv-title">信源档案</h2>
+          <p className="nv-subtitle">{sorted.length} 个信源 · 今日产量 {sorted.reduce((s, i) => s + (i.today || 0), 0)} 篇</p>
         </div>
-        {!loading && !error && <p className="briefing-subtitle">{sorted.length} 个信源 · 按今日产量排序</p>}
       </div>
-      {loading ? (
-        <div className="loading">加载中...</div>
-      ) : error ? (
-        <div className="empty">
-          <Rss size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-          <p>加载失败，请稍后重试</p>
-        </div>
-      ) : sorted.length === 0 ? (
-        <div className="empty">
-          <Rss size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-          <p>暂无信源数据</p>
-        </div>
-      ) : (
-        <div className="sources-table-wrap">
-          <table className="sources-table">
-            <thead>
-              <tr>
-                <th>信源</th>
-                <th>今日 / 总量</th>
-                <th>权重</th>
-                <th>最近成功</th>
-                <th>最近失败</th>
-                <th>失败数</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map(s => (
-                <tr key={s.name}>
-                  <td className="sources-name">{s.name}</td>
-                  <td className="sources-num">{s.today ?? 0} / {s.total ?? 0}</td>
-                  <td className="sources-num">{s.weight ?? '—'}</td>
-                  <td>{s.lastOk ? formatDate(s.lastOk) : '—'}</td>
-                  <td>{s.lastError ? formatDate(s.lastError) : '—'}</td>
-                  <td className={`sources-num${s.failCount > 0 ? ' sources-fail' : ''}`}>{s.failCount ?? 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+
+      <div className="src-grid">
+        {sorted.map(s => {
+          const health = s.failCount > 0 ? 'warning' : 'ok'
+          const entityCount = s.topEntities?.length || 0
+          return (
+            <div key={s.name} className="src-card">
+              <div className="src-card-header">
+                <span className="src-card-name">{s.name}</span>
+                <span className={`src-health src-${health}`}>
+                  {health === 'ok' ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                  {health === 'ok' ? '正常' : `${s.failCount} 次失败`}
+                </span>
+              </div>
+              <div className="src-card-stats">
+                <span className="src-stat"><Newspaper size={12} /> 今日 <strong>{s.today}</strong></span>
+                <span className="src-stat"><Globe size={12} /> 总量 <strong>{s.total}</strong></span>
+                <span className="src-stat"><TrendingUp size={12} /> 权重 <strong>{s.weight}</strong></span>
+              </div>
+              {entityCount > 0 && (
+                <div className="src-entities">
+                  <Hash size={10} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                  {s.topEntities!.slice(0, 4).map(e => (
+                    <span key={e.name} className="src-entity-tag">{e.name}</span>
+                  ))}
+                  {s.topEntities!.length > 4 && <span className="src-entity-more">+{s.topEntities!.length - 4}</span>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -538,23 +538,46 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ts-deep-link:hover { color: var(--accent-hover) }
 
 /* ===== Sources（信源健康度） ===== */
-.sources-view { animation: fadeUp .5s var(--ease) both }
-.sources-table-wrap {
-  overflow-x: auto;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+.sources-view { animation: fadeUp .5s var(--ease) both; max-width: 680px }
+
+/* 信源卡片网格 */
+.src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px }
+.src-card {
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); display: flex; flex-direction: column; gap: 8px;
 }
-.sources-table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 12.5px }
-.sources-table th {
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  text-align: left; white-space: nowrap;
-  font-size: 10px; font-weight: 700; color: var(--text-tertiary);
-  text-transform: uppercase; letter-spacing: .05em;
+.src-card-header { display: flex; align-items: center; justify-content: space-between }
+.src-card-name { font-size: 13px; font-weight: 600; color: var(--text) }
+.src-health { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px }
+.src-ok { background: #ecfdf5; color: #059669 }
+.src-warning { background: #fffbeb; color: #d97706 }
+.src-card-stats { display: flex; gap: 12px; font-size: 11px; color: var(--text-tertiary) }
+.src-stat { display: flex; align-items: center; gap: 3px }
+.src-stat strong { color: var(--text); font-weight: 600 }
+.src-entities { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px }
+.src-entity-tag {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px;
+  background: var(--card-hover); color: var(--text-secondary);
 }
-.sources-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); white-space: nowrap }
-.sources-table tr:last-child td { border-bottom: none }
-.sources-name { font-weight: 600; color: var(--text) }
-.sources-num { font-variant-numeric: tabular-nums }
-.sources-fail { color: #dc2626; font-weight: 700 }
+.src-entity-more { font-size: 10px; color: var(--text-tertiary) }
+
+/* 跨源对比（crossRef 叙事） */
+.nd-crossref-section { margin-bottom: 28px }
+.nd-cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 12px }
+.nd-cr-card {
+  padding: 10px 12px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); background: var(--surface);
+}
+.nd-cr-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px }
+.nd-cr-source { font-size: 12px; font-weight: 600; color: var(--text) }
+.nd-cr-angle { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: var(--accent-light); color: var(--accent) }
+.nd-cr-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 4px; gap: 1px }
+.nd-cr-types { display: flex; gap: 6px; flex-wrap: wrap }
+.nd-cr-summary {
+  padding: 12px 14px; background: var(--accent-light);
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary);
+  line-height: 1.6;
+}
 
 /* 页脚小字链接 */
 .footer-link { color: var(--text-tertiary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border) }

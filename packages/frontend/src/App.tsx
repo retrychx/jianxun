@@ -508,7 +508,7 @@ export default function App() {
               onAsk={(q) => { setAskQuery(q); setAskOpen(true) }}
             />
           ) : view === 'entity' && baseRoute.entity ? (
-            <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} />
+            <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} />
           ) : view === 'digest' && baseRoute.date ? (
             <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} follows={follows} onEntityClick={openEntity} />
           ) : view === 'topic' && baseRoute.topic ? (
