@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Hash, Newspaper, TrendingUp } from 'lucide-react'
-import type { WeeklyResponse } from '../api'
-import { getWeekly } from '../api'
+import { Hash, Newspaper, TrendingUp, GitBranch, Clock } from 'lucide-react'
+import type { WeeklyResponse, NarrativeSummary } from '../api'
+import { getWeekly, getNarratives } from '../api'
 
 // 近 7 天日期范围：'7月20日 – 7月26日'
 function weekRange(): string {
@@ -10,6 +10,11 @@ function weekRange(): string {
   start.setDate(start.getDate() - 6)
   const fmt = (d: Date) => d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
   return `${fmt(start)} – ${fmt(end)}`
+}
+
+// 临时导出 cleanNarrativeTitle — 后续移动到 utils
+function cleanLabel(label: string): string {
+  return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
 }
 
 function WeeklySkeleton() {
@@ -27,15 +32,16 @@ function WeeklySkeleton() {
   )
 }
 
-// 周报卡片（#/weekly）：适合截图分享的单卡设计
+// 周报卡片（#/weekly）：叙事驱动的周度回顾
 export function WeeklyView() {
   const [data, setData] = useState<WeeklyResponse | null>(null)
+  const [narratives, setNarratives] = useState<NarrativeSummary[]>([])
   const [error, setError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    getWeekly()
-      .then(d => { if (!cancelled) setData(d) })
+    Promise.all([getWeekly(), getNarratives()])
+      .then(([w, n]) => { if (!cancelled) { setData(w); setNarratives(n.narratives || []) } })
       .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
   }, [])
@@ -98,6 +104,18 @@ export function WeeklyView() {
                 <span className="weekly-topic-label">{t.label}</span>
                 <span className="weekly-topic-count">{t.count} 篇</span>
               </div>
+            ))}
+          </div>
+        )}
+
+        {narratives.filter(n => n.status === 'active').length > 0 && (
+          <div className="bf-section">
+            <div className="bf-section-title"><GitBranch size={13} /> 本周追踪中的故事</div>
+            {narratives.filter(n => n.status === 'active').slice(0, 5).map(n => (
+              <a key={n.keyword} href={`#/narrative/${encodeURIComponent(n.keyword)}`} className="weekly-narr-row">
+                <span className="weekly-narr-label">{cleanLabel(n.label || n.keyword)}</span>
+                <span className="weekly-narr-meta">{n.articleCount} 篇 · {Object.keys(n.sourceStats).length} 个来源{n.summary ? ` · ${n.summary.slice(0, 40)}` : ''}</span>
+              </a>
             ))}
           </div>
         )}
