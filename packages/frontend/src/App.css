@@ -191,7 +191,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .tab-list {
   display: flex; gap: 6px; overflow-x: auto;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
-  
+
   padding: 2px 0;
 }
 .tab-list::-webkit-scrollbar { display: none }
@@ -205,7 +205,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   cursor: pointer; white-space: nowrap; flex-shrink: 0;
   font-family: inherit;
   transition: all .2s cubic-bezier(.16,1,.3,1);
-  
+
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -888,7 +888,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   /* Trending standalone page on mobile (full-width, no card styling) */
   .trending-view .trending-panel { border: none; border-radius: 0; position: static; background: transparent }
   .trending-view .panel-header { padding: 8px 14px; margin-bottom: 0 }
-  .trending-view .trending-item { padding: 12px 14px }
+  .trending-view .trending-item { padding: 12px 0 }
   .trending-view .trending-ext { padding: 2px 6px }
 
   /* Sheet: full screen on mobile */
@@ -960,7 +960,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .trending-view .panel-header { border-bottom: 1px solid var(--border-light); padding: 14px 0 12px }
 
 .trending-panel::before {
-  content: ''; position: absolute; top: -4px; left: 12px; right: 12px; height: 4px;
+  content: ''; position: absolute; top: -4px; left: 0; right: 0; height: 4px;
   background: radial-gradient(circle at 6px 4px, transparent 3px, #d4c9b8 3px);
   background-size: 12px 4px; background-repeat: repeat-x;
 }
