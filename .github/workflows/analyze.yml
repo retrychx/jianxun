@@ -1,8 +1,7 @@
-name: AI Analysis
+name: AI Analysis (replaced by cron-analyze Worker)
 
 on:
-  schedule:
-    - cron: '0 */3 * * *'
+  # 由 cron-analyze Worker (jianxun-cron-analyze) 替代，每 3h 自动触发
   workflow_dispatch:
 
 jobs:

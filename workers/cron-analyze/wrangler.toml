@@ -1,0 +1,14 @@
+name = "jianxun-cron-analyze"
+main = "index.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 每 3 小时触发一次 agent pipeline（分析、翻译、叙事检测等）
+[triggers]
+crons = ["5 */3 * * *"]
+
+[vars]
+SITE_URL = "https://jianxun.pages.dev"
+
+# 所需 secret（通过 `npx wrangler secret put` 配置）：
+#   ADMIN_TOKEN — 访问主站 API 的认证令牌

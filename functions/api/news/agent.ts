@@ -1,4 +1,5 @@
-import { json } from '../../../src/handler'
+import { json, requireAdmin } from '../../../src/handler'
+import { runAgent } from '../../../src/agent/index.js'
 
 // GET /api/news/agent — agent run status and last log
 export async function onRequestGet(context: any) {
@@ -19,4 +20,12 @@ export async function onRequestGet(context: any) {
     skipAi: log?.skipAi || false,
     phases: log?.results || null,
   })
+}
+
+// POST /api/news/agent — trigger the agent pipeline
+export async function onRequestPost(context: any) {
+  const denied = requireAdmin(context.request, context.env)
+  if (denied) return denied
+  const result = await runAgent(context.env, context)
+  return json({ ok: true, result })
 }

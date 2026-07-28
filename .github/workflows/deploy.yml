@@ -36,3 +36,9 @@ jobs:
 
       - name: Set Admin Token
         run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN
+
+      - name: Deploy cron-analyze Worker
+        run: npx wrangler deploy -c workers/cron-analyze/wrangler.toml
+
+      - name: Set Admin Token for cron-analyze
+        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN --name jianxun-cron-analyze
