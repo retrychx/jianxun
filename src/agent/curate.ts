@@ -33,9 +33,8 @@ export async function curateBriefing(env: Env) {
      ORDER BY score DESC LIMIT 30`
   ).all<any>()
   for (const a of (highImpact.results || [])) {
-    try { const d = JSON.parse(a.analysis_detail); if (d.impact === 'high' || d.significance) { a._significance = d.significance || ''; a._impact = d.impact; a._controversy = d.controversy } } catch {}
-    // Check if this article belongs to an active narrative
-    if (!candidates.some(c => c.id === a.id) && (a._significance || a._impact === 'high')) candidates.push(a)
+    try { const d = JSON.parse(a.analysis_detail); a._significance = d.significance || ''; a._impact = d.impact; a._controversy = d.controversy } catch {}
+    if (!candidates.some(c => c.id === a.id)) candidates.push(a)
   }
 
   // ── Narrative-tracked stories ──
