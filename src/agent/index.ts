@@ -32,6 +32,7 @@ import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
 import { checkSystemState, planPhases, allocateBudget } from './decider.js'
 import { evaluateQuality, saveKPI, shouldExplore, getExperimentParams, saveExperiment, estimateAPICost, generateReport, saveReport } from './eval.js'
+import { cacheDelete } from '../cache.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
 const ALL_PHASES: PhaseDef[] = [
@@ -87,6 +88,11 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   const results = await runPhases(phases, env)
   const totalMs = Date.now() - start
+
+  // ═══ Cache invalidation: agent 跑完后清相关缓存 ═══
+  // 防止用户看到 agent 更新前的旧数据
+  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly']
+  for (const key of CACHE_KEYS) cacheDelete(key).catch(() => {})
 
   // ═══ Self-Evaluation: 评估本轮分析质量 ═══
   const kpi = await evaluateQuality(env)

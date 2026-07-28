@@ -27,15 +27,15 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
   }
 
   // Full candidate pool for today's window
+  // 注意：去掉 correlated subquery（D1 5s 超时）
   const candidates = await env.DB.prepare(
-    `SELECT n.id, n.title, n.summary, n.category, n.source, n.analysis_detail,
-       (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-     FROM news n
+    `SELECT id, title, summary, category, source, analysis_detail
+     FROM news
      WHERE published_at >= datetime(date('now', '+8 hours'), '-8 hours', '-24 hours')
        AND published_at < datetime(date('now', '+8 hours'), '-8 hours')
-     ORDER BY n.score DESC`
+     ORDER BY score DESC`
   ).all()
-  const all = candidates.results as any[]
+  const all = (candidates?.results || []) as any[]
 
   // Enrich candidates with parsed analysis_detail for the digest prompt
   for (const c of all) {

@@ -1,5 +1,5 @@
-import { topics, json } from '../../../src/handler'
+import { tryCatch, topics, json } from '../../../src/handler'
 
 export async function onRequestGet(context: any) {
-  return json(await topics(context.env))
+  return tryCatch(() => topics(context.env))
 }

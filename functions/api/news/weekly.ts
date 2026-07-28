@@ -1,5 +1,5 @@
-import { weekly, json } from '../../../src/handler'
+import { tryCatch, weekly, json } from '../../../src/handler'
 
 export async function onRequestGet(context: any) {
-  return json(await weekly(context.env))
+  return tryCatch(() => weekly(context.env))
 }

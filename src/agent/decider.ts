@@ -64,17 +64,15 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
     if (p) planned.push(p)
   }
 
-  // 有文章待分析才跑
-  if (state.pendingArticles > 0) {
-    const analysis = basePhases.find(b => b.name === 'analyzeNewArticles')
-    if (analysis) planned.push(analysis)
-    const narrative = basePhases.find(b => b.name === 'updateNarratives')
-    if (narrative) planned.push(narrative)
-    // 分析产生的下游阶段
-    for (const name of ['detectBreakingNews', 'crossRefAnalysis', 'linkEntities', 'detectControversy']) {
-      const p = basePhases.find(b => b.name === name)
-      if (p) planned.push(p)
-    }
+  // 分析阶段：无论有没有待分析文章都跑（内部自己查 DB）
+  // 之前 pendingArticles > 0 条件导致新文章来了但 agent 不分析
+  const analysis = basePhases.find(b => b.name === 'analyzeNewArticles')
+  if (analysis) planned.push(analysis)
+  const narrative = basePhases.find(b => b.name === 'updateNarratives')
+  if (narrative) planned.push(narrative)
+  for (const name of ['detectBreakingNews', 'crossRefAnalysis', 'linkEntities', 'detectControversy']) {
+    const p = basePhases.find(b => b.name === name)
+    if (p) planned.push(p)
   }
 
   // 有信号才跑学习阶段
