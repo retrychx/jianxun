@@ -98,6 +98,28 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
         <div className="briefing-list">
           {boosted.map((item, i) => {
             const summary = displaySummary(item, lang)
+            const isFirst = i === 0
+            if (isFirst) {
+              return (
+              <article key={item.id} className="briefing-hero" onClick={() => onNewsClick(item.id)}>
+                <div className="briefing-hero-meta">
+                  <span className="briefing-source">{item.source}</span>
+                  <span className="briefing-cat" style={{ backgroundColor: categoryColor(item.category) }}>{item.category}</span>
+                  {item.heat != null && item.heat > 1 && <span className="briefing-heat">{item.heat} 家媒体报道</span>}
+                </div>
+                <h3 className="briefing-hero-title">{displayTitle(item, lang)}</h3>
+                {summary && <p className="briefing-hero-summary">{summary}</p>}
+                {item.keyPoints && item.keyPoints.length > 0 && (
+                  <div className="card-keypoints" style={{ marginTop: 4 }}>
+                    {item.keyPoints.slice(0, 2).map((kp, i) => <span key={i} className="card-kp">· {kp}</span>)}
+                  </div>
+                )}
+                {summary && item.reason && item.reason !== summary && (
+                  <div className="briefing-reason" style={{ marginTop: 6 }}><span className="briefing-reason-dot" />{item.reason}</div>
+                )}
+              </article>
+              )
+            }
             return (
             <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)}>
               <div className="briefing-rank"><span className="briefing-num">{String(i + 1).padStart(2, '0')}</span></div>
@@ -106,9 +128,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
                   <span className="briefing-source">{item.source}</span>
                   <span className="briefing-cat" style={{ backgroundColor: categoryColor(item.category) }}>{item.category}</span>
                   {item.publishedAt && <span className="briefing-time">{formatDate(item.publishedAt)}</span>}
-                  {item.heat != null && item.heat > 1 && (
-                    <span className="briefing-heat">{item.heat} 家媒体报道</span>
-                  )}
+                  {item.heat != null && item.heat > 1 && (<span className="briefing-heat">{item.heat} 家媒体报道</span>)}
                   {matchesFollow(item, followedNames) && <span className="briefing-followed">关注</span>}
                 </div>
                 <h3 className="bf-card-title">{displayTitle(item, lang)}</h3>
