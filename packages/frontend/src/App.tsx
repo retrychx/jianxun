@@ -433,6 +433,7 @@ export default function App() {
   const openEntity = useCallback((name: string) => {
     navCountRef.current++
     trackSignal('entity', name)
+    import('../hooks/useInterest').then(m => m.trackEntityClick(name)).catch(() => {})
     navigate(buildHash({ view: 'entity', entity: name }))
   }, [navigate, trackSignal])
 
@@ -534,7 +535,7 @@ export default function App() {
               navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
             }} />
           ) : view === 'trending' ? (
-            <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} /></div>
+            <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} standalone onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)} /></div>
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'weekly' ? (

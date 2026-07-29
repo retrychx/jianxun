@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Newspaper, Hash, GitBranch, TrendingUp } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
 import { boostFollowed, displaySummary, displayTitle, formatTime, formatDate, matchesFollow, type Lang } from '../utils'
 import { FollowWeekly } from './FollowWeekly'
+import { getActiveInterests, matchesInterest } from '../hooks/useInterest'
 
 interface Props {
   items: BriefingItem[]
@@ -19,6 +20,7 @@ interface Props {
 
 export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow, onNarrativeClick }: Props) {
   const [narrUpdates, setNarrUpdates] = useState<any[]>([])
+  const interests = useMemo(() => getActiveInterests(), [])
 
   useEffect(() => {
     fetch('/api/news/briefing/updates').then(r => r.json()).then(d => {
@@ -28,8 +30,10 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
 
   const followedEntities = follows.filter(f => f.type === 'entity')
   const followedNames = followedEntities.map(f => f.name)
-  // 关注加权：命中关注实体的条目稳定置顶
-  const boosted = boostFollowed(items, followedNames)
+  // 关注 + 兴趣加权：命中关注或兴趣实体的条目稳定置顶
+  const boosted = boostFollowed(items, [...followedNames, ...interests])
+  // 兴趣标记
+  const interestSet = new Set(interests.map(i => i.toLowerCase()))
 
   return (
     <div className="briefing-view">
