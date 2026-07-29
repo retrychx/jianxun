@@ -24,6 +24,7 @@ import { useFollow } from './hooks/useFollow'
 import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from './hooks/useHashRoute'
 import { useTheme, THEMES, THEME_META } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
+import { trackEntityClick } from './hooks/useInterest'
 import { boostFollowed, matchesFollow, type Lang } from './utils'
 import './App.css'
 
@@ -433,7 +434,7 @@ export default function App() {
   const openEntity = useCallback((name: string) => {
     navCountRef.current++
     trackSignal('entity', name)
-    import('../hooks/useInterest').then(m => m.trackEntityClick(name)).catch(() => {})
+    trackEntityClick(name)
     navigate(buildHash({ view: 'entity', entity: name }))
   }, [navigate, trackSignal])
 
