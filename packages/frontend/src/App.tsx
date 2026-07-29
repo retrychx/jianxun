@@ -449,7 +449,7 @@ export default function App() {
 
       <header className="header">
         <div className="header-top">
-          <h1 className="logo"><a href="#/" aria-label="简讯首页">简讯</a></h1>
+          <h1 className="logo"><a href="#/" aria-label="简讯首页"><span className="logo-accent">简</span><span className="logo-muted">讯</span></a></h1>
           <nav className="header-nav" aria-label="主导航">
             <a href="#/" className={navActive === 'briefing' ? 'active' : ''} aria-current={navActive === 'briefing' ? 'page' : undefined}>日报<KinkLine /></a>
             <a href="#/narratives" className={navActive === 'narratives' || navActive === 'narrative' ? 'active' : ''} aria-current={navActive === 'narratives' || navActive === 'narrative' ? 'page' : undefined}>故事<KinkLine /></a>

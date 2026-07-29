@@ -107,7 +107,10 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .header { margin: 0 26px 14px }
 }
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px }
-.logo { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.03em; line-height: 1; flex-shrink: 0 }
+.logo { font-family: var(--font-serif); font-size: 22px; font-weight: 700; letter-spacing: .02em; line-height: 1; flex-shrink: 0 }
+.logo a { color: var(--text); text-decoration: none }
+.logo-accent { color: var(--accent) }
+.logo-muted { color: var(--text) }
 
 /* 社论感：logo 与各卡片/视图标题用衬线，正文保持无衬线 */
 .logo, .briefing-title, .bf-card-title, .card-title, .sheet-title, .tph-title,
@@ -939,7 +942,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   .nd-hero-title { font-size: 20px }
   .app { padding: 0 14px 68px } /* 底部留出 tab bar 空间 */
   .header { padding: 10px 0; gap: 8px; margin: 0 0 10px }
-  .logo { font-size: 17px }
+  .logo { font-size: 19px }
   .header-search-box { max-width: none }
   .hs-field { font-size: 12px; width: 80px }
   .ha-btn { width: 28px; height: 28px }
