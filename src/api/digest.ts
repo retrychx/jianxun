@@ -33,7 +33,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
      FROM news
      WHERE published_at >= datetime(date('now', '+8 hours'), '-8 hours', '-24 hours')
        AND published_at < datetime(date('now', '+8 hours'), '-8 hours')
-     ORDER BY score DESC`
+     ORDER BY score DESC LIMIT 50`
   ).all()
   const all = (candidates?.results || []) as any[]
 
