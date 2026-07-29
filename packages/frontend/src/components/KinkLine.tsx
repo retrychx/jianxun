@@ -1,23 +1,28 @@
 import { useId } from 'react'
 
-// 选中态指示线：折几下的手绘笔画，两端渐隐（stroke 用 currentColor，跟随链接色）
-// 每个实例独立的 gradient id：否则移动端 display:none 的 header-nav 里第一个同名
-// 渐变会被 url() 优先解析到，而隐藏子树里的 paint server 不生效
+// 选中态指示线：铅印线（Printer's Rule）
+// 灵感来自宽幅报纸的 column rule——活版印刷压出来的红痕
+// 动画：从中间向两端延展，模仿印刷压痕
+// 两端渐隐模拟油墨在纸面上的自然扩散
+
 export function KinkLine() {
-  const id = 'kg' + useId().replace(/:/g, '')
+  const id = 'pr' + useId().replace(/:/g, '')
+  const filterId = 'pb' + useId().replace(/:/g, '')
   return (
-    <svg className="kink-line" width="34" height="8" viewBox="0 0 34 8" fill="none" aria-hidden="true" focusable="false">
+    <svg className="kink-line" width="48" height="12" viewBox="0 0 48 12" fill="none" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-          <stop offset="0.35" stopColor="currentColor" stopOpacity="1" />
-          <stop offset="0.65" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="0.15" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="0.85" stopColor="currentColor" stopOpacity="1" />
           <stop offset="1" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
+      {/* 主线条 */}
       <path
-        d="M1 6 L9 2.5 L16 6.5 L24 2 L33 5.5"
-        stroke={`url(#${id})`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        d="M4 6 L44 6"
+        stroke={`url(#${id})`} strokeWidth="3" strokeLinecap="round"
+        className="kink-line-bar"
       />
     </svg>
   )
