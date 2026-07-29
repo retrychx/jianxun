@@ -452,9 +452,9 @@ export default function App() {
           <h1 className="logo"><a href="#/" aria-label="简讯首页">简讯</a></h1>
           <nav className="header-nav" aria-label="主导航">
             <a href="#/" className={navActive === 'briefing' ? 'active' : ''} aria-current={navActive === 'briefing' ? 'page' : undefined}>日报<KinkLine /></a>
+            <a href="#/narratives" className={navActive === 'narratives' || navActive === 'narrative' ? 'active' : ''} aria-current={navActive === 'narratives' || navActive === 'narrative' ? 'page' : undefined}>故事<KinkLine /></a>
             <a href="#/feed" className={navActive === 'feed' ? 'active' : ''} aria-current={navActive === 'feed' ? 'page' : undefined}>新闻<KinkLine /></a>
             <a href="#/topics" className={navActive === 'topics' ? 'active' : ''} aria-current={navActive === 'topics' ? 'page' : undefined}>话题<KinkLine /></a>
-            <a href="#/narratives" className={navActive === 'narratives' || navActive === 'narrative' ? 'active' : ''} aria-current={navActive === 'narratives' || navActive === 'narrative' ? 'page' : undefined}>故事<KinkLine /></a>
           </nav>
           <div className="header-search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="hs-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>

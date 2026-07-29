@@ -51,7 +51,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
   const totalCount = all.length
 
   if (!existing) {
-    if (totalCount < 10) return 'insufficient'
+    if (totalCount < 5) return 'insufficient'
     const digest = await generateDigest(all, apiKey)
     if (!digest) return 'failed'
     await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')

@@ -1,7 +1,9 @@
-import { memo, useState } from 'react'
+import { memo, useState, useCallback } from 'react'
+import { Bookmark } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { categoryColor } from '../constants'
 import { displaySummary, displayTitle, formatDate, type Lang } from '../utils'
+import { isBookmarked, addBookmark, removeBookmark } from '../hooks/useBookmark'
 
 interface Props {
   item: NewsItem
@@ -18,8 +20,14 @@ function getDomain(url: string): string {
 
 export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed, isNew, onHide }: Props) {
   const [imgError, setImgError] = useState(false)
+  const [saved, setSaved] = useState(() => isBookmarked(item.id))
   const showImage = !!item.image && !imgError
   const summary = displaySummary(item, lang)
+  const toggleBookmark = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (saved) { removeBookmark(item.id); setSaved(false) }
+    else { addBookmark({ id: item.id, title: item.title, source: item.source, url: item.url }); setSaved(true) }
+  }, [saved, item.id, item.title, item.source, item.url])
 
   return (
     <article className={`news-card${showImage ? '' : ' no-image'}`} onClick={() => onClick?.(item.id)}>
@@ -64,6 +72,9 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
           {item.heat != null && item.heat > 1 && (
             <span className="card-heat">{item.heat} 家媒体报道</span>
           )}
+          <button className={`card-bookmark${saved ? ' saved' : ''}`} onClick={toggleBookmark} aria-label={saved ? '取消保存' : '保存'}>
+            <Bookmark size={12} />
+          </button>
         </div>
       </div>
     </article>
