@@ -1,4 +1,5 @@
 // POST /api/signal/click — record user click signal (no auth needed)
+// target_type 保持纯类型名（'article'/'narrative'/'entity'），deviceId 为可选字段
 import { json } from '../../../src/handler'
 
 export async function onRequestPost(context: any) {
@@ -8,15 +9,12 @@ export async function onRequestPost(context: any) {
 
   const targetType = body.type
   const targetId = String(body.id ?? '').trim()
-  const deviceId = String(body.deviceId ?? '').trim().slice(0, 36)
   if (!targetType || !targetId) return json({ ok: false }, 400)
 
   try {
-    // Store device-level signal so we can later personalize by device
-    const did = deviceId || 'anonymous'
     env.DB.prepare(
       "INSERT INTO signals (target_type, target_id) VALUES (?, ?)"
-    ).bind(`${targetType}:${did}`, targetId).run().catch(() => {})
+    ).bind(targetType, targetId).run().catch(() => {})
 
     if (targetType === 'article') {
       env.DB.prepare(
