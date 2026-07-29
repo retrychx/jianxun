@@ -74,20 +74,6 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
         </div>
       )}
 
-      {/* 升温信源 */}
-      {risingSources.length > 0 && (
-        <div className="bf-section">
-          <div className="bf-section-title"><Flame size={13} /> 今日高产信源</div>
-          <div className="bf-rising-sources">
-            {risingSources.map(s => (
-              <span key={s.name} className="bf-rising-chip" onClick={() => onEntityClick?.(s.name)}>
-                {s.name} <small>{s.count} 篇</small>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {items.length === 0 ? (
         <div className="empty">
           <Newspaper size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
@@ -145,6 +131,20 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
             </article>
             )
           })}
+        </div>
+      )}
+
+      {/* 升温信源 */}
+      {risingSources.length > 0 && (
+        <div className="bf-section" style={{ marginTop: items.length > 0 ? 12 : 0 }}>
+          <div className="bf-section-title"><Flame size={13} /> 今日高产信源</div>
+          <div className="bf-rising-sources">
+            {risingSources.map(s => (
+              <span key={s.name} className="bf-rising-chip" onClick={() => onEntityClick?.(s.name)}>
+                {s.name} <small>{s.count} 篇</small>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
