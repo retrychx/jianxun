@@ -1,4 +1,4 @@
-// 简讯内容抓取调度器：Cron Trigger 每 2 小时调一次生产的 /api/news/fetch
+// 简讯内容抓取调度器：Cron Trigger 每 1 小时调一次生产的 /api/news/fetch
 import type { ScheduledEvent, ExecutionContext } from '@cloudflare/workers-types'
 
 interface Env {

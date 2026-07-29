@@ -10,7 +10,7 @@ export const CONFIG = {
     timeouts: { analysis: 30_000, digest: 60_000, answer: 60_000, classification: 30_000, narrative: 30_000, crossRef: 30_000, translation: 30_000, storyline: 30_000, topicLabels: 30_000, default: 30_000 },
   },
   agent: { concurrencyGuardMs: 300_000, phaseTimeoutMs: 30_000, pingTimeoutMs: 5_000 },
-  analyze: { limitPerRun: 10, maxRetries: 3, windowDays: 2, phaseTimeoutMs: 90_000 },
+  analyze: { limitPerRun: 20, maxRetries: 3, windowDays: 2, phaseTimeoutMs: 180_000 },
   refine: { batchSize: 10, maxPerRun: 40, phaseTimeoutMs: 30_000 },
   translate: { maxPerRun: 10, phaseTimeoutMs: 30_000 },
   crossRef: { windowDays: 2, minArticles: 4, maxGroups: 5, phaseTimeoutMs: 30_000 },
