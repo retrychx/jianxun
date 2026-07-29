@@ -430,6 +430,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .briefing-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; line-height: 1 }
 .briefing-title { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -.01em; line-height: 1 }
 .briefing-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; letter-spacing: .05em }
+.briefing-date { font-size: 12px; font-weight: 500; color: var(--text-tertiary); margin-left: auto }
 
 .briefing-list { display: flex; flex-direction: column; gap: 8px }
 .briefing-card {

@@ -38,9 +38,10 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
       <div className="briefing-header">
         <div className="briefing-title-row">
           <h2 className="briefing-title">今日简报</h2>
+          <span className="briefing-date">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span>
         </div>
         <p className="briefing-subtitle">
-          {items.length} 篇精选{updatedAt ? ` · 更新于 ${formatTime(updatedAt)}` : ''}
+          AI 从 {items.length} 篇报道中精选今日要闻{updatedAt ? ` · 更新于 ${formatTime(updatedAt)}` : ''}
         </p>
       </div>
 
