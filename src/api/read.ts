@@ -23,7 +23,9 @@ export async function listNews(env: Env, url: URL) {
     countQuery += ' WHERE category = ?'
     params.push(category); countParams.push(category)
   }
-  query += ' ORDER BY n.published_at DESC, (n.score * COALESCE(sw.weight, 1.0)) DESC LIMIT ? OFFSET ?'
+  // 时间衰减排序：高分新文章靠前，旧文章自然下沉
+  // formula: score / (1 + hours_old × 0.05)
+  query += " ORDER BY (n.score * COALESCE(sw.weight, 1.0)) / (1 + CAST((julianday('now') - julianday(n.published_at)) * 24 AS INTEGER) * 0.05) DESC LIMIT ? OFFSET ?"
   params.push(pageSize, offset)
 
   const [items, totalResult] = await Promise.all([
