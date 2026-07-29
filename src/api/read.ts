@@ -23,7 +23,7 @@ export async function listNews(env: Env, url: URL) {
     countQuery += ' WHERE category = ?'
     params.push(category); countParams.push(category)
   }
-  query += ' ORDER BY (n.score * COALESCE(sw.weight, 1.0)) DESC, n.published_at DESC LIMIT ? OFFSET ?'
+  query += ' ORDER BY n.published_at DESC, (n.score * COALESCE(sw.weight, 1.0)) DESC LIMIT ? OFFSET ?'
   params.push(pageSize, offset)
 
   const [items, totalResult] = await Promise.all([
@@ -149,7 +149,7 @@ export async function search(env: Env, q: string) {
 export async function entitySearch(env: Env, name: string) {
   const like = `%${likeEscape(name)}%`
   const items = await env.DB.prepare(
-    "SELECT * FROM news WHERE title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR entities LIKE ? ESCAPE '\\' ORDER BY score DESC LIMIT 30"
+    "SELECT * FROM news WHERE title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR entities LIKE ? ESCAPE '\\' ORDER BY published_at DESC LIMIT 30"
   ).bind(like, like, like).all()
   return { items: (items.results as any[]).map(mapNews), entity: name }
 }
