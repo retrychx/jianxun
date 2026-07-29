@@ -446,9 +446,16 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   display: block; padding: 18px 20px; margin-bottom: 10px; cursor: pointer;
   border: 2px solid var(--accent); border-radius: var(--radius);
   background: var(--accent-light); transition: all .2s var(--ease);
+  position: relative;
 }
 .briefing-hero:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px) }
 .briefing-hero:active { transform: scale(.995) }
+.briefing-hero-badge {
+  position: absolute; top: -1px; right: 18px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  padding: 2px 8px; border-radius: 0 0 4px 4px;
+  background: var(--accent); color: #fff;
+}
 .briefing-hero-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px }
 .briefing-hero-title { font-family: var(--font-serif); font-size: 18px; font-weight: 700; line-height: 1.35; color: var(--text); letter-spacing: -.01em }
 .briefing-hero-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin-top: 4px }

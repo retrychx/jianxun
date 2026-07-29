@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Newspaper, Hash, GitBranch, TrendingUp, Flame } from 'lucide-react'
+import { Newspaper, Hash, GitBranch, TrendingUp } from 'lucide-react'
 import type { BriefingItem } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
@@ -19,12 +19,10 @@ interface Props {
 
 export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onEntityClick, onUnfollow, onNarrativeClick }: Props) {
   const [narrUpdates, setNarrUpdates] = useState<any[]>([])
-  const [risingSources, setRisingSources] = useState<any[]>([])
 
   useEffect(() => {
     fetch('/api/news/briefing/updates').then(r => r.json()).then(d => {
       if (d.updatedNarratives) setNarrUpdates(d.updatedNarratives.slice(0, 4))
-      if (d.risingSources) setRisingSources(d.risingSources.slice(0, 4))
     }).catch(() => {})
   }, [])
 
@@ -41,23 +39,9 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
           <span className="briefing-date">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span>
         </div>
         <p className="briefing-subtitle">
-          AI 从 {items.length} 篇报道中精选今日要闻{updatedAt ? ` · 更新于 ${formatTime(updatedAt)}` : ''}
+          AI 从 {items.length} 篇报道中精选今日要闻
         </p>
       </div>
-
-      {followedEntities.length > 0 && (
-        <div className="bf-section">
-          <div className="bf-section-title"><Hash size={13} /> 关注的实体</div>
-          <div className="bf-follows">
-            {followedEntities.slice(0, 8).map(f => (
-              <span key={f.id} className="bf-follow-tag">
-                <button className="bf-follow-name" onClick={() => onEntityClick(f.name)} title={`查看 ${f.name} 的相关报道`}>{f.name}</button>
-                <button className="bf-follow-x" onClick={() => onUnfollow(f.name)} aria-label={`取消关注 ${f.name}`}>×</button>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 叙事动态 */}
       {narrUpdates.length > 0 && (
@@ -88,6 +72,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
             if (isFirst) {
               return (
               <article key={item.id} className="briefing-hero" onClick={() => onNewsClick(item.id)}>
+                <div className="briefing-hero-badge">今日精选</div>
                 <div className="briefing-hero-meta">
                   <span className="briefing-source">{item.source}</span>
                   <span className="briefing-cat" style={{ backgroundColor: categoryColor(item.category) }}>{item.category}</span>
@@ -134,14 +119,15 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
         </div>
       )}
 
-      {/* 升温信源 */}
-      {risingSources.length > 0 && (
-        <div className="bf-section" style={{ marginTop: items.length > 0 ? 12 : 0 }}>
-          <div className="bf-section-title"><Flame size={13} /> 今日高产信源</div>
-          <div className="bf-rising-sources">
-            {risingSources.map(s => (
-              <span key={s.name} className="bf-rising-chip" onClick={() => onEntityClick?.(s.name)}>
-                {s.name} <small>{s.count} 篇</small>
+      {/* 关注的实体 */}
+      {followedEntities.length > 0 && (
+        <div className="bf-section" style={{ marginTop: 16 }}>
+          <div className="bf-section-title"><Hash size={13} /> 关注的实体</div>
+          <div className="bf-follows">
+            {followedEntities.slice(0, 12).map(f => (
+              <span key={f.id} className="bf-follow-tag">
+                <button className="bf-follow-name" onClick={() => onEntityClick(f.name)} title={`查看 ${f.name} 的相关报道`}>{f.name}</button>
+                <button className="bf-follow-x" onClick={() => onUnfollow(f.name)} aria-label={`取消关注 ${f.name}`}>×</button>
               </span>
             ))}
           </div>
