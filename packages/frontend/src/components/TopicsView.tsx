@@ -100,10 +100,10 @@ export function TopicsView({ topics, lang, onNewsClick }: Props) {
   if (!topics.length) {
     return (
       <div className="topics-view">
-        <div className="empty">
-          <Hash size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+        <div className="empty" style={{ marginTop: 40 }}>
+          <Hash size={28} style={{ opacity: .3, marginBottom: 8 }} />
           <p>暂无话题</p>
-          <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>有足够多的同源报道时会自动生成话题簇</p>
+          <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>有足够多的同源报道时会自动生成话题簇，先看看新闻吧</p>
         </div>
       </div>
     )

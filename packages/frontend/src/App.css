@@ -425,7 +425,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 
 /* ===== Briefing ===== */
-.briefing-view { animation: fadeUp .5s var(--ease) both }
+.briefing-view { animation: fadeUp .4s var(--ease) both }
 .briefing-header { margin-bottom: 20px }
 .briefing-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; line-height: 1 }
 .briefing-title { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -.01em; line-height: 1 }
@@ -490,7 +490,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 
 /* ===== Digest（日报） ===== */
-.digest-view { animation: fadeUp .5s var(--ease) both }
+.digest-view { animation: fadeUp .4s var(--ease) both }
 .digest-header { margin-bottom: 18px }
 .digest-date-row { display: flex; align-items: center; gap: 10px }
 .digest-date { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -.01em; line-height: 1.2 }
@@ -557,7 +557,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .digest-archive:hover { border-color: var(--scrollbar); color: var(--text); background: var(--card-hover) }
 
 /* ===== Topic（话题深挖） ===== */
-.topic-view { animation: fadeUp .5s var(--ease) both }
+.topic-view { animation: fadeUp .4s var(--ease) both }
 .topic-storyline {
   margin-bottom: 20px; padding: 12px 14px;
   background: var(--accent-light); border-radius: var(--radius-sm);
@@ -585,7 +585,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .ts-deep-link:hover { color: var(--accent-hover) }
 
 /* ===== Sources（信源健康度） ===== */
-.sources-view { animation: fadeUp .5s var(--ease) both; max-width: 680px }
+.sources-view { animation: fadeUp .4s var(--ease) both; max-width: 680px }
 
 /* 信源卡片网格 */
 .src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px }
@@ -630,7 +630,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .footer-link { color: var(--text-tertiary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border) }
 .footer-link:hover { color: var(--text-secondary) }
 /* ===== Topics / Narrative ===== */
-.topics-view { animation: fadeUp .5s var(--ease) both }
+.topics-view { animation: fadeUp .4s var(--ease) both }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
 
 .tph { margin-bottom: 20px }
@@ -1110,7 +1110,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 }
 .browse-back:hover { color: var(--text) }
 /* ===== Search ===== */
-.search-view { animation: fadeUp .5s var(--ease) both }
+.search-view { animation: fadeUp .4s var(--ease) both }
 .search-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px }
 .search-query { font-size: 15px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .search-clear {
@@ -1149,7 +1149,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .search-results-section { margin-top: 4px }
 
 /* ===== Entity View ===== */
-.entity-view { animation: fadeUp .5s var(--ease) both }
+.entity-view { animation: fadeUp .4s var(--ease) both }
 
 /* Entity Story Board — 情感走势图 */
 .eb-sent-chart { display: flex; align-items: flex-end; gap: 3px; height: 80px; margin-bottom: 6px; overflow-x: auto; padding-bottom: 4px }
@@ -1399,7 +1399,7 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .follow-weekly-arrow { margin-left: auto; color: var(--text-tertiary); flex-shrink: 0 }
 
 /* ===== Weekly（周报卡片，适合截图分享） ===== */
-.weekly-view { animation: fadeUp .5s var(--ease) both; display: flex; justify-content: center }
+.weekly-view { animation: fadeUp .4s var(--ease) both; display: flex; justify-content: center }
 .weekly-card {
   width: 100%; max-width: 520px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);

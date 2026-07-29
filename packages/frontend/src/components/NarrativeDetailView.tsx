@@ -148,11 +148,12 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
       <div className="narr-detail">
         <div className="narr-detail-top">
           <button className="back-btn" onClick={onBack}><ArrowLeft size={16} /></button>
-          <h2 className="nd-hero-title" style={{ flex: 1 }}>叙事未找到</h2>
+          <h2 className="nd-hero-title" style={{ flex: 1 }}>故事未找到</h2>
         </div>
         <div className="empty" style={{ marginTop: 40 }}>
-          <Radio size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-          <p>叙事未找到</p>
+          <Radio size={28} style={{ opacity: .3, marginBottom: 8 }} />
+          <p>故事未找到</p>
+          <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>换个关键词试试，或在故事列表查看活跃话题</p>
         </div>
       </div>
     )
