@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Hash, Globe, TrendingUp, GitBranch, Newspaper, Clock, Smile, Frown, Meh } from 'lucide-react'
+import { ChevronRight, Hash, Globe, TrendingUp, GitBranch, Newspaper, Clock, Smile, Frown, Meh, Coins, Package, UserCog, Scale, LineChart, Handshake, Pin } from 'lucide-react'
 import type { NewsItem, NarrativeSummary } from '../api'
 import { decodeEntities } from '../utils'
 import { NewsCard } from './NewsCard'
@@ -16,14 +16,14 @@ interface EntityBriefing {
   articles: NewsItem[]
 }
 
-const EVENT_META: Record<string, { label: string; icon: string; color: string }> = {
-  funding: { label: '融资', icon: '💰', color: '#047857' },
-  product: { label: '产品', icon: '📦', color: '#b45309' },
-  exec: { label: '人事', icon: '👔', color: '#7c3aed' },
-  regulatory: { label: '监管', icon: '⚖️', color: '#dc2626' },
-  financial: { label: '财务', icon: '📈', color: '#1d4ed8' },
-  partnership: { label: '合作', icon: '🤝', color: '#0891b2' },
-  other: { label: '其他', icon: '📌', color: '#737373' },
+const EVENT_META: Record<string, { label: string; icon: typeof Coins; color: string }> = {
+  funding: { label: '融资', icon: Coins, color: '#047857' },
+  product: { label: '产品', icon: Package, color: '#b45309' },
+  exec: { label: '人事', icon: UserCog, color: '#7c3aed' },
+  regulatory: { label: '监管', icon: Scale, color: '#dc2626' },
+  financial: { label: '财务', icon: LineChart, color: '#1d4ed8' },
+  partnership: { label: '合作', icon: Handshake, color: '#0891b2' },
+  other: { label: '其他', icon: Pin, color: '#737373' },
 }
 
 interface Props {
@@ -119,9 +119,10 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
           <div className="eb-events">
             {briefing.events.map((ev, i) => {
               const meta = EVENT_META[ev.type] || EVENT_META.other
+              const Icon = meta.icon
               return (
                 <div key={i} className="eb-event">
-                  <span className="eb-event-icon">{meta.icon}</span>
+                  <span className="eb-event-icon" style={{ color: meta.color }}><Icon size={15} /></span>
                   <div className="eb-event-body">
                     <div className="eb-event-title">{ev.title}</div>
                     {ev.detail && <div className="eb-event-detail">{ev.detail}</div>}

@@ -1205,7 +1205,11 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   border: 1px solid var(--border-light); border-radius: var(--radius-sm);
   background: var(--surface);
 }
-.eb-event-icon { flex-shrink: 0; font-size: 16px }
+.eb-event-icon {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; margin-top: 1px;
+  border-radius: 6px; background: var(--card-hover);
+}
 .eb-event-body { flex: 1; min-width: 0 }
 .eb-event-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4 }
 .eb-event-detail { font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 2px }
