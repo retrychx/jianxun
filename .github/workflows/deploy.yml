@@ -26,7 +26,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy packages/frontend/dist --branch main
+        run: npx wrangler pages deploy --project-name jianxun --branch main
 
       - name: Run D1 migrations
         run: npx wrangler d1 migrations apply jianxun --remote
