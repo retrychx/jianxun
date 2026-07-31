@@ -1654,6 +1654,38 @@ a { color: inherit; text-decoration: none; cursor: pointer }
   border-radius: var(--radius-sm); text-align: center;
 }
 
+/* 故事/赛道 tab */
+.nv-tabs {
+  display: flex; gap: 4px; margin-bottom: 16px;
+  background: var(--surface); border-radius: var(--radius-sm);
+  padding: 3px; border: 1px solid var(--border-light);
+}
+.nv-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer;
+  font-size: 13px; font-family: inherit; color: var(--text-secondary); background: transparent;
+  transition: all .15s;
+}
+.nv-tab.active { background: var(--bg); color: var(--text); font-weight: 600 }
+
+/* 早期信号 */
+.nv-signals { margin-bottom: 16px }
+.nv-signals-header {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
+}
+.nv-signal-item {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px 10px; margin-bottom: 4px;
+  border: 1px solid var(--accent-border); border-radius: var(--radius-sm);
+  background: var(--accent-light); cursor: pointer; font-family: inherit;
+  transition: all .15s;
+}
+.nv-signal-item:hover { box-shadow: var(--shadow) }
+.nv-signal-label { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.nv-signal-meta { margin-left: auto; font-size: 10px; color: var(--text-tertiary); flex-shrink: 0 }
+
 /* Pull-to-refresh indicator */
 .nv-pull-indicator {
   display: flex; align-items: center; justify-content: center; gap: 6px;

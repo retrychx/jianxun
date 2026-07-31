@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   GitBranch, ChevronRight, Clock, Hash, AlertTriangle,
-  BookOpen, Flame, Radio, Globe, Newspaper, RefreshCw,
+  BookOpen, Flame, Radio, Globe, Newspaper, RefreshCw, Activity, Radar,
 } from 'lucide-react'
 import { getNarratives, type NarrativeSummary } from '../api'
 import { decodeEntities } from '../utils'
@@ -62,6 +62,9 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
   const [showStale, setShowStale] = useState(false)
   const [pullDist, setPullDist] = useState(0)
   const [pullPhase, setPullPhase] = useState<'idle' | 'pulling' | 'ready'>('idle')
+  const [tab, setTab] = useState<'stories' | 'sectors'>('stories')
+  const [signals, setSignals] = useState<any[]>([])
+  const [sectors, setSectors] = useState<any[]>([])
   const touchStartY = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -77,6 +80,16 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
     setLoading(true)
     load().finally(() => setLoading(false))
   }, [load])
+
+  // 加载早期信号 + 赛道数据
+  useEffect(() => {
+    fetch('/api/news/signals').then(r => r.json()).then(d => {
+      if (d.risingNarratives) setSignals(d.risingNarratives.slice(0, 4))
+    }).catch(() => {})
+    fetch('/api/news/sectors').then(r => r.json()).then(d => {
+      if (d.sectors) setSectors(d.sectors)
+    }).catch(() => {})
+  }, [])
 
   // Pull-to-refresh touch handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -190,6 +203,75 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
       {/* Refresh feedback */}
       {refreshMsg && <div className="nv-refresh-toast">{refreshMsg}</div>}
 
+      {/* Tab switch: 故事 / 赛道 */}
+      <div className="nv-tabs">
+        <button className={`nv-tab${tab === 'stories' ? ' active' : ''}`} onClick={() => setTab('stories')}>
+          <GitBranch size={13} /> 故事
+        </button>
+        <button className={`nv-tab${tab === 'sectors' ? ' active' : ''}`} onClick={() => setTab('sectors')}>
+          <Radar size={13} /> 赛道
+        </button>
+      </div>
+
+      {/* ═══ 赛道 tab ═══ */}
+      {tab === 'sectors' ? (
+        sectors.length === 0 ? (
+          <div className="empty" style={{ marginTop: 40 }}>
+            <Radar size={28} style={{ opacity: .3, marginBottom: 8 }} />
+            <p>暂无赛道数据</p>
+          </div>
+        ) : (
+          <div className="sector-grid">
+            {sectors.map(s => {
+              const maxPlayer = Math.max(1, ...s.players.map((p: any) => p.count))
+              const maxHeat = Math.max(1, ...s.heatTrend.map((h: any) => h.count))
+              return (
+                <div key={s.key} className="sector-card">
+                  <div className="sector-head">
+                    <span className="sector-label">{s.label}</span>
+                    <span className="sector-meta">{s.articleCount} 篇 · {s.sourceCount} 个信源</span>
+                  </div>
+                  <div className="sector-players">
+                    {s.players.map((p: any) => (
+                      <div key={p.name} className="sector-player">
+                        <span className="sector-player-name">{p.name}</span>
+                        <span className="sector-player-bar"><span className="sector-player-fill" style={{ width: `${(p.count / maxPlayer) * 100}%` }} /></span>
+                        <span className="sector-player-count">{p.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {s.heatTrend.length > 1 && (
+                    <div className="sector-heat">
+                      {s.heatTrend.map((h: any) => (
+                        <div key={h.date} className="sector-heat-col" title={`${h.date}: ${h.count}篇`}>
+                          <div className="sector-heat-bar" style={{ height: `${(h.count / maxHeat) * 100}%` }} />
+                        </div>
+                      ))}
+                      <span className="sector-heat-days">{s.heatTrend[0]?.date} ~ {s.heatTrend[s.heatTrend.length - 1]?.date}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : (
+      /* ═══ 故事 tab ═══ */
+      <>
+      {/* 早期信号 */}
+      {signals.length > 0 && (
+        <div className="nv-signals">
+          <div className="nv-signals-header"><Activity size={13} /> 早期信号 · 24h 升温</div>
+          {signals.map(s => (
+            <button key={s.keyword} className="nv-signal-item" onClick={() => onNarrativeClick(s.keyword)}>
+              <span className="signal-arrow up">▲</span>
+              <span className="nv-signal-label">{s.label}</span>
+              <span className="nv-signal-meta">{s.sourceCount} 信源</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {!narratives.length ? (
         <div className="empty" style={{ marginTop: 40 }}>
           <Radio size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
@@ -268,6 +350,8 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
             </details>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   )
