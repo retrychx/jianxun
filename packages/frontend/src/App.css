@@ -1186,6 +1186,32 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .eb-sent-legend span { display: flex; align-items: center; gap: 3px }
 
 /* Entity key people */
+/* 叙事前瞻 */
+.nd-outlook {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 12px;
+  padding: 10px 14px; border-left: 3px solid var(--accent);
+  background: var(--accent-light); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.nd-outlook-label {
+  font-size: 11px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+  padding-top: 1px;
+}
+.nd-outlook-text { font-size: 13px; color: var(--text); line-height: 1.5 }
+
+/* 实体事件流 */
+.eb-events { display: flex; flex-direction: column; gap: 6px }
+.eb-event {
+  display: flex; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.eb-event-icon { flex-shrink: 0; font-size: 16px }
+.eb-event-body { flex: 1; min-width: 0 }
+.eb-event-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4 }
+.eb-event-detail { font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 2px }
+.eb-event-meta { display: flex; gap: 8px; font-size: 10px; color: var(--text-tertiary); margin-top: 3px }
+.eb-event-type { font-weight: 700 }
+
 .eb-people { display: flex; flex-wrap: wrap; gap: 6px }
 .eb-person-chip {
   display: flex; align-items: center; gap: 6px;

@@ -33,6 +33,7 @@ import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js
 import { checkSystemState, planPhases, allocateBudget } from './decider.js'
 import { evaluateQuality, saveKPI, shouldExplore, getExperimentParams, saveExperiment, estimateAPICost, generateReport, saveReport } from './eval.js'
 import { cleanup, recordError } from './cleanup.js'
+import { generateNarrativeOutlooks, extractTopEntityEvents } from './intel.js'
 import { cacheDelete } from '../cache.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
@@ -52,6 +53,8 @@ const ALL_PHASES: PhaseDef[] = [
   { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
   { name: 'detectControversy', run: (e: Env) => detectControversy(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
   { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low' },
+  { name: 'generateNarrativeOutlooks', run: (e: Env) => generateNarrativeOutlooks(e), dependsOn: ['updateNarratives'], priority: 'low' },
+  { name: 'extractTopEntityEvents', run: (e: Env) => extractTopEntityEvents(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
 ]
 
 export async function runAgent(env: Env, ctx?: ExecutionContext) {

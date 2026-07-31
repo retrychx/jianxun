@@ -12,7 +12,18 @@ interface EntityBriefing {
   sentimentTrend: { date: string; positive: number; negative: number; neutral: number; total: number }[]
   narratives: { keyword: string; label: string; articleCount: number; summary: string }[]
   keyPeople: { name: string; count: number }[]
+  events?: { type: string; title: string; date: string; detail: string }[]
   articles: NewsItem[]
+}
+
+const EVENT_META: Record<string, { label: string; icon: string; color: string }> = {
+  funding: { label: '融资', icon: '💰', color: '#047857' },
+  product: { label: '产品', icon: '📦', color: '#b45309' },
+  exec: { label: '人事', icon: '👔', color: '#7c3aed' },
+  regulatory: { label: '监管', icon: '⚖️', color: '#dc2626' },
+  financial: { label: '财务', icon: '📈', color: '#1d4ed8' },
+  partnership: { label: '合作', icon: '🤝', color: '#0891b2' },
+  other: { label: '其他', icon: '📌', color: '#737373' },
 }
 
 interface Props {
@@ -97,6 +108,31 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
             <span><Smile size={12} style={{ color: '#059669' }} /> 正面</span>
             <span><Frown size={12} style={{ color: '#dc2626' }} /> 负面</span>
             <span><Meh size={12} style={{ color: '#a3a3a3' }} /> 中性</span>
+          </div>
+        </section>
+      )}
+
+      {/* ═══ 事件流 ═══ */}
+      {briefing.events && briefing.events.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="nd-section-title">事件动态</h3>
+          <div className="eb-events">
+            {briefing.events.map((ev, i) => {
+              const meta = EVENT_META[ev.type] || EVENT_META.other
+              return (
+                <div key={i} className="eb-event">
+                  <span className="eb-event-icon">{meta.icon}</span>
+                  <div className="eb-event-body">
+                    <div className="eb-event-title">{ev.title}</div>
+                    {ev.detail && <div className="eb-event-detail">{ev.detail}</div>}
+                    <div className="eb-event-meta">
+                      <span className="eb-event-type" style={{ color: meta.color }}>{meta.label}</span>
+                      {ev.date && <span>{ev.date}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}

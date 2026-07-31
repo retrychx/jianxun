@@ -304,6 +304,7 @@ export interface NarrativeDetail extends NarrativeSummary {
   articles: NewsItem[]
   entities: NarrativeEntity[]
   related: RelatedNarrative[]
+  outlook?: string | null
 }
 
 export interface NarrativesTimeline {

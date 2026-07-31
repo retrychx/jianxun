@@ -210,6 +210,14 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
 
         {narrative.summary && <p className="nd-hero-summary">{decodeEntities(narrative.summary)}</p>}
 
+        {/* 叙事前瞻 */}
+        {narrative.outlook && (
+          <div className="nd-outlook">
+            <span className="nd-outlook-label">下一步关注</span>
+            <span className="nd-outlook-text">{narrative.outlook}</span>
+          </div>
+        )}
+
         {/* Key entities */}
         {narrative.entities && narrative.entities.length > 0 && (
           <div className="nd-entity-strip">
