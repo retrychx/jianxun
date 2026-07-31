@@ -3,6 +3,7 @@ import { Newspaper, MessageCircleQuestion } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel } from './components/TrendingPanel'
+import { IntelligenceStream } from './components/IntelligenceStream'
 import { DetailPanel } from './components/DetailPanel'
 import { BriefingView } from './components/BriefingView'
 import { TopicsView } from './components/TopicsView'
@@ -549,7 +550,7 @@ export default function App() {
               navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
             }} />
           ) : view === 'trending' ? (
-            <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} standalone onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)} onSectorClick={() => navigate('#/sectors')} /></div>
+            <div className="trending-view"><IntelligenceStream items={trending} lang={lang} onNewsClick={openNews} onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)} onSectorClick={() => navigate('#/sectors')} /></div>
           ) : view === 'sources' ? (
             <SourcesView />
           ) : view === 'sectors' ? (

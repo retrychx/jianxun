@@ -1209,6 +1209,15 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .signal-arrow.up { color: #dc2626 }
 .signal-label { font-size: 13px; font-weight: 600; color: var(--text) }
 .signal-meta { font-size: 11px; color: var(--text-tertiary); display: flex; gap: 10px }
+.signal-tag {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  background: #fef2f2; color: #dc2626; flex-shrink: 0;
+}
+.signal-tag.story { background: #fff7ed; color: #ea580c }
+.signal-tag.sector-tag { background: #ecfdf5; color: #059669 }
+.signal-card.sector { border-color: #d1fae5; background: #f0fdf4 }
+.stream-list { display: flex; flex-direction: column }
 
 /* Sector radar */
 .sectors-view { animation: fadeUp .4s var(--ease) both; max-width: 680px }
