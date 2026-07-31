@@ -293,22 +293,27 @@ export default function App() {
     }
   }, [sseEpoch, loadAll, loadStats, loadDigestDates, showToast])
 
-  // SW 消息：无感刷新 + 离线提示
+  // SW 消息：无感刷新 + 离线提示 + 版本检测
   const [isOffline, setIsOffline] = useState(false)
+  const [showUpdate, setShowUpdate] = useState(false)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === 'SW_UPDATE') {
         loadAll().catch(() => {}); loadStats().catch(() => {}); loadDigestDates().catch(() => {})
       } else if (e.data?.type === 'SW_OFFLINE') {
         setIsOffline(true)
+      } else if (e.data?.type === 'VERSION') {
+        // 有新版本时提示刷新
+        if (e.data.version !== '5.0.0') setShowUpdate(true)
       }
     }
-    // 也监听原生 online/offline 事件
     const onlineHandler = () => setIsOffline(false)
     const offlineHandler = () => setIsOffline(true)
     window.addEventListener('online', onlineHandler)
     window.addEventListener('offline', offlineHandler)
     navigator.serviceWorker?.addEventListener('message', handler)
+    // 查询当前 SW 版本
+    navigator.serviceWorker?.controller?.postMessage({ type: 'GET_VERSION' })
     return () => {
       navigator.serviceWorker?.removeEventListener('message', handler)
       window.removeEventListener('online', onlineHandler)
@@ -447,6 +452,12 @@ export default function App() {
   return (
     <div className="app">
       {isOffline && <div className="offline-banner">网络已断开，部分内容可能不可用</div>}
+      {showUpdate && (
+        <div className="update-banner">
+          <span>有新版本可用</span>
+          <button onClick={() => window.location.reload()}>立即刷新</button>
+        </div>
+      )}
       {msg && <div className="toast">{msg}</div>}
 
       <header className="header">

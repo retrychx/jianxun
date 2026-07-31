@@ -1,20 +1,36 @@
-// 简讯 Service Worker v4 — 离线缓存 + 弱网检测
-var STATIC_CACHE = 'jianxun-static-v4'
-var API_CACHE = 'jianxun-api-v4'
+// 简讯 Service Worker v5 — 移动端兼容性优化
+var STATIC_CACHE = 'jianxun-static-v5'
+var API_CACHE = 'jianxun-api-v5'
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg']
 
-// 限制 API 缓存条目数，防止无限膨胀
-var MAX_API_CACHE = 200
+var MAX_API_CACHE = 100
+var MAX_STATIC_CACHE = 30
+var VERSION = '5.0.0'
+
+// ═══ P0: AbortSignal.timeout() 兼容 iOS（手写超时） ═══
+function fetchWithTimeout(url, opts, ms) {
+  var controller = new AbortController()
+  var timer = setTimeout(function() { controller.abort() }, ms)
+  opts = opts || {}
+  opts.signal = controller.signal
+  return fetch(url, opts).finally(function() { clearTimeout(timer) })
+}
 
 self.addEventListener('install', function(e) {
   self.skipWaiting()
-  e.waitUntil(caches.open(STATIC_CACHE).then(function(c) { return c.addAll(PRECACHE).catch(function(){}) }))
+  e.waitUntil(
+    caches.open(STATIC_CACHE).then(function(c) { return c.addAll(PRECACHE).catch(function(){}) })
+  )
 })
 
 self.addEventListener('activate', function(e) {
   e.waitUntil(
     caches.keys().then(function(keys) {
-      return Promise.all(keys.filter(function(k) { return k !== STATIC_CACHE && k !== API_CACHE }).map(function(k) { return caches.delete(k) }))
+      return Promise.all(
+        keys
+          .filter(function(k) { return k !== STATIC_CACHE && k !== API_CACHE })
+          .map(function(k) { return caches.delete(k) })
+      )
     }).then(function() { return clients.claim() })
   )
 })
@@ -32,55 +48,81 @@ self.addEventListener('fetch', function(e) {
   e.respondWith(networkWithFallback(e.request))
 })
 
-// ── 静态资源：缓存优先 ──
+// ═══ P1: 缓存容量管理 ═══
+async function evictOldest(cacheName, maxItems) {
+  try {
+    var cache = await caches.open(cacheName)
+    var keys = await cache.keys()
+    var toRemove = keys.length - maxItems
+    if (toRemove > 0) {
+      // 删除最旧的
+      for (var i = 0; i < toRemove; i++) cache.delete(keys[i]).catch(function(){})
+    }
+    // 如果缓存仍在增长（配额警告），清理更多
+    if (navigator.storage && navigator.storage.estimate) {
+      var est = await navigator.storage.estimate()
+      var usage = est.usage || 0
+      var quota = est.quota || 0
+      // 超过 80% 配额 → 清一半
+      if (quota > 0 && usage / quota > 0.8) {
+        var half = Math.ceil(keys.length / 2)
+        for (var j = 0; j < half; j++) cache.delete(keys[j]).catch(function(){})
+      }
+    }
+  } catch {}
+}
+
+// ═══ 静态资源：缓存优先 + 容量管理 ═══
 async function staticFirst(req) {
+  await evictOldest(STATIC_CACHE, MAX_STATIC_CACHE)
   var cached = await caches.match(req)
   if (cached) return cached
   try {
     var res = await fetch(req)
-    if (res.ok) { var clone = res.clone(); caches.open(STATIC_CACHE).then(function(c) { c.put(req, clone) }) }
+    if (res && res.ok) {
+      var clone = res.clone()
+      caches.open(STATIC_CACHE).then(function(c) { c.put(req, clone) })
+    }
     return res
   } catch(e) { return cached || new Response('', { status: 408 }) }
 }
 
-// ── API：有缓存秒回，没缓存正常请求 ──
+// ═══ API：有缓存秒回 + 后台更新 + 容量管理 ═══
 async function apiWithCache(req) {
+  await evictOldest(API_CACHE, MAX_API_CACHE)
   var cache = await caches.open(API_CACHE)
-  // 超量清理（最旧淘汰）
-  var keys = await cache.keys()
-  if (keys.length > MAX_API_CACHE) {
-    cache.delete(keys[0]).catch(function(){})
-  }
-
   var cached = await cache.match(req)
+
   if (cached) {
-    // 后台更新缓存
-    fetch(req).then(function(res) {
+    // 后台更新
+    fetchWithTimeout(req, null, 8000).then(function(res) {
       if (res && res.ok) { cache.put(req, res.clone()); notifyPages('SW_UPDATE') }
     }).catch(function() {})
     return cached
   }
 
   try {
-    var res = await fetch(req)
+    var res = await fetchWithTimeout(req, null, 8000)
     if (res && res.ok) { var clone = res.clone(); cache.put(req, clone) }
     return res || fallbackJSON()
   } catch(e) {
-    // 没缓存+网络失败 → 页面显示"离线"提示
-    notifyPages('SW_OFFLINE')
+    // P2: 弱网不误报离线——只有确认无缓存时才报
+    if (!cached) notifyPages('SW_OFFLINE')
     return fallbackJSON()
   }
 }
 
-// ── 页面：先网络，离线用缓存 ──
+// ═══ 页面：先网络，离线用缓存 ═══
 async function networkWithFallback(req) {
   try {
-    var res = await fetch(req)
+    var res = await fetchWithTimeout(req, null, 8000)
     if (res && res.ok) { var clone = res.clone(); caches.open(STATIC_CACHE).then(function(c) { c.put(req, clone) }) }
     return res
   } catch(e) {
+    var cached = await caches.match(req)
+    if (cached) return cached
     notifyPages('SW_OFFLINE')
-    return (await caches.match(req)) || new Response('简讯 offline', { status: 503 })
+    return new Response('简讯 offline', { status: 503 })
   }
 }
 
@@ -93,3 +135,43 @@ function notifyPages(type) {
 function fallbackJSON() {
   return new Response(JSON.stringify({ items: [] }), { headers: { 'Content-Type': 'application/json' } })
 }
+
+// ═══ P1: 新版本提示 ═══
+self.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'GET_VERSION') {
+    e.source.postMessage({ type: 'VERSION', version: VERSION })
+  }
+})
+
+// ═══ P2: 后台推送通知 ═══
+self.addEventListener('push', function(e) {
+  var data = {}
+  try { data = e.data ? e.data.json() : {} } catch {}
+  var title = data.title || '简讯'
+  var body = data.body || ''
+  var url = data.url || '/'
+
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: body,
+      icon: '/icon-192.svg',
+      badge: '/icon-192.svg',
+      data: { url: url },
+      vibrate: [100, 50, 100],
+    })
+  )
+})
+
+self.addEventListener('notificationclick', function(e) {
+  e.notification.close()
+  var url = e.notification.data && e.notification.data.url ? e.notification.data.url : '/'
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i]
+        if ('focus' in client) { client.focus(); client.navigate(url); return }
+      }
+      return clients.openWindow(url)
+    })
+  )
+})
