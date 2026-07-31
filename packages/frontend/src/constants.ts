@@ -8,3 +8,14 @@ export const CATEGORY_COLORS: Record<string, string> = {
 export function categoryColor(name: string): string {
   return CATEGORY_COLORS[name] || CATEGORY_COLORS['其他']
 }
+
+// 来源可信度（基础分类，后续可由 agent 动态调整）
+export const HIGH_TRUST_SOURCES = [
+  '36氪', '量子位', '虎嗅', '钛媒体', '爱范儿', '品玩', '雷锋网', '动点科技', '中国新闻网', 'IT之家', '凤凰网科技',
+  'MIT Tech Review', 'The Verge', 'TechCrunch', 'Ars Technica', 'Wired', 'New Scientist', 'Simon Willison', 'Quanta Magazine', 'IEEE Spectrum',
+]
+
+export function sourceTrust(source: string): { score: number; label: string } {
+  if (HIGH_TRUST_SOURCES.includes(source)) return { score: 4, label: '可靠' }
+  return { score: 2, label: '一般' }
+}

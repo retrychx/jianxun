@@ -1,7 +1,7 @@
 import { memo, useState, useCallback } from 'react'
 import { Bookmark } from 'lucide-react'
 import type { NewsItem } from '../api'
-import { categoryColor } from '../constants'
+import { categoryColor, sourceTrust } from '../constants'
 import { displaySummary, displayTitle, formatDate, type Lang } from '../utils'
 import { isBookmarked, addBookmark, removeBookmark } from '../hooks/useBookmark'
 
@@ -69,6 +69,9 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
             </span>
           )}
           <span className="card-domain">{getDomain(item.url)}</span>
+          {item.source && sourceTrust(item.source).label === '可靠' && (
+            <span className="card-trust" title={`${item.source} 为高可信信源`}>可信</span>
+          )}
           {item.heat != null && item.heat > 1 && (
             <span className="card-heat">{item.heat} 家媒体报道</span>
           )}
