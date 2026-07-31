@@ -1,6 +1,5 @@
 // GET /api/news/entity/:name/briefing — Entity Story Board
 import { json, mapNews } from '../../../../../src/handler'
-import { getEntityEvents } from '../../../../../src/agent/intel'
 
 export async function onRequestGet(context: any) {
   const { env, params } = context
@@ -88,7 +87,7 @@ export async function onRequestGet(context: any) {
   const keyPeople = [...personCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }))
 
   // 6. 结构化事件（agent 预生成）
-  const events = await getEntityEvents(env, name)
+  const events = null
 
   return json({
     entity: name,

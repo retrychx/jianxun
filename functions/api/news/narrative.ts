@@ -1,6 +1,5 @@
 import { json, mapNews } from '../../../src/handler'
 import { loadActiveNarratives, loadSingleNarrative } from '../../../src/agent'
-import { getNarrativeOutlook } from '../../../src/agent/intel'
 
 // Returns either:
 //   GET /api/news/narrative — list of all active/stale narratives
@@ -85,7 +84,7 @@ export async function onRequestGet(context: any) {
       articles,
       entities: allEntities.slice(0, 30),
       related: related.slice(0, 6),
-      outlook: await getNarrativeOutlook(env, keyword),
+      outlook: null,
     })
   }
 
