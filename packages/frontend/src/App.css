@@ -1217,27 +1217,48 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .signal-tag.story { background: #fff7ed; color: #ea580c }
 .signal-tag.sector-tag { background: #ecfdf5; color: #059669 }
 .signal-card.sector { border-color: #d1fae5; background: #f0fdf4 }
-.stream-list { display: flex; flex-direction: column }
 
-/* 关联情报流 */
-.stream-block { border-bottom: 1px solid var(--border-light) }
-.stream-block:last-child { border-bottom: none }
-.stream-links {
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 2px 14px 10px 42px;
+/* 情报流：点击展开 */
+.stream-list { display: flex; flex-direction: column }
+.stream-item { border-bottom: 1px solid var(--border-light) }
+.stream-item:last-child { border-bottom: none }
+.stream-chevron {
+  margin-left: auto; flex-shrink: 0; color: var(--text-tertiary);
+  opacity: .4; transition: transform .2s var(--ease);
+  padding-right: 14px;
 }
-.stream-link {
-  display: flex; align-items: center; gap: 5px;
-  padding: 4px 8px; border: none; border-radius: 5px;
+.stream-chevron.open { transform: rotate(180deg) }
+.stream-expand {
+  padding: 2px 14px 12px 42px;
+  display: flex; flex-direction: column; gap: 4px;
+  animation: expandDown .25s var(--ease);
+}
+@keyframes expandDown { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+.stream-expand-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border: none; border-radius: 6px;
   background: var(--card-hover); cursor: pointer;
-  font-size: 11px; color: var(--text-secondary); font-family: inherit;
-  text-align: left; transition: all .15s;
+  font-size: 12px; font-family: inherit; text-align: left;
+  color: var(--text-secondary); transition: all .15s;
 }
-.stream-link:hover { background: var(--accent-light); color: var(--accent) }
-.stream-link.sector { background: #f0fdf4; color: #047857 }
-.stream-link.sector:hover { background: #d1fae5 }
-.stream-link-meta { margin-left: auto; font-size: 10px; color: var(--text-tertiary); flex-shrink: 0 }
-.stream-link-arrow { margin-left: auto; flex-shrink: 0; opacity: .5 }
+.stream-expand-link:hover { background: var(--accent-light); color: var(--accent) }
+.stream-expand-link.sector { background: #f0fdf4; color: #047857 }
+.stream-expand-link.sector:hover { background: #d1fae5 }
+.stream-expand-label { font-size: 10px; font-weight: 700; color: var(--text-tertiary); flex-shrink: 0 }
+.stream-expand-value { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.stream-expand-meta { margin-left: auto; font-size: 10px; color: var(--text-tertiary); flex-shrink: 0 }
+.stream-expand-players { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0 }
+.stream-expand-player {
+  font-size: 10px; padding: 0 5px; border-radius: 3px;
+  background: var(--surface); color: var(--text-secondary);
+}
+.stream-expand-article {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border: none; background: none; cursor: pointer;
+  font-size: 11px; color: var(--accent); font-family: inherit;
+  align-self: flex-start;
+}
+.stream-expand-article:hover { text-decoration: underline }
 
 /* Sector radar */
 .sectors-view { animation: fadeUp .4s var(--ease) both; max-width: 680px }
