@@ -14,6 +14,7 @@ import { NarrativesView } from './components/NarrativesView'
 import { NarrativeDetailView } from './components/NarrativeDetailView'
 import { ResearchView } from './components/ResearchView'
 import { SourcesView } from './components/SourcesView'
+import { SectorsView } from './components/SectorsView'
 import { AskView } from './components/AskView'
 import { WeeklyView } from './components/WeeklyView'
 import { BottomNav } from './components/BottomNav'
@@ -383,6 +384,7 @@ export default function App() {
       search: '搜索',
       sources: '信源',
       weekly: '周报',
+      sectors: '行业雷达',
     }
     const base = titles[view] || '简讯'
     if (view === 'narrative' && baseRoute.narrative) {
@@ -550,6 +552,8 @@ export default function App() {
             <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} standalone onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)} /></div>
           ) : view === 'sources' ? (
             <SourcesView />
+          ) : view === 'sectors' ? (
+            <SectorsView />
           ) : view === 'weekly' ? (
             <WeeklyView />
           ) : view === 'feed' ? (
@@ -612,7 +616,7 @@ export default function App() {
 
       <footer className="footer" data-version={BUILD}>
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">故事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
+        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">故事</a> · <a href="#/sectors" className="footer-link">行业雷达</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
       </footer>
 
       <BottomNav active={navActive} />

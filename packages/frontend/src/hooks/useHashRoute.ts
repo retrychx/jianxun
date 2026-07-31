@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative' | 'trending'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative' | 'trending' | 'sectors'
 
 export interface Route {
   view: ViewName
@@ -41,6 +41,8 @@ export function parseHash(hash: string): Route {
       return { view: 'research', research: params.get('q') || '', newsId: null }
     case 'weekly':
       return { view: 'weekly', newsId: null }
+    case 'sectors':
+      return { view: 'sectors', newsId: null }
     case 'digest':
       return segs[1] && /^\d{4}-\d{2}-\d{2}$/.test(segs[1])
         ? { view: 'digest', date: segs[1], newsId: null }
@@ -83,6 +85,8 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return `#/research?q=${encodeURIComponent(r.research || '')}`
     case 'weekly':
       return '#/weekly'
+    case 'sectors':
+      return '#/sectors'
     case 'digest':
       return `#/digest/${r.date || ''}`
     case 'topic':
