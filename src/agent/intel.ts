@@ -15,7 +15,7 @@ export async function generateNarrativeOutlooks(env: Env): Promise<number> {
 
   // 读取已有 outlook 避免重复生成
   const existingRow = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(OUTLOOK_KEY).first<any>()
-  const existing: Record<string, string> = existingRow?.value ? JSON.parse(existingRow.value) : {}
+  const existing: Record<string, { outlook: string; ts: string }> = existingRow?.value ? JSON.parse(existingRow.value) : {}
 
   // 取最近更新的 5 个活跃叙事
   const narrRows = await env.DB.prepare(`
