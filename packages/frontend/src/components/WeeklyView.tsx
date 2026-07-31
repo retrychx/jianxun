@@ -120,6 +120,17 @@ export function WeeklyView() {
           </div>
         )}
 
+        {data.topSources && data.topSources.length > 0 && (
+          <div className="bf-section">
+            <div className="bf-section-title"><Newspaper size={13} /> 本周高产信源</div>
+            <div className="weekly-sources">
+              {data.topSources.slice(0, 6).map(s => (
+                <span key={s.name} className="weekly-source-chip">{s.name}<small>{s.count}</small></span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="weekly-brand">简讯 · AI 新闻聚合</div>
       </div>
     </div>

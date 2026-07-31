@@ -1519,6 +1519,12 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .weekly-narr-row:hover .weekly-narr-label { color: var(--accent) }
 .weekly-narr-label { font-size: 13px; font-weight: 600; color: var(--text); transition: color .15s }
 .weekly-narr-meta { font-size: 11px; color: var(--text-tertiary) }
+.weekly-sources { display: flex; flex-wrap: wrap; gap: 4px }
+.weekly-source-chip {
+  padding: 4px 10px; border: 1px solid var(--border-light); border-radius: 12px;
+  background: var(--surface); font-size: 11px; color: var(--text-secondary);
+}
+.weekly-source-chip small { color: var(--text-tertiary); margin-left: 2px }
 
 .weekly-brand {
   margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-light);

@@ -265,6 +265,8 @@ export interface WeeklyResponse {
   totalNew: number
   topEntities: { name: string; count: number }[]
   topTopics: { label: string; count: number }[]
+  narratives?: { keyword: string; label: string; articleCount: number; sourceCount: number; daysRunning: number; lastUpdated: string }[]
+  topSources?: { name: string; count: number }[]
 }
 
 export function getWeekly(): Promise<WeeklyResponse> {

@@ -248,7 +248,7 @@ export async function topic(env: Env, name: string) {
 }
 
 export async function weekly(env: Env) {
-  { const cached = await cacheGet<any>('weekly'); if (cached) return cached }
+  const cached = await cacheGet<any>('weekly'); if (cached) return cached
   const rows = await env.DB.prepare(
     "SELECT * FROM news WHERE created_at >= datetime('now', '-7 days') ORDER BY score DESC"
   ).all()
@@ -273,7 +273,35 @@ export async function weekly(env: Env) {
   const aiLabels = await generateTopicLabels(clusters.map(c => c.items.slice(0, 3).map(i => i.title)), env.DEEPSEEK_API_KEY)
   const topTopics = clusters.map((c, i) => ({ label: aiLabels?.[i] || fallbackLabel(c.words), count: c.items.length }))
 
-  const result = { totalNew: items.length, topEntities, topTopics }
+  // 本周叙事动态（新增）
+  const narrRows = await env.DB.prepare(`
+    SELECT keyword, label, first_seen, last_updated, article_ids, source_stats
+    FROM narratives WHERE status = 'active'
+    ORDER BY last_updated DESC LIMIT 10
+  `).all<any>()
+  const narratives = ((narrRows.results || []) as any[]).map(n => {
+    const ids: number[] = (() => { try { return JSON.parse(n.article_ids || '[]') } catch { return [] } })()
+    const srcs: Record<string, number> = (() => { try { return JSON.parse(n.source_stats || '{}') } catch { return {} } })()
+    const daysRunning = Math.max(1, Math.round((Date.now() - new Date(n.first_seen).getTime()) / 86400000))
+    return {
+      keyword: n.keyword,
+      label: (n.label || n.keyword).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').trim(),
+      articleCount: ids.length,
+      sourceCount: Object.keys(srcs).length,
+      daysRunning,
+      lastUpdated: n.last_updated,
+    }
+  })
+
+  // 本周高产信源（新增）
+  const srcRows: any = await env.DB.prepare(`
+    SELECT source, COUNT(*) as cnt FROM news
+    WHERE created_at >= datetime('now', '-7 days')
+    GROUP BY source ORDER BY cnt DESC LIMIT 8
+  `).all()
+  const topSources = ((srcRows.results || []) as any[]).map(r => ({ name: r.source, count: r.cnt }))
+
+  const result = { totalNew: items.length, topEntities, topTopics, narratives, topSources }
   await cacheSet('weekly', result, CACHE_TTL.weekly)
   return result
 }
