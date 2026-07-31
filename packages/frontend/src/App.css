@@ -1232,6 +1232,30 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .sector-heat-bar:hover { background: var(--accent) }
 .sector-heat-days { position: absolute; top: -18px; right: 0; font-size: 10px; color: var(--text-tertiary) }
 
+/* Sector mini (trending page) */
+.panel-viewall {
+  display: flex; align-items: center; gap: 2px; margin-left: auto;
+  border: none; background: none; cursor: pointer;
+  font-size: 10px; font-weight: 600; color: var(--text-tertiary); font-family: inherit;
+  transition: color .15s;
+}
+.panel-viewall:hover { color: var(--accent) }
+.sector-mini-list { display: flex; flex-direction: column }
+.sector-mini {
+  padding: 12px 14px; border-bottom: 1px solid var(--border-light);
+  transition: background .12s;
+}
+.sector-mini:last-child { border-bottom: none }
+.sector-mini:hover { background: var(--card-hover) }
+.sector-mini-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px }
+.sector-mini-label { font-size: 13px; font-weight: 600; color: var(--text) }
+.sector-mini-meta { font-size: 10px; color: var(--text-tertiary) }
+.sector-mini-players { display: flex; flex-direction: column; gap: 3px }
+.sector-mini-player { display: flex; align-items: center; gap: 6px }
+.sector-mini-player-name { font-size: 10px; color: var(--text-secondary); width: 50px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.sector-mini-player-bar { flex: 1; height: 4px; background: var(--border-light); border-radius: 2px; overflow: hidden }
+.sector-mini-player-bar span { display: block; height: 100%; background: var(--accent); border-radius: 2px; min-width: 2px }
+
 /* ===== Ask（AI 问答浮窗） ===== */
 .ask-fab {
   position: fixed; right: 20px; bottom: 24px; z-index: 950;

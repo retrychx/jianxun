@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react'
-import { TrendingUp, ExternalLink, GitBranch, Flame, Activity } from 'lucide-react'
+import { TrendingUp, ExternalLink, GitBranch, Flame, Activity, Radar, ChevronRight } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { displayTitle, type Lang } from '../utils'
 
@@ -10,11 +10,13 @@ interface Props {
   /** 是否独立页面模式（显示额外叙事板块） */
   standalone?: boolean
   onNarrativeClick?: (keyword: string) => void
+  onSectorClick?: () => void
 }
 
-export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', onNewsClick, standalone, onNarrativeClick }: Props) {
+export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', onNewsClick, standalone, onNarrativeClick, onSectorClick }: Props) {
   const [hotNarrs, setHotNarrs] = useState<any[]>([])
   const [signals, setSignals] = useState<any>(null)
+  const [sectors, setSectors] = useState<any[]>([])
 
   useEffect(() => {
     if (!standalone) return
@@ -22,6 +24,9 @@ export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', o
       if (d.hottest) setHotNarrs(d.hottest.slice(0, 6))
     }).catch(() => {})
     fetch('/api/news/signals').then(r => r.json()).then(d => setSignals(d)).catch(() => {})
+    fetch('/api/news/sectors').then(r => r.json()).then(d => {
+      if (d.sectors) setSectors(d.sectors.slice(0, 4))
+    }).catch(() => {})
   }, [standalone])
 
   if (!items.length && !hotNarrs.length) return null
@@ -77,6 +82,38 @@ export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', o
                 </div>
               </div>
             ))}
+          </div>
+        </>
+      )}
+
+      {/* 行业概览（仅独立页面） */}
+      {standalone && sectors.length > 0 && (
+        <>
+          <div className="panel-header" style={{ borderTop: '1px solid var(--border-light)', marginTop: 0 }}>
+            <Radar size={15} style={{ color: 'var(--accent)' }} />
+            <span className="panel-title">行业概览</span>
+            <button className="panel-viewall" onClick={onSectorClick}>全部赛道 <ChevronRight size={12} /></button>
+          </div>
+          <div className="sector-mini-list">
+            {sectors.map(s => {
+              const maxPlayer = Math.max(1, ...s.players.map((p: any) => p.count))
+              return (
+                <div key={s.key} className="sector-mini" onClick={onSectorClick} style={{ cursor: onSectorClick ? 'pointer' : 'default' }}>
+                  <div className="sector-mini-head">
+                    <span className="sector-mini-label">{s.label}</span>
+                    <span className="sector-mini-meta">{s.articleCount} 篇</span>
+                  </div>
+                  <div className="sector-mini-players">
+                    {s.players.slice(0, 3).map((p: any) => (
+                      <span key={p.name} className="sector-mini-player">
+                        <span className="sector-mini-player-name">{p.name}</span>
+                        <span className="sector-mini-player-bar"><span style={{ width: `${(p.count / maxPlayer) * 100}%` }} /></span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </>
       )}
