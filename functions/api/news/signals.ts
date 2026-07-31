@@ -16,10 +16,10 @@ export async function onRequestGet(context: any) {
   const { env } = context
 
   // 1. 叙事热度变化（今日 vs 昨日）
-  const today = await env.DB.prepare(`
+  const today: any = await env.DB.prepare(`
     SELECT keyword, label, last_updated, article_ids, source_stats, developments
     FROM narratives WHERE status = 'active' AND last_updated >= datetime('now', '-24 hours')
-  `).all<any>()
+  `).all()
   const narratives = (today.results || []) as any[]
 
   // 计算每个叙事的当前热度和 24h 内新增文章
