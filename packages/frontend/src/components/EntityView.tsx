@@ -21,9 +21,10 @@ interface Props {
   onBack: () => void
   onNewsClick: (id: number) => void
   onNarrativeClick?: (keyword: string) => void
+  onEntityClick?: (name: string) => void
 }
 
-export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick }: Props) {
+export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick, onEntityClick }: Props) {
   const [briefing, setBriefing] = useState<EntityBriefing | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)

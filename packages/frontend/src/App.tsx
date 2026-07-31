@@ -533,7 +533,7 @@ export default function App() {
               onNarrativeClick={(kw) => navigate(`#/narrative/${encodeURIComponent(kw)}`)}
             />
           ) : view === 'entity' && baseRoute.entity ? (
-            <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} />
+            <EntityView entity={baseRoute.entity} lang={lang} onBack={goBack} onNewsClick={openNews} onNarrativeClick={(kw: string) => { navigate(`#/narrative/${encodeURIComponent(kw)}`) }} onEntityClick={openEntity} />
           ) : view === 'digest' && baseRoute.date ? (
             <DigestLoader date={baseRoute.date} dates={digestDates} lang={lang} onNewsClick={openNews} follows={follows} onEntityClick={openEntity} />
           ) : view === 'topic' && baseRoute.topic ? (

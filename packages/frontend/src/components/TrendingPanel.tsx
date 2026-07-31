@@ -64,7 +64,7 @@ export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', o
             <span className="panel-subtitle">24h 内升温</span>
           </div>
           <div className="trending-list">
-            {signals.risingNarratives.slice(0, 5).map(n => (
+            {signals.risingNarratives.slice(0, 5).map((n: any) => (
               <div key={n.keyword} className="signal-card rising" onClick={() => onNarrativeClick?.(n.keyword)} style={{ cursor: onNarrativeClick ? 'pointer' : 'default' }}>
                 <div className="signal-head">
                   <span className="signal-arrow up">▲</span>
