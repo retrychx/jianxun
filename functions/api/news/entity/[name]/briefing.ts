@@ -67,12 +67,32 @@ export async function onRequestGet(context: any) {
     total: v.total,
   }))
 
+  // 5. 关键人物：与该实体同现的 person 实体
+  const personCount = new Map<string, number>()
+  for (const a of articles) {
+    const raw = (a as any).entities
+    if (raw) {
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (Array.isArray(parsed)) {
+          for (const e of parsed) {
+            if (e?.type === 'person' && e?.name) {
+              personCount.set(e.name, (personCount.get(e.name) || 0) + 1)
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+  const keyPeople = [...personCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }))
+
   return json({
     entity: name,
     articleCount: articles.length,
     sourceStats,
     sentimentTrend,
     narratives,
+    keyPeople,
     articles: articles.slice(0, 20),
   })
 }

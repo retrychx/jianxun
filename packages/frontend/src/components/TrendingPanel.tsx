@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react'
-import { TrendingUp, ExternalLink, GitBranch, Flame } from 'lucide-react'
+import { TrendingUp, ExternalLink, GitBranch, Flame, Activity } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { displayTitle, type Lang } from '../utils'
 
@@ -14,12 +14,14 @@ interface Props {
 
 export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', onNewsClick, standalone, onNarrativeClick }: Props) {
   const [hotNarrs, setHotNarrs] = useState<any[]>([])
+  const [signals, setSignals] = useState<any>(null)
 
   useEffect(() => {
     if (!standalone) return
     fetch('/api/news/narrative/heat').then(r => r.json()).then(d => {
       if (d.hottest) setHotNarrs(d.hottest.slice(0, 6))
     }).catch(() => {})
+    fetch('/api/news/signals').then(r => r.json()).then(d => setSignals(d)).catch(() => {})
   }, [standalone])
 
   if (!items.length && !hotNarrs.length) return null
@@ -52,6 +54,32 @@ export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', o
           </div>
         ))}
       </div>
+
+      {/* 早期信号（仅独立页面） */}
+      {standalone && signals?.risingNarratives?.length > 0 && (
+        <>
+          <div className="panel-header" style={{ borderTop: '1px solid var(--border-light)', marginTop: 0 }}>
+            <Activity size={15} style={{ color: 'var(--accent)' }} />
+            <span className="panel-title">早期信号</span>
+            <span className="panel-subtitle">24h 内升温</span>
+          </div>
+          <div className="trending-list">
+            {signals.risingNarratives.slice(0, 5).map(n => (
+              <div key={n.keyword} className="signal-card rising" onClick={() => onNarrativeClick?.(n.keyword)} style={{ cursor: onNarrativeClick ? 'pointer' : 'default' }}>
+                <div className="signal-head">
+                  <span className="signal-arrow up">▲</span>
+                  <span className="signal-label">{n.label}</span>
+                </div>
+                <div className="signal-meta">
+                  <span>热度 {n.heat}</span>
+                  <span>{n.sourceCount} 个信源</span>
+                  <span>{n.articleCount} 篇</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* 热门故事（仅独立页面） */}
       {standalone && hotNarrs.length > 0 && (

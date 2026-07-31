@@ -11,6 +11,7 @@ interface EntityBriefing {
   sourceStats: { source: string; count: number }[]
   sentimentTrend: { date: string; positive: number; negative: number; neutral: number; total: number }[]
   narratives: { keyword: string; label: string; articleCount: number; summary: string }[]
+  keyPeople: { name: string; count: number }[]
   articles: NewsItem[]
 }
 
@@ -125,6 +126,21 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
                 <div className="nd-related-top"><GitBranch size={14} className="nd-related-icon" /><span className="nd-related-label">{n.label}</span></div>
                 <div className="nd-related-meta"><span>{n.articleCount} 篇</span></div>
               </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ═══ 关键人物 ═══ */}
+      {briefing.keyPeople && briefing.keyPeople.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="nd-section-title">关键人物</h3>
+          <div className="eb-people">
+            {briefing.keyPeople.map(p => (
+              <span key={p.name} className="eb-person-chip" onClick={() => onEntityClick?.(p.name)} style={{ cursor: 'pointer' }}>
+                <span className="eb-person-name">{p.name}</span>
+                <span className="eb-person-count">{p.count} 篇</span>
+              </span>
             ))}
           </div>
         </section>

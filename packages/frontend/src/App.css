@@ -1180,6 +1180,31 @@ a { color: inherit; text-decoration: none; cursor: pointer }
 .eb-sent-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-secondary); margin-bottom: 8px }
 .eb-sent-legend span { display: flex; align-items: center; gap: 3px }
 
+/* Entity key people */
+.eb-people { display: flex; flex-wrap: wrap; gap: 6px }
+.eb-person-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border: 1px solid var(--border-light);
+  border-radius: 16px; background: var(--surface);
+  font-size: 12px; transition: all .15s;
+}
+.eb-person-chip:hover { border-color: var(--accent-border); background: var(--accent-light) }
+.eb-person-name { font-weight: 600; color: var(--text) }
+.eb-person-count { font-size: 10px; color: var(--text-tertiary) }
+
+/* Signal radar */
+.signal-card {
+  padding: 14px 16px; margin-bottom: 10px;
+  border: 1px solid var(--border-light); border-radius: var(--radius);
+  background: var(--surface); display: flex; flex-direction: column; gap: 4px;
+}
+.signal-card.rising { border-color: var(--accent-border); background: var(--accent-light) }
+.signal-head { display: flex; align-items: center; gap: 8px }
+.signal-arrow { font-size: 13px; font-weight: 700 }
+.signal-arrow.up { color: #dc2626 }
+.signal-label { font-size: 13px; font-weight: 600; color: var(--text) }
+.signal-meta { font-size: 11px; color: var(--text-tertiary); display: flex; gap: 10px }
+
 /* ===== Ask（AI 问答浮窗） ===== */
 .ask-fab {
   position: fixed; right: 20px; bottom: 24px; z-index: 950;
