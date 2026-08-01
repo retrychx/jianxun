@@ -34,30 +34,47 @@ export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> 
     params = [limit]
   }
   const rows = await env.DB.prepare(query).bind(...params).all<any>()
+  const pending = rows.results || []
+
+  // 限并发分析：20 篇顺序分析最坏 ~180s 撞上阶段超时，4 篇并行可降到 ~50s。
+  // 并发 DeepSeek 调用由 fetchWithRetry 的 429 重试兜底。
+  const CONCURRENCY = 4
   let done = 0
-  for (const row of (rows.results || [])) {
-    await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
-    try {
-      // RSS description 足够长时跳过全文抓取（节省 6s/article）
-      let extracted: string | null = null, pageTitle: string | null = null
-      if (!row.description || row.description.length < 100) {
-        const result = await extractContent(row.url)
-        extracted = result.content
-        pageTitle = result.title
+  const queue = [...pending]
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length) {
+        const row = queue.shift()!
+        if (await analyzeOne(env, row, apiKey)) done++
       }
-      const content = (extracted || row.description || row.title).slice(0, 2000)
-      const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle)
-      if (result) {
-        await env.DB.prepare(
-          `UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?,content),
-           analyzed_at=datetime('now'), analysis_detail=? WHERE id=?`
-        ).bind(result.base.summary, JSON.stringify(result.base.entities), JSON.stringify(result.base.sentiment),
-          result.base.category || '科技', extracted, JSON.stringify(result.detail), row.id).run()
-        done++
-      }
-    } catch (e: any) { console.error('[analyze] article analysis failed:', e?.message) }
-  }
+    }),
+  )
   return done
+}
+
+/** 分析单篇文章（限并发池内执行）；成功返回 true */
+async function analyzeOne(env: Env, row: any, apiKey: string): Promise<boolean> {
+  await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
+  try {
+    // RSS description 足够长时跳过全文抓取（节省 6s/article）
+    let extracted: string | null = null, pageTitle: string | null = null
+    if (!row.description || row.description.length < 100) {
+      const result = await extractContent(row.url)
+      extracted = result.content
+      pageTitle = result.title
+    }
+    const content = (extracted || row.description || row.title).slice(0, 2000)
+    const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle)
+    if (result) {
+      await env.DB.prepare(
+        `UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?,content),
+         analyzed_at=datetime('now'), analysis_detail=? WHERE id=?`
+      ).bind(result.base.summary, JSON.stringify(result.base.entities), JSON.stringify(result.base.sentiment),
+        result.base.category || '科技', extracted, JSON.stringify(result.detail), row.id).run()
+      return true
+    }
+  } catch (e: any) { console.error('[analyze] article analysis failed:', e?.message) }
+  return false
 }
 
 /** DeepSeek batch reclassify low-confidence articles. */

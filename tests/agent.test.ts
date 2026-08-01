@@ -78,6 +78,20 @@ describe('analyzeNewArticles', () => {
     const done = await analyzeNewArticles(env, 10)
     expect(done).toBe(0)
   })
+
+  it('限并发池能处理多篇文章', async () => {
+    env.DB.exec(
+      `INSERT INTO news (title, url, source, lang, description, score, published_at, title_norm) VALUES
+       ('文章甲', 'https://example.com/a1', '测试', 'zh', 'short', 80, datetime('now','-1 hour'), 'n1'),
+       ('文章乙', 'https://example.com/a2', '测试', 'zh', 'short', 79, datetime('now','-1 hour'), 'n2'),
+       ('文章丙', 'https://example.com/a3', '测试', 'zh', 'short', 78, datetime('now','-1 hour'), 'n3')`,
+    )
+    mockFetch()
+    const done = await analyzeNewArticles(env, 10)
+    expect(done).toBe(3)
+    const analyzed = env.DB._db.prepare('SELECT COUNT(*) c FROM news WHERE analyzed_at IS NOT NULL').get()
+    expect(analyzed.c).toBe(3)
+  })
 })
 
 describe('flagLowQualityAnalyses', () => {
