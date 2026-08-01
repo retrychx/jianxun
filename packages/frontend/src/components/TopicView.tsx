@@ -25,6 +25,7 @@ export function TopicView({ name, lang, onBack, onNewsClick }: Props) {
   const [data, setData] = useState<TopicDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -36,7 +37,7 @@ export function TopicView({ name, lang, onBack, onNewsClick }: Props) {
       .catch(() => { if (!cancelled) setError(true) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [name])
+  }, [name, reloadKey])
 
   const timeline = data && Array.isArray(data.timeline) ? data.timeline : []
 
@@ -68,7 +69,7 @@ export function TopicView({ name, lang, onBack, onNewsClick }: Props) {
         <div className="empty" style={{ marginTop: 40 }}>
           <Hash size={28} style={{ opacity: .3, marginBottom: 8 }} />
           <p>话题加载失败</p>
-          <button className="search-clear" onClick={() => window.location.reload()} style={{ marginTop: 8, fontSize: 13, color: 'var(--accent)' }}>重试</button>
+          <button className="search-clear" onClick={() => setReloadKey(k => k + 1)} style={{ marginTop: 8, fontSize: 13, color: 'var(--accent)' }}>重试</button>
         </div>
       ) : (
         <>

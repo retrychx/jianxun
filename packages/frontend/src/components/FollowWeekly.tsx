@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Hash } from 'lucide-react'
 import { getByEntity } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
@@ -17,6 +17,8 @@ interface Row {
 // 数据加载中、无关注实体或全部无报道时都整体隐藏。
 export function FollowWeekly({ follows, onEntityClick }: Props) {
   const [rows, setRows] = useState<Row[] | null>(null)
+  // 会话内实体计数缓存：切换关注时只补拉新实体，避免每次 toggle 都重复请求全部 3 个实体
+  const cacheRef = useRef(new Map<string, number>())
 
   useEffect(() => {
     const entities = follows.filter(f => f.type === 'entity').slice(0, 3)
@@ -24,15 +26,21 @@ export function FollowWeekly({ follows, onEntityClick }: Props) {
     let cancelled = false
     const weekAgo = Date.now() - 7 * 86_400_000
     // entity 接口最多返回 30 条（按热度），本周计数在这个窗口内统计
-    Promise.all(entities.map(async f => {
+    const toFetch = entities.filter(f => !cacheRef.current.has(f.name))
+    Promise.all(toFetch.map(async f => {
       try {
         const res = await getByEntity(f.name)
         const count = res.items.filter(i => i.publishedAt && new Date(i.publishedAt).getTime() >= weekAgo).length
+        cacheRef.current.set(f.name, count)
         return { name: f.name, count }
       } catch {
+        cacheRef.current.set(f.name, 0)
         return { name: f.name, count: 0 }
       }
-    })).then(r => { if (!cancelled) setRows(r) })
+    })).then(() => {
+      if (cancelled) return
+      setRows(entities.map(f => ({ name: f.name, count: cacheRef.current.get(f.name) ?? 0 })))
+    })
     return () => { cancelled = true }
   }, [follows])
 

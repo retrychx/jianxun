@@ -29,8 +29,9 @@ import { useFollow } from './hooks/useFollow'
 import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from './hooks/useHashRoute'
 import { useTheme, THEMES, THEME_META } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
+import { useRealtime } from './hooks/useRealtime'
 import { trackEntityClick } from './hooks/useInterest'
-import { boostFollowed, matchesFollow, type Lang } from './utils'
+import { boostFollowed, matchesFollow, cleanNarrativeLabel, type Lang } from './utils'
 import './App.css'
 
 const PAGE_SIZE = 50
@@ -262,104 +263,16 @@ export default function App() {
     } catch {}
   }, [notifGranted])
 
-  // SSE: 实时推送（新文章抓取完成时自动刷新）
-  const [sseEpoch, setSseEpoch] = useState(0)
-  useEffect(() => {
-    const es = new EventSource('/api/events')
-    let reconnectTimer: number | null = null
-
-    es.addEventListener('new-articles', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        const count = data.count ?? 0
-        showToast(`收到 ${count} 篇新文章，已更新`)
-      } catch {}
-      loadAll().catch(() => {})
-      loadStats().catch(() => {})
-      loadDigestDates().catch(() => {})
-      // 若用户正停留在 feed 视图，顺手刷新列表，让"已更新"提示名副其实
-      if (feedStateRef.current.view === 'feed') {
-        loadNews(feedStateRef.current.cat, 1, false).catch(() => {})
-      }
-    })
-
-    es.addEventListener('breaking', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        const title = data.title || ''
-        const sources = data.sources || []
-        showToast(`🔴 突发: ${title}（${sources.join('/')}）`)
-        notifyBrowser('🔴 突发新闻', `${title} - ${sources.join('/')}`, `#/news/${data.articleId || ''}`)
-      } catch {}
-      loadAll().catch(() => {})
-    })
-
-    es.addEventListener('narrative-update', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        const label = data.label || ''
-        const text = data.text || ''
-        showToast(`📖 ${label}: ${text}`)
-        notifyBrowser('📖 叙事更新', `${label}: ${text.slice(0, 80)}`, `#/narrative/${encodeURIComponent(data.keyword || '')}`)
-      } catch {}
-      loadAll().catch(() => {})
-    })
-
-    es.addEventListener('debate', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        showToast(`⚡ 争议: ${data.topic || ''}`)
-        notifyBrowser('⚡ 争议话题', data.topic || '')
-      } catch {}
-      loadAll().catch(() => {})
-    })
-
-    es.onerror = () => {
-      es.close()
-      reconnectTimer = window.setTimeout(() => {
-        setSseEpoch(e => e + 1)
-      }, 15_000)
-    }
-
-    return () => {
-      es.close()
-      if (reconnectTimer !== null) clearTimeout(reconnectTimer)
-    }
-  }, [sseEpoch, loadAll, loadStats, loadDigestDates, showToast])
-
-  // SW 消息：无感刷新 + 离线提示 + 版本检测
-  const [isOffline, setIsOffline] = useState(false)
-  const [showUpdate, setShowUpdate] = useState(false)
-  useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type === 'SW_UPDATE') {
-        loadAll().catch(() => {}); loadStats().catch(() => {}); loadDigestDates().catch(() => {})
-      } else if (e.data?.type === 'SW_OFFLINE') {
-        setIsOffline(true)
-      } else if (e.data?.type === 'VERSION') {
-        // 有新版本时提示刷新：与上次见过的版本比较，不再硬编码版本号（否则发布时漏改一处就永久失效）
-        const v = String(e.data.version || '')
-        const seen = localStorage.getItem('sw_version_seen')
-        if (seen !== null && seen !== v) setShowUpdate(true)
-        localStorage.setItem('sw_version_seen', v)
-      }
-    }
-    const onlineHandler = () => setIsOffline(false)
-    const offlineHandler = () => setIsOffline(true)
-    const controllerChanged = () => navigator.serviceWorker?.controller?.postMessage({ type: 'GET_VERSION' })
-    window.addEventListener('online', onlineHandler)
-    window.addEventListener('offline', offlineHandler)
-    navigator.serviceWorker?.addEventListener('message', handler)
-    navigator.serviceWorker?.addEventListener('controllerchange', controllerChanged)
-    // 查询当前 SW 版本
-    navigator.serviceWorker?.controller?.postMessage({ type: 'GET_VERSION' })
-    return () => {
-      navigator.serviceWorker?.removeEventListener('message', handler)
-      navigator.serviceWorker?.removeEventListener('controllerchange', controllerChanged)
-      window.removeEventListener('online', onlineHandler)
-      window.removeEventListener('offline', offlineHandler)
-    }
-  }, [loadAll, loadStats, loadDigestDates])
+  // SSE + SW 实时事件（抽取到 useRealtime，减轻巨石组件）
+  const { isOffline, showUpdate } = useRealtime({
+    loadAll,
+    loadStats,
+    loadDigestDates,
+    loadNews,
+    feedState: feedStateRef.current,
+    showToast,
+    notifyBrowser,
+  })
 
   // 预加载：用户可能在当前页面停留时提前加载下一个 tab 的数据
   const prefetched = useRef(new Set<string>())
@@ -582,13 +495,11 @@ export default function App() {
             <TopicView name={baseRoute.topic} lang={lang} onBack={goBack} onNewsClick={openNews} />
           ) : view === 'narratives' ? (
             <NarrativesView onNarrativeClick={(kw, label) => {
-              const clean = (label || kw).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/\s*·\s*/g, '·').trim()
-              navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
+              navigate(`#/narrative/${encodeURIComponent(cleanNarrativeLabel(label || kw))}?kw=${encodeURIComponent(kw)}`)
             }} onNewsClick={openNews} onResearchCreate={(kw) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} />
           ) : view === 'narrative' && baseRoute.narrative ? (
             <NarrativeDetailView keyword={baseRoute.narrative} lang={lang} onBack={goBack} onNewsClick={openNews} isFollowing={isFollowing} toggleFollow={toggleFollow} onResearch={(kw: string) => { navigate(`#/research?q=${encodeURIComponent(kw)}`) }} onNarrativeClick={(kw: string, label?: string) => {
-              const clean = (label || kw).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/\s*·\s*/g, '·').trim()
-              navigate(`#/narrative/${encodeURIComponent(clean)}?kw=${encodeURIComponent(kw)}`)
+              navigate(`#/narrative/${encodeURIComponent(cleanNarrativeLabel(label || kw))}?kw=${encodeURIComponent(kw)}`)
             }} />
           ) : view === 'trending' ? (
             <div className="trending-view"><TrendingPanel items={trending} lang={lang} onNewsClick={openNews} /></div>

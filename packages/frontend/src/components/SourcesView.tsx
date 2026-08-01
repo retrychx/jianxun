@@ -7,15 +7,17 @@ export function SourcesView() {
   const [items, setItems] = useState<SourceHealth[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setLoading(true); setError(false)
     getSources()
       .then(res => { if (!cancelled) setItems(Array.isArray(res.items) ? res.items : []) })
       .catch(() => { if (!cancelled) setError(true) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
+  }, [reloadKey])
 
   if (loading) return (
     <div className="sources-view">
@@ -30,7 +32,7 @@ export function SourcesView() {
       <div className="empty" style={{ marginTop: 40 }}>
         <Rss size={28} style={{ opacity: .3, marginBottom: 8 }} />
         <p>加载失败</p>
-        <button onClick={() => window.location.reload()} style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }}>重试</button>
+        <button onClick={() => setReloadKey(k => k + 1)} style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }}>重试</button>
       </div>
     </div>
   )

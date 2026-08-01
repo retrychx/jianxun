@@ -4,7 +4,8 @@ import {
   BookOpen, Flame, Radio, Globe, Newspaper, RefreshCw, Activity, Radar,
 } from 'lucide-react'
 import { getNarratives, type NarrativeSummary } from '../api'
-import { decodeEntities } from '../utils'
+import { decodeEntities, cleanNarrativeLabel as cleanLabel } from '../utils'
+import { SectorCard } from './SectorCard'
 
 interface Props {
   onNarrativeClick: (keyword: string, label?: string) => void
@@ -28,14 +29,6 @@ function categorize(n: NarrativeSummary): Category {
   if (n.keyword.startsWith('__research__')) return 'research'
   if (n.keyword.startsWith('__cross__')) return 'cross'
   return 'normal'
-}
-
-function cleanLabel(label: string): string {
-  return label
-    .replace(/^__\w+__/, '')
-    .replace(/^[🔴⚡📖📍]\s*/, '')
-    .replace(/^(?:突发|争议|研究|多源对比:)\s*/, '')
-    .trim()
 }
 
 function timeAgo(dateStr: string): string {
@@ -216,37 +209,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
           </div>
         ) : (
           <div className="sector-grid">
-            {sectors.map(s => {
-              const maxPlayer = Math.max(1, ...s.players.map((p: any) => p.count))
-              const maxHeat = Math.max(1, ...s.heatTrend.map((h: any) => h.count))
-              return (
-                <div key={s.key} className="sector-card">
-                  <div className="sector-head">
-                    <span className="sector-label">{s.label}</span>
-                    <span className="sector-meta">{s.articleCount} 篇 · {s.sourceCount} 个信源</span>
-                  </div>
-                  <div className="sector-players">
-                    {s.players.map((p: any) => (
-                      <div key={p.name} className="sector-player">
-                        <span className="sector-player-name">{p.name}</span>
-                        <span className="sector-player-bar"><span className="sector-player-fill" style={{ width: `${(p.count / maxPlayer) * 100}%` }} /></span>
-                        <span className="sector-player-count">{p.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {s.heatTrend.length > 1 && (
-                    <div className="sector-heat">
-                      {s.heatTrend.map((h: any) => (
-                        <div key={h.date} className="sector-heat-col" title={`${h.date}: ${h.count}篇`}>
-                          <div className="sector-heat-bar" style={{ height: `${(h.count / maxHeat) * 100}%` }} />
-                        </div>
-                      ))}
-                      <span className="sector-heat-days">{s.heatTrend[0]?.date} ~ {s.heatTrend[s.heatTrend.length - 1]?.date}</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {sectors.map(s => <SectorCard key={s.key} sector={s} />)}
           </div>
         )
       ) : (

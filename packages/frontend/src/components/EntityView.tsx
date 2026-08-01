@@ -39,6 +39,7 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
   const [briefing, setBriefing] = useState<EntityBriefing | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -47,7 +48,7 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
       if (!cancelled) setBriefing(d)
     }).catch(() => { if (!cancelled) setError(true) }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [entity])
+  }, [entity, reloadKey])
 
   if (loading) return (
     <div className="entity-view">
@@ -62,7 +63,7 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
       <div className="empty" style={{ marginTop: 40 }}>
         <Hash size={28} style={{ opacity: .3, marginBottom: 8 }} />
         <p>加载失败</p>
-        <button style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }} onClick={() => window.location.reload()}>重试</button>
+        <button style={{ marginTop: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)' }} onClick={() => setReloadKey(k => k + 1)}>重试</button>
       </div>
     </div>
   )

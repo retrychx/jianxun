@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ArrowLeft, Bell, BellOff, BookOpen, Radio, Globe, Newspaper, Clock, ChevronRight, MapPin, Users, GitBranch, Lightbulb, TrendingUp, ExternalLink } from 'lucide-react'
-import { decodeEntities } from '../utils'
+import { decodeEntities, cleanNarrativeLabel as cleanNarrativeTitle } from '../utils'
 import { getNarrative, type NarrativeDetail, type NarrativeEntity } from '../api'
 import { NewsCard } from './NewsCard'
 
@@ -28,10 +28,6 @@ function narrTypeInfo(keyword: string): { label: string; color: string } | null 
   if (keyword.startsWith('__debate__')) return { label: '争议', color: '#d97706' }
   if (keyword.startsWith('__cross__')) return { label: '多源', color: '#0891b2' }
   return null
-}
-
-function cleanNarrativeTitle(label: string): string {
-  return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
 }
 
 export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFollowing, toggleFollow, onResearch, onNarrativeClick }: Props) {

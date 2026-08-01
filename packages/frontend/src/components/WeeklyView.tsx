@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Hash, Newspaper, TrendingUp, GitBranch, Clock } from 'lucide-react'
 import type { WeeklyResponse, NarrativeSummary } from '../api'
 import { getWeekly, getNarratives } from '../api'
+import { cleanNarrativeLabel as cleanLabel } from '../utils'
 
 // 近 7 天日期范围：'7月20日 – 7月26日'
 function weekRange(): string {
@@ -10,11 +11,6 @@ function weekRange(): string {
   start.setDate(start.getDate() - 6)
   const fmt = (d: Date) => d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
   return `${fmt(start)} – ${fmt(end)}`
-}
-
-// 临时导出 cleanNarrativeTitle — 后续移动到 utils
-function cleanLabel(label: string): string {
-  return label.replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').replace(/^(?:突发|争议|研究|多源对比:)\s*/, '').trim()
 }
 
 function WeeklySkeleton() {
