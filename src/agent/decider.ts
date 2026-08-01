@@ -44,7 +44,9 @@ export async function checkSystemState(env: Env): Promise<SystemState> {
     activeNarratives: activeNarratives?.c || 0,
     secondsSinceLastRun,
     apiOk: true, // 由调用方设置
-    remainingBudget: 60_000, // 默认 60s 预算
+    // 粗粒度预筛选阈值（>30s 才考虑低优先级阶段）；真正的 CPU 预算由
+    // state.ts 的 checkBudget（25s 安全值）在运行时逐阶段实时控制。
+    remainingBudget: 60_000,
   }
 }
 
@@ -94,13 +96,4 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
   }
 
   return planned
-}
-
-/** 自适应预算分配 */
-export function allocateBudget(phaseCount: number, totalBudget: number): number {
-  if (phaseCount <= 0) return totalBudget
-  // 预留 20% 给意外延迟
-  const perPhase = Math.floor((totalBudget * 0.8) / phaseCount)
-  // 每个阶段至少 5s，最多 45s
-  return Math.max(5_000, Math.min(45_000, perPhase))
 }

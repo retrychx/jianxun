@@ -16,7 +16,7 @@ import type { Env } from '../helpers.js'
 import type { PhaseDef } from './types.js'
 import { runPhases } from './scheduler.js'
 import { shouldSkipDueToConcurrency, markAgentRun, saveAgentLog, pingDeepSeek, initBudget } from './state.js'
-import { CONFIG } from './config.js'
+import { CONFIG, phaseTimeout } from './config.js'
 import { fixMissingImages, tuneSourceWeights } from './health.js'
 import { analyzeNewArticles, refineCategories } from './analyze.js'
 import { translateMissing } from './translate.js'
@@ -30,7 +30,7 @@ import { linkEntities } from './entity.js'
 import { generateTodayDigest } from '../api/digest.js'
 import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
-import { checkSystemState, planPhases, allocateBudget } from './decider.js'
+import { checkSystemState, planPhases } from './decider.js'
 import { evaluateQuality, saveKPI, estimateAPICost, generateReport, saveReport } from './eval.js'
 import { cleanup, recordError } from './cleanup.js'
 import { generateNarrativeOutlooks, extractTopEntityEvents } from './intel.js'
@@ -42,15 +42,15 @@ const ALL_PHASES: PhaseDef[] = [
   { name: 'mergeOverlappingNarratives', run: (e: Env) => mergeOverlappingNarratives(e), priority: 'critical' },
   { name: 'fixMissingImages', run: (e: Env) => fixMissingImages(e), priority: 'critical' },
   { name: 'analyzeNewArticles', run: (e: Env) => analyzeNewArticles(e, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, priority: 'critical' },
-  { name: 'updateNarratives', run: (e: Env) => updateNarratives(e), priority: 'critical' },
-  { name: 'generateDailyDigest', run: (e: Env) => generateTodayDigest(e), priority: 'critical' },
-  { name: 'refineCategories', run: (e: Env) => refineCategories(e) },
-  { name: 'translateMissing', run: (e: Env) => translateMissing(e) },
-  { name: 'crossRefAnalysis', run: (e: Env) => runCrossRefAnalysis(e), dependsOn: ['analyzeNewArticles'] },
+  { name: 'updateNarratives', run: (e: Env) => updateNarratives(e), timeout: CONFIG.narrative.phaseTimeoutMs, priority: 'critical' },
+  { name: 'generateDailyDigest', run: (e: Env) => generateTodayDigest(e), timeout: CONFIG.digest.phaseTimeoutMs, priority: 'critical' },
+  { name: 'refineCategories', run: (e: Env) => refineCategories(e), timeout: CONFIG.refine.phaseTimeoutMs },
+  { name: 'translateMissing', run: (e: Env) => translateMissing(e), timeout: CONFIG.translate.phaseTimeoutMs },
+  { name: 'crossRefAnalysis', run: (e: Env) => runCrossRefAnalysis(e), timeout: CONFIG.crossRef.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
   { name: 'detectBreakingNews', run: (e: Env) => detectBreakingNews(e), timeout: CONFIG.breaking.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
-  { name: 'tuneSourceWeights', run: (e: Env) => tuneSourceWeights(e) },
+  { name: 'tuneSourceWeights', run: (e: Env) => tuneSourceWeights(e), timeout: CONFIG.health.phaseTimeoutMs },
   { name: 'linkEntities', run: (e: Env) => linkEntities(e), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
-  { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
+  { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), timeout: CONFIG.briefing.phaseTimeoutMs, dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
   { name: 'detectControversy', run: (e: Env) => detectControversy(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
   { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low' },
   { name: 'generateNarrativeOutlooks', run: (e: Env) => generateNarrativeOutlooks(e), dependsOn: ['updateNarratives'], priority: 'low' },
@@ -87,12 +87,13 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   // 决策引擎选择本周期跑哪些阶段
   const phases = planPhases(state, filteredPhases)
-  // 自适应预算分配
-  const budget = allocateBudget(phases.length, state.remainingBudget)
 
-  // 把动态超时应用到各阶段
+  // 每个阶段用其配置的超时（AI 调用大多是 I/O 等待，需要足够的 wall-clock）。
+  // 之前用 allocateBudget 把所有阶段压到 5s 下限，导致 updateNarratives/translateMissing
+  // 这类阶段经常跑不完就超时（线上 health 持续报 "Timed out after 5000ms"）。
+  // CPU 总预算仍由 checkBudget 实时控制：低优先级阶段在接近上限时被跳过。
   for (const p of phases) {
-    if (!p.timeout) p.timeout = budget
+    if (!p.timeout) p.timeout = phaseTimeout(p.name)
   }
 
   const results = await runPhases(phases, env)
