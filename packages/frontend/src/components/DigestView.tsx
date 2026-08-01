@@ -83,7 +83,7 @@ export function DigestView({ digest, dates, lang, onNewsClick, follows, onEntity
       ) : (
         <div className="digest-list">
           {items.map((item, i) => (
-            <article key={item.id} className="digest-card" onClick={() => onNewsClick(item.id)}>
+            <article key={item.id} className="digest-card" onClick={() => onNewsClick(item.id)} role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNewsClick(item.id) } }}>
               <div className="digest-num">{String(i + 1).padStart(2, '0')}</div>
               <div className="digest-body">
                 <h3 className="digest-title">{displayTitle(item, lang)}</h3>
@@ -102,7 +102,7 @@ export function DigestView({ digest, dates, lang, onNewsClick, follows, onEntity
       )}
 
       {digest.extra && (
-        <article className="digest-extra" onClick={() => onNewsClick(digest.extra!.id)}>
+        <article className="digest-extra" onClick={() => onNewsClick(digest.extra!.id)} role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNewsClick(digest.extra!.id) } }}>
           <div className="digest-extra-label">今日番外</div>
           <h3 className="digest-title">{displayTitle(digest.extra, lang)}</h3>
           {digest.extra.why && <p className="digest-why">{digest.extra.why}</p>}

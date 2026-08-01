@@ -1,11 +1,11 @@
-// 简讯 Service Worker v5 — 移动端兼容性优化
-var STATIC_CACHE = 'jianxun-static-v5'
-var API_CACHE = 'jianxun-api-v5'
+// 简讯 Service Worker v6 — 移动端兼容性优化 + 修复 SW_UPDATE 刷新反馈环
+var STATIC_CACHE = 'jianxun-static-v6'
+var API_CACHE = 'jianxun-api-v6'
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg']
 
 var MAX_API_CACHE = 100
 var MAX_STATIC_CACHE = 30
-var VERSION = '5.0.0'
+var VERSION = '5.1.0'
 
 // ═══ P0: AbortSignal.timeout() 兼容 iOS（手写超时） ═══
 function fetchWithTimeout(url, opts, ms) {
@@ -94,9 +94,19 @@ async function apiWithCache(req) {
   var cached = await cache.match(req)
 
   if (cached) {
-    // 后台更新
+    // 后台更新：内容真的变了才通知页面。
+    // 否则「页面收到 SW_UPDATE → 重拉 API → 再次命中缓存分支 → 再次 SW_UPDATE」
+    // 会形成每轮 4 倍膨胀的无界刷新反馈环。比较新旧响应内容，相同则不通知。
     fetchWithTimeout(req, null, 8000).then(function(res) {
-      if (res && res.ok) { cache.put(req, res.clone()); notifyPages('SW_UPDATE') }
+      if (!res || !res.ok) return
+      var newClone = res.clone()
+      var oldClone = cached.clone()
+      Promise.all([newClone.text(), oldClone.text()]).then(function(texts) {
+        if (texts[0] !== texts[1]) {
+          cache.put(req, res.clone()).catch(function(){})
+          notifyPages('SW_UPDATE')
+        }
+      }).catch(function() {})
     }).catch(function() {})
     return cached
   }

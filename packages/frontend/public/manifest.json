@@ -4,8 +4,8 @@
   "description": "AI 智能新闻聚合：每日简报、热门排行、话题簇与多来源报道分析",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafafa",
-  "theme_color": "#b91c1c",
+  "background_color": "#f5f0eb",
+  "theme_color": "#f5f0eb",
   "icons": [
     {
       "src": "/icon-192.svg",

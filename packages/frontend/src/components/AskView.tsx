@@ -46,7 +46,7 @@ function AnswerText({ text, refs, onNewsClick }: { text: string; refs: AskRef[];
             href={`#/news/${ref.id}`}
             title={ref.title}
             onClick={e => { e.preventDefault(); onNewsClick(ref.id) }}
-          >{m[1]}</a>
+          >{Number(m[1]) + 1}</a>
         )
       })}
     </p>

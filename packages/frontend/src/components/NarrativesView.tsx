@@ -119,23 +119,17 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
   }, [pullPhase])
 
   // Trigger narrative recomputation
+  // 公开站点的「刷新」只重拉列表（读接口）；叙事重算触发付费 LLM + 写库，
+  // 只允许管理员通过带 ADMIN_TOKEN 的 API 调用（POST /api/news/narrative/refresh）。
   const triggerRefresh = useCallback(async () => {
     if (refreshing) return
     setRefreshing(true)
     setRefreshMsg(null)
     try {
-      const res = await fetch('/api/news/narrative/refresh', { method: 'POST' })
-      const data = await res.json()
-      if (data.ok) {
-        setRefreshMsg('计算完成')
-        await load()
-      } else if (data.remaining) {
-        setRefreshMsg(`请 ${data.remaining} 秒后再试`)
-      } else {
-        setRefreshMsg(data.error || '刷新失败')
-      }
+      await load()
+      setRefreshMsg('已更新')
     } catch {
-      setRefreshMsg('请求失败')
+      setRefreshMsg('刷新失败')
     }
     setRefreshing(false)
     setTimeout(() => setRefreshMsg(null), 3000)

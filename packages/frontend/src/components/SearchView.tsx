@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, SearchX, MessageCircleQuestion, Globe, GitBranch, Newspaper, TrendingUp, Clock, ChevronRight } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { getNarratives } from '../api'
@@ -30,9 +30,12 @@ export function SearchView({ results, query, searching, error, lang, onClear, on
   const [relatedNarratives, setRelatedNarratives] = useState<{ keyword: string; label: string; articleCount: number }[]>([])
   const [showIntel, setShowIntel] = useState(true)
 
+  // 竞态防护：输入 openai 后又改成 anthropic，旧查询的晚到响应不应覆盖新情报条
+  const intelSeq = useRef(0)
   useEffect(() => {
     if (query.length < 2) { setIntel(null); setRelatedNarratives([]); return }
     setShowIntel(true)
+    const seq = ++intelSeq.current
     Promise.allSettled([
       fetch(`/api/news/entity/${encodeURIComponent(query)}/briefing`).then(r => r.ok ? r.json() : null),
       getNarratives().then(d => {
@@ -46,6 +49,7 @@ export function SearchView({ results, query, searching, error, lang, onClear, on
         }))
       }),
     ]).then(([entityRes, narrRes]) => {
+      if (seq !== intelSeq.current) return
       if (entityRes.status === 'fulfilled' && entityRes.value) setIntel(entityRes.value)
       if (narrRes.status === 'fulfilled') setRelatedNarratives(narrRes.value)
     })

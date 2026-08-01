@@ -70,8 +70,9 @@ export interface CategoryCount {
 
 const BASE = '/api'
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  // 允许调用方传入自己的 AbortController（切页即取消），否则用 15s 超时兜底
+  const res = await fetch(url, { signal: signal || AbortSignal.timeout(15000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
@@ -80,12 +81,12 @@ export function getNews(params: {
   category?: string
   page?: number
   pageSize?: number
-}): Promise<NewsListResponse> {
+}, signal?: AbortSignal): Promise<NewsListResponse> {
   const q = new URLSearchParams()
   if (params.category && params.category !== '全部') q.set('category', params.category)
   if (params.page) q.set('page', String(params.page))
   if (params.pageSize) q.set('pageSize', String(params.pageSize))
-  return fetchJson(`${BASE}/news?${q}`)
+  return fetchJson(`${BASE}/news?${q}`, signal)
 }
 
 export function getTrending(): Promise<{ items: NewsItem[] }> {
@@ -125,16 +126,16 @@ export function getBriefing(): Promise<{ items: BriefingItem[] }> {
   return fetchJson(`${BASE}/news/briefing`)
 }
 
-export function getDetail(id: number): Promise<NewsDetail> {
-  return fetchJson(`${BASE}/news/${id}/detail`)
+export function getDetail(id: number, signal?: AbortSignal): Promise<NewsDetail> {
+  return fetchJson(`${BASE}/news/${id}/detail`, signal)
 }
 
-export function getByEntity(name: string): Promise<{ items: NewsItem[]; entity: string }> {
-  return fetchJson(`${BASE}/news/entity/${encodeURIComponent(name)}`)
+export function getByEntity(name: string, signal?: AbortSignal): Promise<{ items: NewsItem[]; entity: string }> {
+  return fetchJson(`${BASE}/news/entity/${encodeURIComponent(name)}`, signal)
 }
 
-export function searchNews(q: string): Promise<{ items: NewsItem[]; query: string }> {
-  return fetchJson(`${BASE}/news/search?q=${encodeURIComponent(q)}`)
+export function searchNews(q: string, signal?: AbortSignal): Promise<{ items: NewsItem[]; query: string }> {
+  return fetchJson(`${BASE}/news/search?q=${encodeURIComponent(q)}`, signal)
 }
 
 /* ===== 日报 / 话题深挖 / 信源（增量接口，404 或字段缺失时调用方需兜底） ===== */
@@ -164,8 +165,8 @@ export interface DigestResponse {
   extra?: DigestExtra | null
 }
 
-export function getDigest(date?: string): Promise<DigestResponse> {
-  return fetchJson(`${BASE}/news/digest${date ? `?date=${encodeURIComponent(date)}` : ''}`)
+export function getDigest(date?: string, signal?: AbortSignal): Promise<DigestResponse> {
+  return fetchJson(`${BASE}/news/digest${date ? `?date=${encodeURIComponent(date)}` : ''}`, signal)
 }
 
 export function getDigests(): Promise<{ dates: string[] }> {
@@ -315,8 +316,8 @@ export function getNarratives(): Promise<{ narratives: NarrativeSummary[] }> {
   return fetchJson(`${BASE}/news/narrative`)
 }
 
-export function getNarrative(keyword: string): Promise<NarrativeDetail> {
-  return fetchJson(`${BASE}/news/narrative?keyword=${encodeURIComponent(keyword)}`)
+export function getNarrative(keyword: string, signal?: AbortSignal): Promise<NarrativeDetail> {
+  return fetchJson(`${BASE}/news/narrative?keyword=${encodeURIComponent(keyword)}`, signal)
 }
 
 export function getNarrativesTimeline(): Promise<NarrativesTimeline> {

@@ -22,7 +22,15 @@ export const TrendingPanel = memo(function TrendingPanel({ items, lang = 'zh', o
       </div>
       <div className="trending-list">
         {items.slice(0, 10).map((item, i) => (
-          <div key={item.id} className="trending-item" onClick={() => onNewsClick(item.id)}>
+          <div
+            key={item.id}
+            className="trending-item"
+            onClick={() => onNewsClick(item.id)}
+            role="link"
+            tabIndex={0}
+            aria-label={displayTitle(item, lang)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNewsClick(item.id) } }}
+          >
             <span className={`trending-rank ${i < 3 ? 'top3' : ''}`}>{i + 1}</span>
             <div className="trending-content">
               <span className="trending-title">{displayTitle(item, lang)}</span>

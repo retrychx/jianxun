@@ -1,24 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { Newspaper, MessageCircleQuestion } from 'lucide-react'
 import { CategoryBar } from './components/CategoryBar'
 import { NewsCard } from './components/NewsCard'
 import { TrendingPanel } from './components/TrendingPanel'
 import { DetailPanel } from './components/DetailPanel'
 import { BriefingView } from './components/BriefingView'
-import { TopicsView } from './components/TopicsView'
 import { SearchView } from './components/SearchView'
-import { EntityView } from './components/EntityView'
-import { DigestLoader } from './components/DigestView'
-import { TopicView } from './components/TopicView'
-import { NarrativesView } from './components/NarrativesView'
-import { NarrativeDetailView } from './components/NarrativeDetailView'
-import { ResearchView } from './components/ResearchView'
-import { SourcesView } from './components/SourcesView'
-import { SectorsView } from './components/SectorsView'
 import { AskView } from './components/AskView'
-import { WeeklyView } from './components/WeeklyView'
 import { BottomNav } from './components/BottomNav'
 import { KinkLine } from './components/KinkLine'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { Virtuoso } from 'react-virtuoso'
+
+// 代码分割：重视图按需加载，缩小首屏 JS
+const TopicsView = lazy(() => import('./components/TopicsView').then(m => ({ default: m.TopicsView })))
+const EntityView = lazy(() => import('./components/EntityView').then(m => ({ default: m.EntityView })))
+const DigestLoader = lazy(() => import('./components/DigestView').then(m => ({ default: m.DigestLoader })))
+const TopicView = lazy(() => import('./components/TopicView').then(m => ({ default: m.TopicView })))
+const NarrativesView = lazy(() => import('./components/NarrativesView').then(m => ({ default: m.NarrativesView })))
+const NarrativeDetailView = lazy(() => import('./components/NarrativeDetailView').then(m => ({ default: m.NarrativeDetailView })))
+const ResearchView = lazy(() => import('./components/ResearchView').then(m => ({ default: m.ResearchView })))
+const SourcesView = lazy(() => import('./components/SourcesView').then(m => ({ default: m.SourcesView })))
+const SectorsView = lazy(() => import('./components/SectorsView').then(m => ({ default: m.SectorsView })))
+const WeeklyView = lazy(() => import('./components/WeeklyView').then(m => ({ default: m.WeeklyView })))
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests } from './api'
 import { useFollow } from './hooks/useFollow'
@@ -63,6 +67,7 @@ export default function App() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [feedError, setFeedError] = useState(false)
   const [msg, setMsg] = useState('')
   const [askOpen, setAskOpen] = useState(false)
   const [askQuery, setAskQuery] = useState('')
@@ -83,20 +88,28 @@ export default function App() {
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('hiddenNews') || '[]')) } catch { return new Set() }
   })
-  const hideArticle = (id: number) => {
+  // useCallback 保持引用稳定，否则每个 NewsCard 的 memo 都被击穿、每次渲染全量重绘
+  const hideArticle = useCallback((id: number) => {
     setHiddenIds(prev => {
       const next = new Set(prev); next.add(id)
-      localStorage.setItem('hiddenNews', JSON.stringify([...next]))
       return next
     })
-  }
+  }, [])
+  // localStorage 写入放在 effect（updater 必须是纯函数，渲染期也不该读写 localStorage）
+  useEffect(() => {
+    localStorage.setItem('hiddenNews', JSON.stringify([...hiddenIds]))
+  }, [hiddenIds])
 
   // ─── 新文章标记：记录上次访问时间 ───
-  const saved = localStorage.getItem('lastVisit')
-  const now = Date.now()
-  localStorage.setItem('lastVisit', String(now))
-  // 首次访问（无记录）时取当前时间为基准，不标"新"
-  const lastVisitRef = useRef(saved ? Number(saved) : now)
+  // 首次渲染时惰性读一次（不再每次渲染都 getItem/setItem）
+  const lastVisitRef = useRef<number>(0)
+  if (lastVisitRef.current === 0) {
+    const saved = localStorage.getItem('lastVisit')
+    lastVisitRef.current = saved ? Number(saved) : Date.now()
+  }
+  useEffect(() => {
+    localStorage.setItem('lastVisit', String(Date.now()))
+  }, [])
 
   // Hash 路由：route 为当前 hash 解析结果；baseRoute 为详情覆盖层之下的视图
   const route = useHashRoute()
@@ -110,9 +123,13 @@ export default function App() {
   const activeCat = view === 'feed' ? (baseRoute.cat ?? '全部') : ''
   // tab 高亮：历史日报/话题深挖归入「日报」；信源/问答/周报页不高亮任何 tab
   const navActive: ViewName = view === 'digest' || view === 'topic' ? 'briefing' : view
+  // 供 SSE 处理器读取当前 feed 状态（避免闭包捕获过期 view/cat 导致重新订阅 EventSource）
+  const feedStateRef = useRef({ view: 'briefing', cat: '全部' })
+  feedStateRef.current = { view, cat: activeCat }
   // 关注加权（客户端重排）：命中关注实体的条目稳定置顶并加「关注」标记
-  const followedEntityNames = follows.filter(f => f.type === 'entity').map(f => f.name)
-  const boostedNews = boostFollowed(news, followedEntityNames).filter(n => !hiddenIds.has(n.id))
+  // useMemo：boostFollowed 是 O(n·m)，每次渲染重算 + 数组重建会白白浪费
+  const followedEntityNames = useMemo(() => follows.filter(f => f.type === 'entity').map(f => f.name), [follows])
+  const boostedNews = useMemo(() => boostFollowed(news, followedEntityNames).filter(n => !hiddenIds.has(n.id)), [news, followedEntityNames, hiddenIds])
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -146,19 +163,31 @@ export default function App() {
   }, [])
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
+  // 竞态防护：切分类/翻页时取消上一轮请求，旧响应用 AbortController 中止 + aborted 检查丢弃
+  const newsAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => newsAbort.current?.abort(), [])
   const loadNews = useCallback(async (cat: string, pageNum = 1, append = false) => {
+    newsAbort.current?.abort()
+    const ac = new AbortController()
+    newsAbort.current = ac
     if (append) setLoadingMore(true)
     else setLoading(true)
     try {
-      const data = await getNews({ category: cat, page: pageNum, pageSize: PAGE_SIZE })
+      const data = await getNews({ category: cat, page: pageNum, pageSize: PAGE_SIZE }, ac.signal)
+      if (ac.signal.aborted) return
       setNews(prev => append ? [...prev, ...data.items] : data.items)
       setNewsTotal(data.total)
       setPage(pageNum)
+      setFeedError(false)
     } catch {
+      if (ac.signal.aborted) return
+      setFeedError(true)
       showToast('新闻加载失败，请稍后重试')
     } finally {
-      if (append) setLoadingMore(false)
-      else setLoading(false)
+      if (!ac.signal.aborted) {
+        if (append) setLoadingMore(false)
+        else setLoading(false)
+      }
     }
   }, [showToast])
 
@@ -248,6 +277,10 @@ export default function App() {
       loadAll().catch(() => {})
       loadStats().catch(() => {})
       loadDigestDates().catch(() => {})
+      // 若用户正停留在 feed 视图，顺手刷新列表，让"已更新"提示名副其实
+      if (feedStateRef.current.view === 'feed') {
+        loadNews(feedStateRef.current.cat, 1, false).catch(() => {})
+      }
     })
 
     es.addEventListener('breaking', (e: MessageEvent) => {
@@ -304,19 +337,25 @@ export default function App() {
       } else if (e.data?.type === 'SW_OFFLINE') {
         setIsOffline(true)
       } else if (e.data?.type === 'VERSION') {
-        // 有新版本时提示刷新
-        if (e.data.version !== '5.0.0') setShowUpdate(true)
+        // 有新版本时提示刷新：与上次见过的版本比较，不再硬编码版本号（否则发布时漏改一处就永久失效）
+        const v = String(e.data.version || '')
+        const seen = localStorage.getItem('sw_version_seen')
+        if (seen !== null && seen !== v) setShowUpdate(true)
+        localStorage.setItem('sw_version_seen', v)
       }
     }
     const onlineHandler = () => setIsOffline(false)
     const offlineHandler = () => setIsOffline(true)
+    const controllerChanged = () => navigator.serviceWorker?.controller?.postMessage({ type: 'GET_VERSION' })
     window.addEventListener('online', onlineHandler)
     window.addEventListener('offline', offlineHandler)
     navigator.serviceWorker?.addEventListener('message', handler)
+    navigator.serviceWorker?.addEventListener('controllerchange', controllerChanged)
     // 查询当前 SW 版本
     navigator.serviceWorker?.controller?.postMessage({ type: 'GET_VERSION' })
     return () => {
       navigator.serviceWorker?.removeEventListener('message', handler)
+      navigator.serviceWorker?.removeEventListener('controllerchange', controllerChanged)
       window.removeEventListener('online', onlineHandler)
       window.removeEventListener('offline', offlineHandler)
     }
@@ -519,7 +558,10 @@ export default function App() {
             <>
               <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
             </>
-          ) : view === 'search' ? (
+          ) : (
+            <ErrorBoundary>
+              <Suspense fallback={<SkeletonCard />}>
+              {view === 'search' ? (
             <SearchView
               results={searchResults}
               query={searchQuery.trim()}
@@ -563,26 +605,48 @@ export default function App() {
                   <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
                 </>
               ) : news.length === 0 ? (
-                <div className="empty">
-                  <Newspaper size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
-                  <p>暂无新闻</p>
-                  <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>切换分类看看，或稍后再来</p>
-                </div>
-              ) : (
-                <>
-                  <div className="card-list">
-                    {boostedNews.map((item, i) => (
-                      <div key={item.id} className="card-enter" style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}>
-                        <NewsCard item={item} lang={lang} onClick={openNews} followed={matchesFollow(item, followedEntityNames)} isNew={new Date(item.createdAt).getTime() > lastVisitRef.current} onHide={hideArticle} />
-                      </div>
-                    ))}
+                feedError ? (
+                  <div className="empty" style={{ marginTop: 40 }}>
+                    <p>新闻加载失败</p>
+                    <button className="load-more" onClick={() => loadNews(activeCat || '全部')} style={{ marginTop: 12 }}>重试</button>
                   </div>
-                  {page * PAGE_SIZE < newsTotal && (
-                    <button className="load-more" onClick={() => loadNews(activeCat || '全部', page + 1, true)} disabled={loadingMore}>
-                      {loadingMore ? '加载中...' : `加载更多（还有 ${newsTotal - news.length} 篇）`}
-                    </button>
+                ) : (
+                  <div className="empty">
+                    <Newspaper size={28} style={{ color: 'var(--text-tertiary)', marginBottom: 8 }} />
+                    <p>暂无新闻</p>
+                    <p style={{ fontSize: 13, marginTop: 4, color: 'var(--text-tertiary)' }}>切换分类看看，或稍后再来</p>
+                  </div>
+                )
+              ) : (
+                <Virtuoso
+                  useWindowScroll
+                  data={boostedNews}
+                  endReached={() => {
+                    if (!loadingMore && page * PAGE_SIZE < newsTotal) {
+                      loadNews(activeCat || '全部', page + 1, true)
+                    }
+                  }}
+                  components={{
+                    Footer: () => (
+                      <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                        {loadingMore ? '加载中...' : page * PAGE_SIZE < newsTotal ? '上滑加载更多' : '— 已显示全部 —'}
+                      </div>
+                    ),
+                  }}
+                  itemContent={(_index, item) => (
+                    // 虚拟化后条目会随滚动挂载/卸载，逐条入场动画会反复播放，故只保留间距
+                    <div style={{ paddingBottom: 10 }}>
+                      <NewsCard
+                        item={item}
+                        lang={lang}
+                        onClick={openNews}
+                        followed={matchesFollow(item, followedEntityNames)}
+                        isNew={new Date(item.createdAt).getTime() > lastVisitRef.current}
+                        onHide={hideArticle}
+                      />
+                    </div>
                   )}
-                </>
+                />
               )}
             </>
           ) : view === 'topics' ? (
@@ -607,6 +671,9 @@ export default function App() {
                   />
                 }
               />
+              )}
+              </Suspense>
+            </ErrorBoundary>
           )}
         </div>
         <aside className="sidebar">

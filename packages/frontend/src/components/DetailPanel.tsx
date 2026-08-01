@@ -56,13 +56,20 @@ export function DetailPanel({ newsId, lang, onClose, onEntityClick, onNewsClick,
 
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
 
+  // 竞态防护：快速切换文章时取消上一轮请求，晚到的旧响应不再覆盖新文章详情
+  const detailAbort = useRef<AbortController | null>(null)
+  const entityAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => { detailAbort.current?.abort(); entityAbort.current?.abort() }, [])
   const loadDetail = useCallback((id: number) => {
+    detailAbort.current?.abort()
+    const ac = new AbortController()
+    detailAbort.current = ac
     setLoading(true); setLoadError(false); setDetail(null)
     setEntityNews(new Map()); setEntityError(null); setExpandedEntity(null)
-    getDetail(id)
-      .then(setDetail)
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
+    getDetail(id, ac.signal)
+      .then(d => { if (!ac.signal.aborted) setDetail(d) })
+      .catch(() => { if (!ac.signal.aborted) setLoadError(true) })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false) })
   }, [])
 
   useEffect(() => {
@@ -82,11 +89,16 @@ export function DetailPanel({ newsId, lang, onClose, onEntityClick, onNewsClick,
   }, [newsId, handleClose])
 
   const fetchEntityNews = async (name: string) => {
+    entityAbort.current?.abort()
+    const ac = new AbortController()
+    entityAbort.current = ac
     setEntityError(null)
     try {
-      const res = await getByEntity(name)
+      const res = await getByEntity(name, ac.signal)
+      if (ac.signal.aborted) return
       setEntityNews(prev => new Map(prev).set(name, res.items))
     } catch {
+      if (ac.signal.aborted) return
       setEntityError(name)
     }
   }

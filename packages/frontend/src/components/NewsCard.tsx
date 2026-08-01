@@ -30,7 +30,16 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
   }, [saved, item.id, item.title, item.source, item.url])
 
   return (
-    <article className={`news-card${showImage ? '' : ' no-image'}`} onClick={() => onClick?.(item.id)}>
+    <article
+      className={`news-card${showImage ? '' : ' no-image'}`}
+      onClick={() => onClick?.(item.id)}
+      role="link"
+      tabIndex={0}
+      aria-label={displayTitle(item, lang)}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && onClick) { e.preventDefault(); onClick(item.id) }
+      }}
+    >
       {showImage && (
         <div className="card-image-wrap">
           <img

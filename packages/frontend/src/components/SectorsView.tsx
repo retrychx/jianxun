@@ -13,12 +13,15 @@ interface Sector {
 export function SectorsView() {
   const [sectors, setSectors] = useState<Sector[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true); setError(false)
     fetch('/api/news/sectors').then(r => r.json()).then(d => {
       if (d.sectors) setSectors(d.sectors)
-    }).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+    }).catch(() => setError(true)).finally(() => setLoading(false))
+  }
+  useEffect(load, [])
 
   if (loading) return (
     <div className="sectors-view">
@@ -39,7 +42,12 @@ export function SectorsView() {
         </div>
       </div>
 
-      {sectors.length === 0 ? (
+      {error ? (
+        <div className="empty" style={{ marginTop: 40 }}>
+          <p>赛道数据加载失败</p>
+          <button className="load-more" onClick={load} style={{ marginTop: 12 }}>重试</button>
+        </div>
+      ) : sectors.length === 0 ? (
         <div className="empty" style={{ marginTop: 40 }}>
           <Radar size={28} style={{ opacity: .3, marginBottom: 8 }} />
           <p>暂无赛道数据</p>

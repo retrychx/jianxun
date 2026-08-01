@@ -75,7 +75,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
             const isFirst = i === 0
             if (isFirst) {
               return (
-              <article key={item.id} className="briefing-hero" onClick={() => onNewsClick(item.id)}>
+              <article key={item.id} className="briefing-hero" onClick={() => onNewsClick(item.id)} role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNewsClick(item.id) } }}>
                 <div className="briefing-hero-badge">今日精选</div>
                 <div className="briefing-hero-meta">
                   <span className="briefing-source">{item.source}</span>
@@ -96,7 +96,7 @@ export function BriefingView({ items, updatedAt, follows, lang, onNewsClick, onE
               )
             }
             return (
-            <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)}>
+            <article key={item.id} className="briefing-card" onClick={() => onNewsClick(item.id)} role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNewsClick(item.id) } }}>
               <div className="briefing-rank"><span className="briefing-num">{String(i + 1).padStart(2, '0')}</span></div>
               <div className="briefing-body">
                 <div className="briefing-meta">
