@@ -75,6 +75,40 @@ export function isoZ(ts: string | null | undefined): string | null {
   return ts.replace(' ', 'T') + 'Z'
 }
 
+// SQLite datetime('now') stores "YYYY-MM-DD HH:MM:SS" (UTC). These helpers keep
+// JS-side cutoffs in the same format so string comparisons in SQL are correct
+// (lexicographic vs. ISO strings would misorder ' ' < 'T' on the same day).
+
+/** Parse a DB datetime("YYYY-MM-DD HH:MM:SS", UTC) into a Date. */
+export function parseDBTime(s: string): Date {
+  return new Date(s.replace(' ', 'T') + 'Z')
+}
+
+/** Format a Date as DB datetime("YYYY-MM-DD HH:MM:SS", UTC). */
+export function toDBTime(d: Date): string {
+  return d.toISOString().replace('T', ' ').slice(0, 19)
+}
+
+/** 客户端 IP（用于限流 scope）。CF 会设置 CF-Connecting-IP。 */
+export function clientIp(request: Request): string {
+  return request.headers.get('CF-Connecting-IP') || 'unknown'
+}
+
+/**
+ * 固定窗口限流（D1 表 rate_limits）。窗口过期行由 agent cleanup 定期清理。
+ * 返回 true=放行；false=拒绝（应返回 429）。限流器自身异常时放行，避免误伤正常访问。
+ */
+export async function rateLimit(env: Env, scope: string, limit: number, windowSeconds: number): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare(
+      "SELECT COUNT(*) as c FROM rate_limits WHERE scope = ? AND created_at >= datetime('now', ?)"
+    ).bind(scope, `-${windowSeconds} seconds`).first<any>()
+    if ((row?.c || 0) >= limit) return false
+    await env.DB.prepare("INSERT INTO rate_limits (scope) VALUES (?)").bind(scope).run()
+    return true
+  } catch { return true }
+}
+
 // Report configuration status: which env vars are set.
 export async function statusCheck(env: Env) {
   return {

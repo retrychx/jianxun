@@ -1,5 +1,5 @@
 import { cacheGet, cacheSet, cacheDelete, CACHE_TTL } from '../cache.js'
-import { generateDigest, DEEPSEEK_MODEL, fetchWithRetry } from '../analysis/deepseek.js'
+import { generateDigest } from '../analysis/deepseek.js'
 import { type Env } from '../helpers.js'
 
 // Incremental daily digest: first generation creates a full digest from the
@@ -26,13 +26,15 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
     } catch { existingItems = [] }
   }
 
-  // Full candidate pool for today's window
+  // Full candidate pool for today's window.
+  // 原先窗口固定为「北京昨日 00:00 ~ 今日 00:00」，导致打上"今日"标签的日报
+  // 永远只含昨天内容（今天发布的新文章永远不会进入）。改为滚动 24 小时窗口，
+  // 让"今日日报"名副其实，且增量逻辑能持续吸收当天新文章。
   // 注意：去掉 correlated subquery（D1 5s 超时）
   const candidates = await env.DB.prepare(
     `SELECT id, title, summary, category, source, analysis_detail
      FROM news
-     WHERE published_at >= datetime(date('now', '+8 hours'), '-8 hours', '-24 hours')
-       AND published_at < datetime(date('now', '+8 hours'), '-8 hours')
+     WHERE published_at >= datetime('now', '-24 hours')
      ORDER BY score DESC LIMIT 50`
   ).all()
   const all = (candidates?.results || []) as any[]
@@ -81,41 +83,6 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
     .bind(JSON.stringify(existingItems), mergedExtra ? JSON.stringify(mergedExtra) : null, date).run()
   await Promise.allSettled([cacheDelete('digest'), cacheDelete('digests')])
   return 'generated'
-}
-
-export async function debugDigest(env: Env) {
-  const apiKey = env.DEEPSEEK_API_KEY
-  if (!apiKey) return { stage: 'no-api-key' }
-  const candidates = await env.DB.prepare(
-    `SELECT n.id, n.title, n.summary, n.category, n.source,
-       (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-     FROM news n
-     WHERE published_at >= datetime('now', '-24 hours')
-     ORDER BY n.score DESC LIMIT 30`
-  ).all()
-  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(60_000),
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages: [
-        { role: 'system', content: '你是中文科技日报主编。从候选新闻中挑出今天最重要的 5-8 条做成日报。只返回 JSON：{"intro":"≤120字","items":[{"news_id":数字,"why":"≤30字","category":"分类"}],"extra":{"news_id":数字,"why":"≤30字"}或null}。news_id 必须来自候选列表。' },
-        { role: 'user', content: (candidates.results as any[]).slice(0, 30).map(c => `[${c.id}] ${c.title}（${c.source}/${c.category}）\n${(c.summary || '').slice(0, 200)}`).join('\n\n') }
-      ],
-      temperature: 0.2,
-      max_tokens: 2048,
-    }),
-  })
-  if (!res) return { stage: 'failed', httpStatus: 0, candidateCount: candidates.results?.length }
-  const text = await res.text()
-  let parsed: any = null
-  try {
-    const data = JSON.parse(text)
-    const raw = data.choices?.[0]?.message?.content || ''
-    parsed = { finishReason: data.choices?.[0]?.finish_reason, contentHead: raw.slice(0, 600), contentTail: raw.slice(-300) }
-  } catch { parsed = { nonJsonResponse: text.slice(0, 600) } }
-  return { stage: 'llm', httpStatus: res.status, candidateCount: candidates.results?.length, ...parsed }
 }
 
 export async function digest(env: Env, date: string | null) {

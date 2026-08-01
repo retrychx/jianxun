@@ -8,10 +8,8 @@
  *  - generateTopicLabels, generateDigest, translateBatch
  *  - generateStoryline, generateAnswer
  *  - crossRefAnalysis (multi-source angle comparison)
- *  - titleSimilarity
  */
 
-import { tokenize } from '../tokenize.js'
 import { CONFIG } from '../agent/config.js'
 import {
   ANALYSIS_PROMPT, TOPIC_LABELS_PROMPT, DIGEST_PROMPT, TRANSLATION_PROMPT,
@@ -24,10 +22,12 @@ export async function fetchWithRetry(url: string, options: RequestInit, retries 
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, options)
-      if (res.status >= 400 && res.status < 500) return res
       if (res.ok || i === retries) return res
+      // 429（限流）应当重试；其余 4xx（参数错/鉴权失败等）重试无意义，直接放弃
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) return res
     } catch { if (i === retries) return null }
-    await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+    // 指数退避 + 轻微抖动，避免同时重试打满限流窗口
+    await new Promise(r => setTimeout(r, (1000 * (i + 1)) + Math.floor(Math.random() * 300)))
   }
   return null
 }
@@ -75,7 +75,7 @@ export interface AnalysisDetail {
 }
 
 export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string, pageTitle?: string | null): Promise<{ base: DeepSeekResult; detail: AnalysisDetail } | null> {
-  const prompt = `你是一位资深科技新闻分析编辑。深刻理解这篇文章，返回以下 JSON（不要其他文字）：\n\n{\n  "summary": "2-3句精炼中文摘要，包含核心事实（谁/什么/影响）",\n  "keyPoints": ["要点1（≤20字）","要点2","要点3","要点4","要点5"],\n  "category": "AI|科技|财经|国际|政治|健康|体育|娱乐|游戏|教育|社会",\n  "entities": [\n    { "name": "实体名", "type": "person|company|product|technology|concept", "weight": 0.8, "role": "角色简述（≤10字）" }\n  ],\n  "sentiment": {\n    "label": "positive|negative|neutral|mixed",\n    "scores": { "positive": 0.x, "negative": 0.x, "neutral": 0.x },\n    "perspective": "报道角度和倾向简短描述（中文，≤20字）"\n  },\n  "significance": "这篇文章在当天新闻中的重要性判断（≤40字）",\n  "controversy": false,\n  "impact": "short|medium|high"\n}`
+  const prompt = ANALYSIS_PROMPT
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -118,7 +118,7 @@ export async function generateDigest(candidates: DigestCandidate[], apiKey: stri
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是中文科技日报主编。从候选新闻中挑出今天最重要的 10-20 条，做成一期"AI/科技行业日报"。只返回 JSON（不要其他文字）：\n{\n  "intro": "≤120字中文开场白，总览今日行业动态",\n  "items": [{ "news_id": 数字, "why": "≤30字，这条为什么重要", "category": "分类" }],\n  "extra": { "news_id": 数字, "why": "≤30字" } 或 null\n}\nitems 按重要性排序，尽可能多选但有价值的才选；extra 是最有趣/最轻松的一条番外，不得与 items 重复。news_id 必须来自候选列表。' }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }], temperature: 0.2, max_tokens: 4096 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: DIGEST_PROMPT }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }], temperature: 0.2, max_tokens: 4096 }),
     })
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -170,7 +170,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是中文科技新闻编辑。根据候选新闻回答读者问题：不超过250字中文，事实必须来自候选新闻，候选里没有的信息就明说"暂无相关报道"。引用候选时在句末用 [n] 标注，n 为候选编号。只返回 JSON（不要其他文字）：\n{ "answer": "≤250字中文回答，含 [n] 引用", "refs": [被引用的候选编号] }' }, { role: 'user', content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0,30).map((c,i) => `[${i}] ${c.titleZh||c.title}（${c.source||'未知来源'}${c.publishedAt ? '/'+c.publishedAt.slice(0,10) : ''}）\n${((c.summaryZh||c.summary)||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: ANSWER_PROMPT }, { role: 'user', content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0,30).map((c,i) => `[${i}] ${c.titleZh||c.title}（${c.source||'未知来源'}${c.publishedAt ? '/'+c.publishedAt.slice(0,10) : ''}）\n${((c.summaryZh||c.summary)||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
     const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -178,13 +178,6 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
     const refs: number[] = [...new Set((Array.isArray(parsed.refs) ? parsed.refs as any[] : []).map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length))]
     return { answer: answer.slice(0,500), refs }
   } catch { return null }
-}
-
-export function titleSimilarity(a: string, b: string): number {
-  const setA = new Set(tokenize(a)); const setB = new Set(tokenize(b))
-  if (!setA.size || !setB.size) return 0
-  const intersection = new Set([...setA].filter(x => setB.has(x)))
-  return intersection.size / new Set([...setA, ...setB]).size
 }
 
 export interface CrossRefResult { keyword: string; sources: { name: string; angle: string }[]; comparison: string; articleIds: number[] }
@@ -199,7 +192,7 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
       const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(30_000),
-        body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: '你是新闻对比分析编辑。以下是多家媒体对同一事件的报道。比较各家的报道角度、侧重点和潜在倾向差异。只返回 JSON（不要其他文字）：\n{\n  "keyword": "报道的事件关键词（≤20字中文）",\n  "comparison": "≤100字对比分析：指出各源报道角度的关键差异"\n}' }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
+        body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CROSSREF_PROMPT }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
       })
       if (!res?.ok) continue
       const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
@@ -215,10 +208,10 @@ export async function batchClassify(
   articles: { id: number; title: string }[],
   apiKey: string,
 ): Promise<{ index: number; category: string }[]> {
-  const { CLASSIFY_PROMPT } = await import('./prompts.js')
   const texts = articles.map((a, idx) => `[${idx}] ${a.title}`).join('\n')
   const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.classification),
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024 }),
   })
   if (!res?.ok) return []

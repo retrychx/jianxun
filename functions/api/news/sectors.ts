@@ -1,5 +1,5 @@
 // GET /api/news/sectors — 行业雷达：赛道 + 公司竞争格局 + 热度走势
-import { json } from '../../../src/handler'
+import { json, tryCatch } from '../../../src/handler'
 
 // 赛道关键词映射（粗粒度，后续可扩充）
 const SECTORS: Record<string, { label: string; keywords: string[] }> = {
@@ -14,6 +14,7 @@ const SECTORS: Record<string, { label: string; keywords: string[] }> = {
 }
 
 export async function onRequestGet(context: any) {
+  return tryCatch(async () => {
   const { env } = context
 
   // 最近 7 天文章
@@ -88,4 +89,5 @@ export async function onRequestGet(context: any) {
   sectors.sort((a, b) => b.articleCount - a.articleCount)
 
   return json({ sectors })
+  })
 }

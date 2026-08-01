@@ -1,10 +1,13 @@
-import { detail, saveAnalysis, validateAnalysisBody, json, requireAdmin } from '../../../../src/handler'
+import { detail, saveAnalysis, validateAnalysisBody, json, requireAdmin, tryCatch } from '../../../../src/handler'
 
 export async function onRequestGet(context: any) {
-  const id = parseInt(context.params.id)
-  const result = await detail(context.env, id)
-  if (!result) return json({ message: 'Not Found' }, 404)
-  return json(result)
+  return tryCatch(async () => {
+    const id = parseInt(context.params.id)
+    if (!Number.isInteger(id) || id <= 0) return json({ error: 'invalid id' }, 400)
+    const result = await detail(context.env, id)
+    if (!result) return json({ message: 'Not Found' }, 404)
+    return json(result)
+  })
 }
 
 export async function onRequestPost(context: any) {

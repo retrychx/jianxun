@@ -2,9 +2,6 @@
  * Agent Self-Evaluation — KPI tracking, exploration, cost awareness, reporting.
  */
 import type { Env } from '../helpers.js'
-import type { AgentMemory } from './types.js'
-import { CONFIG } from './config.js'
-import { loadMemory, saveMemory } from './memory.js'
 
 // ═══ 1. 自我评估：KPI 追踪 ═══
 
@@ -78,60 +75,7 @@ export async function saveKPI(env: Env, kpi: Partial<AgentKPI>): Promise<void> {
   } catch {}
 }
 
-// ═══ 2. 探索新策略：A/B 测试 ═══
-
-const EXPLORE_KEY = 'agent_explore'
-
-interface ExperimentResult {
-  param: string
-  baseline: number
-  variant: number
-  variantValue: number
-  winner: 'baseline' | 'variant'
-  timestamp: string
-}
-
-/** 每隔 N 轮尝试一个变体参数 */
-export function shouldExplore(runCount: number): boolean {
-  return runCount > 0 && runCount % 10 === 0 // 每 10 轮探索一次
-}
-
-/** 生成当前轮次的实验参数 */
-export function getExperimentParams(memory: AgentMemory): Record<string, number> {
-  const params: Record<string, number> = {}
-  const runCount = memory.totalAnalyses || 0
-
-  if (runCount % 10 === 0) {
-    // 尝试降低匹配阈值（召回更多）
-    params.matchThreshold = 0.3 // vs 默认 0.35
-  } else if (runCount % 10 === 5) {
-    // 尝试提高匹配阈值（更精确）
-    params.matchThreshold = 0.4
-  }
-
-  return params
-}
-
-/** 保存实验比较结果 */
-export async function saveExperiment(env: Env, memory: AgentMemory, paramsUsed: Record<string, number>, result: any): Promise<void> {
-  try {
-    const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(EXPLORE_KEY).first<any>()
-    const history: ExperimentResult[] = row?.value ? JSON.parse(row.value) : []
-    // 简化的实验记录
-    history.push({
-      param: Object.keys(paramsUsed).join(','),
-      baseline: CONFIG.narrative.matchThreshold,
-      variant: paramsUsed.matchThreshold || 0,
-      variantValue: result?.articlesAnalyzed || 0,
-      winner: 'variant',
-      timestamp: new Date().toISOString(),
-    })
-    if (history.length > 20) history.splice(0, history.length - 20)
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)").bind(EXPLORE_KEY, JSON.stringify(history)).run()
-  } catch {}
-}
-
-// ═══ 3. 成本感知 ═══
+// ═══ 2. 成本感知 ═══
 
 const API_COST_PER_CALL = 0.002 // $0.002 per DeepSeek API call
 
@@ -139,11 +83,7 @@ export function estimateAPICost(calls: number): number {
   return Math.round(calls * API_COST_PER_CALL * 100) / 100 // 返回 cents
 }
 
-export function getBudgetRemaining(startBudget: number, used: number): number {
-  return Math.max(0, startBudget - used)
-}
-
-// ═══ 4. 向用户汇报 ═══
+// ═══ 3. 向用户汇报 ═══
 
 export interface AgentReport {
   timestamp: string

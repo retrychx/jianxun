@@ -31,7 +31,7 @@ import { generateTodayDigest } from '../api/digest.js'
 import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
 import { checkSystemState, planPhases, allocateBudget } from './decider.js'
-import { evaluateQuality, saveKPI, shouldExplore, getExperimentParams, saveExperiment, estimateAPICost, generateReport, saveReport } from './eval.js'
+import { evaluateQuality, saveKPI, estimateAPICost, generateReport, saveReport } from './eval.js'
 import { cleanup, recordError } from './cleanup.js'
 import { generateNarrativeOutlooks, extractTopEntityEvents } from './intel.js'
 import { cacheDelete } from '../cache.js'
@@ -61,6 +61,11 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   const start = Date.now()
   if (!env.DEEPSEEK_API_KEY) return
   if (await shouldSkipDueToConcurrency(env)) return
+
+  // 原子占位：运行开始就把 last_run 写为当前时间。
+  // 否则两个并发实例（cron 触发 + 管理端 POST）都会读到旧的 last_run 而同时通过守卫，
+  // 导致重复 SELECT / 重复调 DeepSeek / analyze_attempts 双倍递增。
+  await markAgentRun(env)
 
   initBudget()
   // pingDeepSeek 仅用于日志，不影响任何阶段运行（各阶段自己有 API 重试）
@@ -111,19 +116,13 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   // ═══ Self-Evaluation: 评估本轮分析质量 ═══
   const kpi = await evaluateQuality(env)
   kpi.totalMs = totalMs
-  kpi.estimatedCost = estimateAPICost(kpi.articlesAnalyzed || 0 + 3) // +3 for narrative/breaking/curation calls
+  kpi.estimatedCost = estimateAPICost((kpi.articlesAnalyzed || 0) + 3) // +3 for narrative/breaking/curation calls
   // 从 phase results 中提取额外 KPI
   kpi.qualityFlags = (results as any)?.flagLowQualityAnalyses?.result || 0
   kpi.narrativesMerged = (results as any)?.mergeOverlappingNarratives?.result || 0
   kpi.briefingCount = (results as any)?.curateBriefing?.result?.briefing || 0
 
   await saveKPI(env, kpi)
-
-  // ═══ Exploration: A/B 测试新策略 ═══
-  if (shouldExplore(memory.totalAnalyses)) {
-    const expParams = getExperimentParams(memory)
-    await saveExperiment(env, memory, expParams, kpi)
-  }
 
   // ═══ Agent Report: 生成人类可读的报告 ═══
   const report = generateReport(kpi, results)

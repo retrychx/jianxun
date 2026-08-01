@@ -1,7 +1,8 @@
 // GET /api/news/briefing/updates — 今日叙事动态 + 升温实体
-import { json } from '../../../../src/handler'
+import { json, tryCatch } from '../../../../src/handler'
 
 export async function onRequestGet(context: any) {
+  return tryCatch(async () => {
   const { env } = context
 
   // 今日有更新的叙事
@@ -23,13 +24,28 @@ export async function onRequestGet(context: any) {
     }
   })
 
-  // 升温实体：今日提及增长最快的实体
+  // 升温实体：今日提及最多的实体（此前误按 source 分组，实际返回的是"高产信源"）
   const entityToday: any = await env.DB.prepare(`
-    SELECT source as entity, COUNT(*) as cnt FROM news
-    WHERE entities IS NOT NULL AND created_at >= datetime('now', '-1 day')
-    GROUP BY source ORDER BY cnt DESC LIMIT 5
+    SELECT entities FROM news
+    WHERE entities IS NOT NULL AND entities != '' AND created_at >= datetime('now', '-1 day')
+    LIMIT 300
   `).all()
-  const risingSources = ((entityToday.results || []) as any[]).map(r => ({ name: r.entity, count: r.cnt }))
+  const entityCount = new Map<string, number>()
+  for (const r of (entityToday.results || [])) {
+    try {
+      const parsed = typeof r.entities === 'string' ? JSON.parse(r.entities) : r.entities
+      if (Array.isArray(parsed)) {
+        for (const e of parsed) {
+          const name = e?.name?.trim()
+          if (name && name.length >= 2) entityCount.set(name, (entityCount.get(name) || 0) + 1)
+        }
+      }
+    } catch {}
+  }
+  const risingSources = [...entityCount.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([name, count]) => ({ name, count }))
 
   return json({ updatedNarratives, risingSources })
+  })
 }

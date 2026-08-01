@@ -35,8 +35,9 @@ export async function saveAnalysis(env: Env, id: number, body: any) {
       "UPDATE news SET summary=?, entities=?, sentiment=?, category=COALESCE(?,category), analyzed_at=datetime('now') WHERE id=?"
     ).bind(summary || null, JSON.stringify(entities || []), JSON.stringify(sentiment || {}), category || null, id).run()
     return { ok: true }
-  } catch (e: any) {
-    return { ok: false, error: e.message }
+  } catch {
+    // 不返回 e.message——可能泄露 SQL/内部结构
+    return { ok: false, error: '分析保存失败' }
   }
 }
 

@@ -43,11 +43,3 @@ export async function extractEntityEvents(env: Env, entity: string, articles: { 
     return Array.isArray(parsed) ? parsed.slice(0, 6) : []
   } catch { return [] }
 }
-
-/** 生成热度解释 */
-export async function explainTrending(env: Env, title: string, sources: string[], heat: number): Promise<string | null> {
-  const k = env.DEEPSEEK_API_KEY
-  if (!k) return null
-  const user = `标题：${title}\n覆盖媒体：${sources.join(',')}\n热度：${heat} 家媒体报道\n\n为什么这条新闻热？`
-  return callAI(k, '输出≤40字中文"为什么热"，不要说废话', user, 80, 15000)
-}

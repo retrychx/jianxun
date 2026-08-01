@@ -84,8 +84,10 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
   }
 
   // 低优先级阶段：只在预算充足时跑
+  // 注意：curateBriefing / generateDailyDigest 已在 always 列表，绝不在此重复加入，
+  // 否则同一周期会并发执行两份同名阶段（scheduler 按 name 去重只对已完成生效）。
   if (state.remainingBudget > 30_000) {
-    for (const name of ['curateBriefing', 'generateResearchBriefs', 'generateDailyDigest']) {
+    for (const name of ['generateResearchBriefs']) {
       const p = basePhases.find(b => b.name === name)
       if (p) planned.push({ ...p, priority: 'low' })
     }

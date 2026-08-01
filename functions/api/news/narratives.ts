@@ -8,7 +8,8 @@ export async function onRequestGet(context: any) {
     const timeline = new Map<string, any[]>()
 
     for (const n of narratives) {
-      const devs: any[] = JSON.parse(n.developments || '[]')
+      // 单个叙事数据损坏不应让整个 timeline 500
+      let devs: any[] = []; try { devs = JSON.parse(n.developments || '[]'); if (!Array.isArray(devs)) devs = [] } catch { devs = [] }
       for (const d of devs) {
         const date = d.date || 'unknown'
         if (!timeline.has(date)) timeline.set(date, [])

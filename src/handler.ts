@@ -4,7 +4,7 @@
 export type { Env } from './helpers.js'
 
 // Common helpers
-export { json, tryCatch, requireAdmin, statusCheck, validateAnalysisBody, isoZ, likeEscape, mapNews } from './helpers.js'
+export { json, tryCatch, requireAdmin, statusCheck, validateAnalysisBody, isoZ, likeEscape, mapNews, rateLimit, clientIp, toDBTime, parseDBTime } from './helpers.js'
 
 // Cache layer
 export { cacheGet, cacheSet, cacheDelete, signalEvent, pollEvent, CACHE_TTL } from './cache.js'
@@ -19,7 +19,7 @@ export { topics, topic, weekly } from './topics.js'
 export { runAgent, fixMissingImages as fixImages, fixMissingImages, analyzeNewArticles, refineCategories, translateMissing, runCrossRefAnalysis, detectBreakingNews, linkEntities, tuneSourceWeights, curateBriefing, detectControversy, generateResearchBriefs, loadActiveNarratives, loadSingleNarrative } from './agent/index.js'
 
 // Daily digest
-export { generateTodayDigest, debugDigest, digest, digests } from './api/digest.js'
+export { generateTodayDigest, digest, digests } from './api/digest.js'
 
 // Admin write endpoints + ask (agent phase functions exported from agent.ts)
 export { fetchNews, saveAnalysis, ask } from './api/write.js'

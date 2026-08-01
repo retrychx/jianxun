@@ -1,5 +1,5 @@
 // GET /api/news/signals — 行业早期信号 + 公司监控 + 来源可信度
-import { json } from '../../../src/handler'
+import { json, tryCatch } from '../../../src/handler'
 
 const CREDIBILITY = [
   ['36氪', '量子位', '虎嗅', '钛媒体', '爱范儿', '品玩', '雷锋网', '动点科技', '中国新闻网', 'IT之家', '凤凰网科技', '搜狐科技', '新浪科技'],
@@ -13,6 +13,7 @@ function sourceCredibility(source: string): { score: number; label: string } {
 }
 
 export async function onRequestGet(context: any) {
+  return tryCatch(async () => {
   const { env } = context
 
   // 1. 叙事热度变化（今日 vs 昨日）
@@ -81,4 +82,5 @@ export async function onRequestGet(context: any) {
     .map(([name, count]) => ({ name, count }))
 
   return json({ risingNarratives, sources, hotEntities })
+  })
 }

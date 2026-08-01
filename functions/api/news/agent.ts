@@ -12,9 +12,10 @@ export async function onRequestGet(context: any) {
     env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_kpis'").first<any>(),
   ])
 
-  const log = lastLog?.value ? JSON.parse(lastLog.value) : null
-  const agentReport = report?.value ? JSON.parse(report.value) : null
-  const kpiHistory = kpis?.value ? JSON.parse(kpis.value) : null
+  // 历史数据可能损坏——单个坏 JSON 不应让整个端点 500
+  let log: any = null; try { log = lastLog?.value ? JSON.parse(lastLog.value) : null } catch {}
+  let agentReport: any = null; try { agentReport = report?.value ? JSON.parse(report.value) : null } catch {}
+  let kpiHistory: any = null; try { kpiHistory = kpis?.value ? JSON.parse(kpis.value) : null } catch {}
 
   return json({
     lastRun: lastRun?.value || null,

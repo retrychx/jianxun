@@ -100,7 +100,8 @@ export async function curateBriefing(env: Env) {
     if (!Array.isArray(items) || !items.length) return { briefing: 0 }
 
     // Validate IDs and build enriched response
-    const validIds = items.map(i => i.id).filter(Boolean)
+    const validIds = items.map(i => i.id).filter((id: number) => Number.isInteger(id) && id > 0)
+    if (!validIds.length) return { briefing: 0 } // 避免拼出 IN () 的非法 SQL
     const rows = await env.DB.prepare(
       `SELECT id, title, title_zh, source, score, heat FROM (
         SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat FROM news n WHERE n.id IN (${validIds.map(() => '?').join(',')})

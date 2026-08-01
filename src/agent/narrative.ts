@@ -7,29 +7,15 @@ import { cacheDelete, signalEvent } from '../cache.js'
 import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary, fetchWithRetry } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
-import { fallbackLabel, type Env } from '../helpers.js'
+import { STOPWORDS } from '../stopwords.js'
+import { fallbackLabel, parseDBTime, toDBTime, type Env } from '../helpers.js'
 import { markAgentRun as setLastAgentRun } from './state.js'
 import { CONFIG } from './config.js'
-import { checkNarrativeQuality } from './quality.js'
 
 const MATCH_THRESHOLD = CONFIG.narrative.matchThreshold
 const MIN_CLUSTER_SIZE = CONFIG.narrative.minClusterSize
 const STALE_DAYS = CONFIG.narrative.staleDays
 const ARCHIVE_DAYS = CONFIG.narrative.archiveDays
-
-// 停用词——这些词出现在关键词里毫无意义
-const STOPWORDS = new Set([
-  'a','an','the','to','in','of','for','on','with','at','by','from','as','is','it','its',
-  'and','or','but','not','this','that','are','was','been','will','has','had','have',
-  'about','into','through','during','before','after','between','under','over',
-  'what','why','how','all','each','their','our','your','new','more','most','some',
-  'any','just','also','very','can','would','could','should','may','might','than',
-  'then','now','up','out','off','down',
-  'ai','app','day','data','one','two','top','big','get','make','use','say','set',
-  'air','ultra','pro','max','mini','lite',
-  '21','22','23','24','25','26','27','28','29','30',
-  '8217','8217;','amp;','lt;','gt;','nbsp;',
-])
 
 export interface Narrative {
   id: number
@@ -60,7 +46,9 @@ export async function updateNarratives(env: Env) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return
 
-  const lastRun = new Date(Date.now() - 86400000).toISOString()
+  // 用与 DB datetime('now') 相同的 "YYYY-MM-DD HH:MM:SS" 格式，
+  // 否则 ISO 串与 DB 串字典序比较会漏掉边界当天全部文章。
+  const lastRun = toDBTime(new Date(Date.now() - 86400000))
   const narratives = await loadActiveNarratives(env)
 
   const rows = await env.DB.prepare(
@@ -270,7 +258,7 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
 async function archiveStale(env: Env, narratives: Narrative[]): Promise<void> {
   for (const n of narratives) {
     if (n.status !== 'active' && n.status !== 'stale') continue
-    const days = (Date.now() - new Date(n.last_updated).getTime()) / 86_400_000
+    const days = (Date.now() - parseDBTime(n.last_updated).getTime()) / 86_400_000
     if (days >= ARCHIVE_DAYS && n.status === 'active') await env.DB.prepare("UPDATE narratives SET status='archived' WHERE id=?").bind(n.id).run()
     else if (days >= STALE_DAYS && n.status === 'active') await env.DB.prepare("UPDATE narratives SET status='stale' WHERE id=?").bind(n.id).run()
   }

@@ -157,6 +157,10 @@ export async function entitySearch(env: Env, name: string) {
 }
 
 export async function detail(env: Env, id: number) {
+  // 详情页是高频读路径，此前完全无缓存——补上（CACHE_TTL.detail 之前是死配置）
+  const cacheKey = `detail:${id}`
+  { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
+
   const row = await env.DB.prepare('SELECT * FROM news WHERE id = ?').bind(id).first<any>()
   if (!row) return null
   const news = mapNews(row)
@@ -178,7 +182,9 @@ export async function detail(env: Env, id: number) {
   }
 
   // Related articles：共享显著词匹配
-  const words = [...new Set(tokenize(news.title))]
+  // 截断词数：该查询每个词会绑定 2 个参数（sumExpr + OR 子句）+ id 共 2N+1 个，
+  // 超过 D1 的 100 绑定参数上限会导致查询失败。
+  const words = [...new Set(tokenize(news.title))].slice(0, 20)
   let related: any[] = []
   if (words.length) {
     const likes = words.map(w => `%${w}%`)
@@ -202,7 +208,9 @@ export async function detail(env: Env, id: number) {
       .map(x => mapNews(x.n))
   }
 
-  return { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related, analysisDetail }
+  const result = { ...news, analysis: { summary, entities, sentiment, content: row.content || null }, related, analysisDetail }
+  await cacheSet(cacheKey, result, CACHE_TTL.detail)
+  return result
 }
 
 export async function briefing(env: Env) {
@@ -291,9 +299,10 @@ export async function sources(env: Env) {
     if (!sourceCats.has(r.source)) sourceCats.set(r.source, [])
     sourceCats.get(r.source)!.push({ category: r.category, count: r.c })
   }
-  // 计算每个源的近期实体焦点
+  // 计算每个源的近期实体焦点（加 LIMIT 防止 7 天全量扫描；高分文章已能代表实体焦点）
   const recentRows = await env.DB.prepare(
-    `SELECT source, entities FROM news WHERE entities IS NOT NULL AND entities != '' AND created_at >= datetime('now', '-7 days')`
+    `SELECT source, entities FROM news WHERE entities IS NOT NULL AND entities != '' AND created_at >= datetime('now', '-7 days')
+     ORDER BY score DESC LIMIT 1000`
   ).all<any>()
   const sourceEntities = new Map<string, Map<string, number>>()
   for (const row of (recentRows.results || [])) {

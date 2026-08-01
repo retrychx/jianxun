@@ -1,21 +1,8 @@
 import { cacheGet, cacheSet, CACHE_TTL } from './cache.js'
 import { tokenize } from './tokenize.js'
+import { STOPWORDS } from './stopwords.js'
 import { mapNews, likeEscape, fallbackLabel, PERSPECTIVES, type Env } from './helpers.js'
 import { generateStoryline, generateTopicLabels } from './analysis.js'
-
-// 停用词——生成关键词时过滤掉这些无意义的词（与 narrative.ts 同步）
-const STOPWORDS = new Set([
-  'a','an','the','to','in','of','for','on','with','at','by','from','as','is','it','its',
-  'and','or','but','not','this','that','are','was','been','will','has','had','have',
-  'about','into','through','during','before','after','between','under','over',
-  'what','why','how','all','each','their','our','your','new','more','most','some',
-  'any','just','also','very','can','would','could','should','may','might','than',
-  'then','now','up','out','off','down',
-  'ai','app','day','data','one','two','top','big','get','make','use','say','set',
-  'air','ultra','pro','max','mini','lite',
-  '21','22','23','24','25','26','27','28','29','30',
-  '8217','amp;','lt;','gt;','nbsp;',
-])
 
 // Threshold for Jaccard similarity when merging topic clusters (0-1).
 // Lower = more aggressive merging; a value around 0.12 catches semantically
@@ -122,7 +109,10 @@ function mergeClusters(a: Cluster, b: Cluster): Cluster {
 
 export async function topics(env: Env) {
   { const cached = await cacheGet<any>('topics'); if (cached) return cached }
-  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 200').all()
+  // 只取聚类/展示需要的列，避免把大 content 列（每篇 ≤8k 字符）读进内存
+  const all = await env.DB.prepare(
+    'SELECT id, title, summary, description, entities, source, published_at, score, category FROM news ORDER BY score DESC LIMIT 200'
+  ).all()
   const items = all.results as any[]
   const topicList: any[] = []
 
@@ -196,7 +186,9 @@ export async function topic(env: Env, name: string) {
   const cacheKey = `topic:${name}`
   { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
 
-  const all = await env.DB.prepare('SELECT * FROM news ORDER BY score DESC LIMIT 200').all()
+  const all = await env.DB.prepare(
+    'SELECT id, title, summary, description, entities, source, published_at, score FROM news ORDER BY score DESC LIMIT 200'
+  ).all()
   const hit = clusterNews(all.results as any[]).find(c =>
     c.words.some(w => w === name || w.includes(name) || name.includes(w)) ||
     fallbackLabel(c.words).includes(name)
@@ -208,7 +200,9 @@ export async function topic(env: Env, name: string) {
     keyword = hit.words.slice(0, 3).join(' · ')
     label = fallbackLabel(hit.words)
   } else {
-    const rows = await env.DB.prepare("SELECT * FROM news WHERE title LIKE ? ESCAPE '\\' ORDER BY published_at DESC LIMIT 20").bind(`%${likeEscape(name)}%`).all()
+    const rows = await env.DB.prepare(
+      "SELECT id, title, summary, description, entities, source, published_at, score FROM news WHERE title LIKE ? ESCAPE '\\' ORDER BY published_at DESC LIMIT 20"
+    ).bind(`%${likeEscape(name)}%`).all()
     if (!rows.results.length) return null
     clusterItems = rows.results as any[]
     keyword = name
@@ -249,10 +243,25 @@ export async function topic(env: Env, name: string) {
 
 export async function weekly(env: Env) {
   const cached = await cacheGet<any>('weekly'); if (cached) return cached
-  const rows = await env.DB.prepare(
-    "SELECT * FROM news WHERE created_at >= datetime('now', '-7 days') ORDER BY score DESC"
-  ).all()
-  const items = rows.results as any[]
+  // 不 SELECT *：content 列每篇 ≤8k 字符，全量读 7 天会一次拉入数 MB。
+  // totalNew 用独立 COUNT，实体/聚类只取高分前 1000 篇的轻量列。
+  const [totalRow, rows, narrRows, srcRows] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) as c FROM news WHERE created_at >= datetime('now', '-7 days')").first<any>(),
+    env.DB.prepare(
+      "SELECT id, title, entities FROM news WHERE created_at >= datetime('now', '-7 days') ORDER BY score DESC LIMIT 1000"
+    ).all(),
+    env.DB.prepare(`
+      SELECT keyword, label, first_seen, last_updated, article_ids, source_stats
+      FROM narratives WHERE status = 'active'
+      ORDER BY last_updated DESC LIMIT 10
+    `).all<any>(),
+    env.DB.prepare(`
+      SELECT source, COUNT(*) as cnt FROM news
+      WHERE created_at >= datetime('now', '-7 days')
+      GROUP BY source ORDER BY cnt DESC LIMIT 8
+    `).all(),
+  ])
+  const items = (rows.results || []) as any[]
 
   const entityCount = new Map<string, number>()
   for (const r of items) {
@@ -274,11 +283,6 @@ export async function weekly(env: Env) {
   const topTopics = clusters.map((c, i) => ({ label: aiLabels?.[i] || fallbackLabel(c.words), count: c.items.length }))
 
   // 本周叙事动态（新增）
-  const narrRows = await env.DB.prepare(`
-    SELECT keyword, label, first_seen, last_updated, article_ids, source_stats
-    FROM narratives WHERE status = 'active'
-    ORDER BY last_updated DESC LIMIT 10
-  `).all<any>()
   const narratives = ((narrRows.results || []) as any[]).map(n => {
     const ids: number[] = (() => { try { return JSON.parse(n.article_ids || '[]') } catch { return [] } })()
     const srcs: Record<string, number> = (() => { try { return JSON.parse(n.source_stats || '{}') } catch { return {} } })()
@@ -294,14 +298,9 @@ export async function weekly(env: Env) {
   })
 
   // 本周高产信源（新增）
-  const srcRows: any = await env.DB.prepare(`
-    SELECT source, COUNT(*) as cnt FROM news
-    WHERE created_at >= datetime('now', '-7 days')
-    GROUP BY source ORDER BY cnt DESC LIMIT 8
-  `).all()
   const topSources = ((srcRows.results || []) as any[]).map(r => ({ name: r.source, count: r.cnt }))
 
-  const result = { totalNew: items.length, topEntities, topTopics, narratives, topSources }
+  const result = { totalNew: totalRow?.c || 0, topEntities, topTopics, narratives, topSources }
   await cacheSet('weekly', result, CACHE_TTL.weekly)
   return result
 }

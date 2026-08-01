@@ -5,15 +5,16 @@
  */
 import type { Env } from '../helpers.js'
 import { cacheDelete } from '../cache.js'
+import { CONFIG } from './config.js'
 
 export async function cleanup(env: Env): Promise<{ archivedNarratives: number; deletedSignals: number }> {
   const result = { archivedNarratives: 0, deletedSignals: 0 }
 
-  // 归档 30 天无更新的叙事（标记为 archived，数据保留）
+  // 归档长期无更新的叙事（阈值与 CONFIG.narrative.archiveDays 一致，避免多套数字漂移）
   try {
     const arch = await env.DB.prepare(
-      "UPDATE narratives SET status = 'archived' WHERE status = 'stale' AND last_updated < datetime('now', '-30 days')"
-    ).run()
+      "UPDATE narratives SET status = 'archived' WHERE status = 'stale' AND last_updated < datetime('now', ?)"
+    ).bind(`-${CONFIG.narrative.archiveDays} days`).run()
     result.archivedNarratives = arch.meta.changes || 0
   } catch (e: any) { console.error('[cleanup] archive narratives:', e?.message) }
 
@@ -24,6 +25,13 @@ export async function cleanup(env: Env): Promise<{ archivedNarratives: number; d
     ).run()
     result.deletedSignals = sig.meta.changes || 0
   } catch (e: any) { console.error('[cleanup] delete signals:', e?.message) }
+
+  // 清理限流表的过期行（rateLimit 只计数不删除，避免无限增长）
+  try {
+    await env.DB.prepare(
+      "DELETE FROM rate_limits WHERE created_at < datetime('now', '-2 days')"
+    ).run()
+  } catch (e: any) { console.error('[cleanup] delete rate_limits:', e?.message) }
 
   cacheDelete('weekly').catch(() => {})
 

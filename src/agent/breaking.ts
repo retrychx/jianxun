@@ -27,7 +27,9 @@ export async function detectBreakingNews(env: Env) {
     if (group.length < 2) continue
     const sources = [...new Set(group.map((a: any) => a.source))]
     if (sources.length < 2) continue
-    const titlePrefix = group[0].title.slice(0,30).replace(/[%_\\]/g, '\\$&')
+    // 去重前缀必须与入库 keyword 的前缀长度一致（同为 40 字符）。
+    // 若此处取 30、入库取 40，前 30 字符相同但 31-40 不同的突发事件会被误判为重复。
+    const titlePrefix = group[0].title.slice(0,40).replace(/[%_\\]/g, '\\$&')
     const existing = await env.DB.prepare("SELECT id FROM narratives WHERE keyword LIKE ? ESCAPE '\\' AND status='active' LIMIT 1").bind(`__breaking__${titlePrefix}%`).first<any>()
     if (existing) continue
 

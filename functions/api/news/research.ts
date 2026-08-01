@@ -1,4 +1,4 @@
-import { json } from '../../../src/handler'
+import { json, rateLimit, clientIp } from '../../../src/handler'
 import { generateResearchReport } from '../../../src/analysis/deepseek.js'
 import { tokenize } from '../../../src/tokenize.js'
 import { likeEscape } from '../../../src/helpers.js'
@@ -16,6 +16,11 @@ export async function onRequestGet(context: any) {
 
   if (query.length < 2 || query.length > 80) {
     return json({ error: '问题长度需在 2-80 字之间' }, 400)
+  }
+
+  // 付费 LLM 端点限流：未命中缓存时同步调 DeepSeek，无限流可被大量唯一 q 绕过缓存烧钱
+  if (!(await rateLimit(env, `research:${clientIp(request)}`, 10, 60))) {
+    return json({ error: '请求过于频繁，请稍后再试' }, 429)
   }
 
   // Check if agent pre-computed research for a matching topic
@@ -87,17 +92,19 @@ export async function onRequestGet(context: any) {
   }
 
   // Expand via entity mentions
-  const entityMatch = latin.length ? `%${likeEscape(latin[0])}%` : null
+  const entityMatch = latin.length ? `%${likeEscape(latin[0] || '')}%` : null
   if (entityMatch) {
     const linked = await env.DB.prepare(
       "SELECT original_name, canonical_name FROM entity_links WHERE original_name LIKE ? OR canonical_name LIKE ? LIMIT 20"
     ).bind(entityMatch, entityMatch).all<any>()
     for (const e of (linked.results || [])) {
-      const like = `%${likeEscape(e.canonical_name || e.original_name)}%`
+      const like = `%${likeEscape(String(e.canonical_name || e.original_name || ''))}%`
+      // 截断排除列表：seenIds 会随候选增长，D1 绑定参数上限 100，超了查询直接失败
+      const excludeIds = [...seenIds].slice(0, 60)
       const extra = await env.DB.prepare(
-        `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news WHERE entities LIKE ? AND id NOT IN (${[...seenIds].map(() => '?').join(',')}) ORDER BY score DESC LIMIT 3`
-      ).bind(like, ...seenIds).all<any>()
-      for (const a of (extra.results || [])) { candidates.push(a); seenIds.add(a.id) }
+        `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news WHERE entities LIKE ? AND id NOT IN (${excludeIds.map(() => '?').join(',')}) ORDER BY score DESC LIMIT 3`
+      ).bind(like, ...excludeIds).all<any>()
+      for (const a of (extra.results || [])) { if (!seenIds.has(a.id)) { candidates.push(a); seenIds.add(a.id) } }
     }
   }
 
