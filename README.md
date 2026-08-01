@@ -109,9 +109,9 @@ curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
   https://你的域名.pages.dev/api/news/fetch
 ```
 
-> 生产环境无需手动抓取：GitHub Actions 每 3 小时自动 POST `/api/news/fetch`
-> （见 `.github/workflows/fetch.yml`）。需在仓库 secrets 配置与 Pages 相同的
-> `ADMIN_TOKEN`，可选 `vars.SITE_URL` 覆盖默认站点地址。
+> 生产环境无需手动抓取：`cron-fetch` Worker 每 1 小时自动 POST `/api/news/fetch`
+> （`workers/cron-fetch/`，由 `deploy.yml` 部署）。需在仓库 secrets 配置与 Pages
+> 相同的 `ADMIN_TOKEN`，可选 `vars.SITE_URL` 覆盖默认站点地址。
 
 ## RSS 源
 

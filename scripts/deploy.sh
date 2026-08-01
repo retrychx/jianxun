@@ -46,8 +46,8 @@ fi
 
 # ─── Migrate ───
 echo ""
-echo "🗄️  运行数据库迁移..."
-npx wrangler d1 migrations apply jianxun
+echo "🗄️  运行数据库迁移（--remote 迁移生产库，不加则只迁移本地）..."
+npx wrangler d1 migrations apply jianxun --remote
 
 # ─── DeepSeek API Key ───
 echo ""
@@ -56,7 +56,8 @@ if [ -z "$(npx wrangler secret list 2>/dev/null | grep DEEPSEEK_API_KEY)" ]; the
   echo "   请输入你的 DeepSeek API Key（输入后不可见）："
   read -s API_KEY
   if [ -n "$API_KEY" ]; then
-    echo "$API_KEY" | npx wrangler secret put DEEPSEEK_API_KEY
+    # printf（而非 echo）避免把末尾换行符写进 secret，导致鉴权头带 \n 而失效
+    printf '%s' "$API_KEY" | npx wrangler secret put DEEPSEEK_API_KEY
     echo "✅ API Key 已设置"
   else
     echo "⚠️  跳过，可稍后通过 npx wrangler secret put DEEPSEEK_API_KEY 设置"
@@ -68,11 +69,15 @@ fi
 # ─── Admin Token（保护写接口） ───
 echo ""
 if [ -z "$(npx wrangler secret list 2>/dev/null | grep ADMIN_TOKEN)" ]; then
-  echo "🔐 生成 ADMIN_TOKEN（写接口鉴权）..."
-  ADMIN_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  echo "$ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
-  echo "✅ ADMIN_TOKEN 已设置，请妥善保存（GitHub Actions 也需要它）："
-  echo "   $ADMIN_TOKEN"
+  echo "🔐 设置 ADMIN_TOKEN（写接口鉴权）..."
+  echo "   请输入你的 ADMIN_TOKEN（输入后不可见；不要打印到终端/日志）："
+  read -s ADMIN_TOKEN
+  if [ -n "$ADMIN_TOKEN" ]; then
+    printf '%s' "$ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+    echo "✅ ADMIN_TOKEN 已设置（GitHub Actions 也需要它，请配置到仓库 secrets）"
+  else
+    echo "⚠️  跳过，可稍后通过 npx wrangler secret put ADMIN_TOKEN 设置"
+  fi
 else
   echo "✅ ADMIN_TOKEN 已设置"
 fi
@@ -84,8 +89,8 @@ pnpm build
 
 # ─── Deploy ───
 echo ""
-echo "🚀 部署到 Cloudflare Pages..."
-npx wrangler pages deploy packages/frontend/dist --branch main
+echo "🚀 部署到 Cloudflare Pages（config 式部署，确保 functions/ 一起发布）..."
+npx wrangler pages deploy --branch main
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"

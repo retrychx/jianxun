@@ -25,30 +25,35 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
-      - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy --project-name jianxun --branch main
-
+      # 先迁移再部署：新代码上线时 schema 已就绪，避免短暂报错
       - name: Run D1 migrations
         run: npx wrangler d1 migrations apply jianxun --remote
 
+      # config 式部署（读取 wrangler.toml pages_build_output_dir），确保 functions/ 一起发布
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy --project-name jianxun --branch main
+
+      # printf（而非 echo）避免把末尾换行符写进 secret
       - name: Set DeepSeek API Key
-        run: echo "${{ secrets.DEEPSEEK_API_KEY }}" | npx wrangler pages secret put DEEPSEEK_API_KEY
+        run: printf '%s' "${{ secrets.DEEPSEEK_API_KEY }}" | npx wrangler pages secret put DEEPSEEK_API_KEY
 
       - name: Set Admin Token
-        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN
+        run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN
 
       - name: Deploy cron-analyze Worker
         run: npx wrangler deploy -c workers/cron-analyze/wrangler.toml
 
+      # 此前 cron-fetch 从未被 CI 部署，其改动不会上线
+      - name: Deploy cron-fetch Worker
+        run: npx wrangler deploy -c workers/cron-fetch/wrangler.toml
+
       - name: Set Admin Token for cron-fetch
         working-directory: workers/cron-fetch
-        run: echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
+        run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
 
       - name: Set Admin Token for cron-analyze
         working-directory: workers/cron-analyze
-        run: |
-          echo "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
-          echo "Admin token set on cron-analyze"
+        run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
 
       - name: Verify cron-analyze health
         continue-on-error: true
