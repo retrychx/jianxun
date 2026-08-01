@@ -1,5 +1,6 @@
 // GET /api/news/sectors — 行业雷达：赛道 + 公司竞争格局 + 热度走势
 import { json, tryCatch } from '../../../src/handler'
+import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
 
 // 赛道关键词映射（粗粒度，后续可扩充）
 const SECTORS: Record<string, { label: string; keywords: string[] }> = {
@@ -16,6 +17,9 @@ const SECTORS: Record<string, { label: string; keywords: string[] }> = {
 export async function onRequestGet(context: any) {
   return tryCatch(async () => {
   const { env } = context
+
+  // 全量重算端点，加缓存避免每次请求都扫 500 行 × 8 赛道
+  const cached = await cacheGet<any>('sectors'); if (cached) return json(cached)
 
   // 最近 7 天文章
   const rows: any = await env.DB.prepare(`
@@ -88,6 +92,8 @@ export async function onRequestGet(context: any) {
 
   sectors.sort((a, b) => b.articleCount - a.articleCount)
 
-  return json({ sectors })
+  const payload = { sectors }
+  await cacheSet('sectors', payload, CACHE_TTL.briefing)
+  return json(payload)
   })
 }

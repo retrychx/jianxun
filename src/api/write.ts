@@ -14,6 +14,11 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
     await Promise.allSettled(deletions)
   }
 
+  // 记录抓取结果供 /api/news/status 观测（cron 抓取健康度）
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_fetch', ?)"
+  ).bind(JSON.stringify({ ts: new Date().toISOString(), fetched: saved })).run().catch(() => {})
+
   // Launch the unified intelligence agent as a background task
   ctx.waitUntil((async () => {
     const { runAgent } = await import('../agent/index.js')
@@ -31,9 +36,14 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
 export async function saveAnalysis(env: Env, id: number, body: any) {
   try {
     const { summary, category, entities, sentiment } = body
+    // 归一化实体：管理端传入的 string[] 转成与 AI 管线一致的对象数组，
+    // 避免同一字段两种结构导致前端解析/排序混乱
+    const normEntities = (Array.isArray(entities) ? entities : []).map((e: any) =>
+      typeof e === 'string' ? { name: e, type: 'concept', weight: 0.5 } : e
+    )
     await env.DB.prepare(
       "UPDATE news SET summary=?, entities=?, sentiment=?, category=COALESCE(?,category), analyzed_at=datetime('now') WHERE id=?"
-    ).bind(summary || null, JSON.stringify(entities || []), JSON.stringify(sentiment || {}), category || null, id).run()
+    ).bind(summary || null, JSON.stringify(normEntities), JSON.stringify(sentiment || {}), category || null, id).run()
     return { ok: true }
   } catch {
     // 不返回 e.message——可能泄露 SQL/内部结构

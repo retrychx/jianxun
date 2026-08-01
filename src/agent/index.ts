@@ -32,6 +32,7 @@ import { loadMemory, saveMemory, ingestSignals } from './memory.js'
 import { flagLowQualityAnalyses, mergeOverlappingNarratives } from './quality.js'
 import { checkSystemState, planPhases } from './decider.js'
 import { evaluateQuality, saveKPI, estimateAPICost, generateReport, saveReport } from './eval.js'
+import { getTokenCount, resetTokenCount, setAgentAbort } from '../analysis/deepseek.js'
 import { cleanup, recordError } from './cleanup.js'
 import { generateNarrativeOutlooks, extractTopEntityEvents } from './intel.js'
 import { cacheDelete } from '../cache.js'
@@ -67,7 +68,12 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   // 导致重复 SELECT / 重复调 DeepSeek / analyze_attempts 双倍递增。
   await markAgentRun(env)
 
+  // 管线可中断：若上一个 run 仍在 isolate 内运行（超过守卫窗口的极端情况），
+  // 启动新 run 时中止其 in-flight DeepSeek 请求
+  setAgentAbort(new AbortController())
+
   initBudget()
+  resetTokenCount() // 每轮清空 DeepSeek token 统计
   // pingDeepSeek 仅用于日志，不影响任何阶段运行（各阶段自己有 API 重试）
   const apiOk = await pingDeepSeek(env.DEEPSEEK_API_KEY).catch(() => false)
 
@@ -111,17 +117,20 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   // ═══ Cache invalidation: agent 跑完后清相关缓存 ═══
   // 防止用户看到 agent 更新前的旧数据
-  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly']
+  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly', 'sectors', 'signals', 'narrative_heat', 'narratives_timeline', 'digest', 'digests']
   for (const key of CACHE_KEYS) cacheDelete(key).catch(() => {})
 
   // ═══ Self-Evaluation: 评估本轮分析质量 ═══
   const kpi = await evaluateQuality(env)
   kpi.totalMs = totalMs
-  kpi.estimatedCost = estimateAPICost((kpi.articlesAnalyzed || 0) + 3) // +3 for narrative/breaking/curation calls
+  kpi.totalTokens = getTokenCount()
+  kpi.estimatedCost = estimateAPICost((kpi.articlesAnalyzed || 0) + 3, kpi.totalTokens) // +3 for narrative/breaking/curation calls
   // 从 phase results 中提取额外 KPI
   kpi.qualityFlags = (results as any)?.flagLowQualityAnalyses?.result || 0
   kpi.narrativesMerged = (results as any)?.mergeOverlappingNarratives?.result || 0
   kpi.briefingCount = (results as any)?.curateBriefing?.result?.briefing || 0
+  kpi.narrativesMatched = (results as any)?.updateNarratives?.result?.matched || 0
+  kpi.narrativesCreated = (results as any)?.updateNarratives?.result?.created || 0
 
   await saveKPI(env, kpi)
 
@@ -136,10 +145,17 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
     memory.sourceMemory[source].ctr = sig.rate
     memory.sourceMemory[source].totalAnalyses++
   }
+  // 学习反馈：实体点击热度 → memory.entityHeat → 下轮 analyzeNewArticles 优先分析
+  for (const [name, clicks] of signals.entityClicks) {
+    memory.entityHeat[name.toLowerCase()] = { clicks, lastSeen: new Date().toISOString() }
+  }
   await saveMemory(env, memory)
 
   await markAgentRun(env)
   await saveAgentLog(env, { ts: new Date().toISOString(), totalMs, skipAi: !apiOk, results })
+
+  // 清理 agent 级中止信号（仅置空，不 abort 更新的 run）
+  setAgentAbort(null)
 }
 
 // Re-export all phase functions for admin endpoints

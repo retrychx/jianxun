@@ -1,9 +1,12 @@
 // GET /api/news/narrative/heat — 叙事热度 + 升温检测
 import { json, tryCatch } from '../../../../src/handler'
+import { cacheGet, cacheSet, CACHE_TTL } from '../../../../src/cache.js'
 
 export async function onRequestGet(context: any) {
   return tryCatch(async () => {
     const { env } = context
+
+    const cached = await cacheGet<any>('narrative_heat'); if (cached) return json(cached)
 
     // 所有活跃叙事，按最后更新时间排序
     const rows: any = await env.DB.prepare(`
@@ -40,6 +43,8 @@ export async function onRequestGet(context: any) {
     const heating = [...narratives].sort((a, b) => b.hoursSinceUpdate - a.hoursSinceUpdate ? a.hoursSinceUpdate - b.hoursSinceUpdate : b.heat - a.heat).slice(0, 8)
     const hottest = [...narratives].sort((a, b) => b.heat - a.heat).slice(0, 8)
 
-    return json({ heating, hottest, total: narratives.length })
+    const payload = { heating, hottest, total: narratives.length }
+    await cacheSet('narrative_heat', payload, CACHE_TTL.briefing)
+    return json(payload)
   })
 }

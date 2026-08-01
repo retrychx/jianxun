@@ -1,4 +1,4 @@
-import { cacheGet, cacheSet, CACHE_TTL } from './cache.js'
+import { cacheGet, cacheSet, CACHE_TTL, singleFlight } from './cache.js'
 import { tokenize } from './tokenize.js'
 import { STOPWORDS } from './stopwords.js'
 import { mapNews, likeEscape, fallbackLabel, PERSPECTIVES, type Env } from './helpers.js'
@@ -109,6 +109,10 @@ function mergeClusters(a: Cluster, b: Cluster): Cluster {
 
 export async function topics(env: Env) {
   { const cached = await cacheGet<any>('topics'); if (cached) return cached }
+  return singleFlight('topics', () => computeTopics(env))
+}
+
+async function computeTopics(env: Env) {
   // 只取聚类/展示需要的列，避免把大 content 列（每篇 ≤8k 字符）读进内存
   const all = await env.DB.prepare(
     'SELECT id, title, summary, description, entities, source, published_at, score, category FROM news ORDER BY score DESC LIMIT 200'
@@ -185,7 +189,11 @@ export async function topics(env: Env) {
 export async function topic(env: Env, name: string) {
   const cacheKey = `topic:${name}`
   { const cached = await cacheGet<any>(cacheKey); if (cached) return cached }
+  return singleFlight(cacheKey, () => computeTopic(env, name))
+}
 
+async function computeTopic(env: Env, name: string) {
+  const cacheKey = `topic:${name}`
   const all = await env.DB.prepare(
     'SELECT id, title, summary, description, entities, source, published_at, score FROM news ORDER BY score DESC LIMIT 200'
   ).all()
@@ -243,6 +251,10 @@ export async function topic(env: Env, name: string) {
 
 export async function weekly(env: Env) {
   const cached = await cacheGet<any>('weekly'); if (cached) return cached
+  return singleFlight('weekly', () => computeWeekly(env))
+}
+
+async function computeWeekly(env: Env) {
   // 不 SELECT *：content 列每篇 ≤8k 字符，全量读 7 天会一次拉入数 MB。
   // totalNew 用独立 COUNT，实体/聚类只取高分前 1000 篇的轻量列。
   const [totalRow, rows, narrRows, srcRows] = await Promise.all([

@@ -24,6 +24,8 @@ export interface AgentKPI {
   narrativesMerged: number
   /** 运行耗时 */
   totalMs: number
+  /** 本轮 DeepSeek token 用量（来自 usage.total_tokens） */
+  totalTokens: number
   /** 预估 API 成本 (cents) */
   estimatedCost: number
 }
@@ -79,7 +81,11 @@ export async function saveKPI(env: Env, kpi: Partial<AgentKPI>): Promise<void> {
 
 const API_COST_PER_CALL = 0.002 // $0.002 per DeepSeek API call
 
-export function estimateAPICost(calls: number): number {
+export function estimateAPICost(calls: number, totalTokens = 0): number {
+  if (totalTokens > 0) {
+    // 有真实 token 用量时按 token 估（deepseek 输入输出均价约 $0.5/M）
+    return Math.round(totalTokens * 0.0005 * 100) / 100
+  }
   return Math.round(calls * API_COST_PER_CALL * 100) / 100 // 返回 cents
 }
 

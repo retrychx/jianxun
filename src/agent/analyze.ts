@@ -1,15 +1,39 @@
 /** Phase 2+3: AI article analysis and category refinement. */
 
 import { extractContent, analyzeWithDeepSeek, batchClassify } from '../analysis/deepseek.js'
-import type { Env } from '../helpers.js'
+import { likeEscape, type Env } from '../helpers.js'
+import { loadMemory } from './memory.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
 export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 0
-  const rows = await env.DB.prepare(
-    "SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days') ORDER BY score DESC LIMIT ?"
-  ).bind(limit).all<any>()
+
+  // 学习反馈：从记忆读热门实体（用户点击多），标题命中的文章优先分析
+  let hotNames: string[] = []
+  try {
+    const mem = await loadMemory(env)
+    hotNames = Object.entries(mem.entityHeat)
+      .filter(([, v]) => v.clicks >= 2)
+      .sort(([, a], [, b]) => b.clicks - a.clicks)
+      .slice(0, 10)
+      .map(([k]) => k)
+  } catch {}
+
+  let query: string
+  let params: any[]
+  if (hotNames.length) {
+    const esc = hotNames.map(n => `%${likeEscape(n)}%`)
+    const clauses = hotNames.map(() => "(title LIKE ? ESCAPE '\\')").join(' OR ')
+    query = `SELECT id, url, title, description FROM news
+      WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days')
+      ORDER BY CASE WHEN ${clauses} THEN 1 ELSE 0 END DESC, score DESC LIMIT ?`
+    params = [...esc, limit]
+  } else {
+    query = "SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days') ORDER BY score DESC LIMIT ?"
+    params = [limit]
+  }
+  const rows = await env.DB.prepare(query).bind(...params).all<any>()
   let done = 0
   for (const row of (rows.results || [])) {
     await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()

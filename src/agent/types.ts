@@ -41,6 +41,7 @@ export interface AgentMemory {
 
 export interface SignalSummary {
   sourceCTR: Map<string, { total: number; clicks: number; rate: number }>
+  entityClicks: Map<string, number>
   categoryEngagement: Map<string, number>
 }
 

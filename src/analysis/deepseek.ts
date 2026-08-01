@@ -18,7 +18,39 @@ import {
 
 export const DEEPSEEK_MODEL = CONFIG.deepseek.model
 
+// ─── 每轮运行的 token 用量统计（可观测性） ───
+let _runTokens = 0
+export function resetTokenCount(): void { _runTokens = 0 }
+export function getTokenCount(): number { return _runTokens }
+
+/** 解析 DeepSeek 响应并累计 usage.total_tokens */
+async function parseJson(res: Response): Promise<any> {
+  const data = await res.json()
+  const usage = data?.usage
+  if (usage && typeof usage.total_tokens === 'number') _runTokens += usage.total_tokens
+  return data
+}
+
+// agent 级中止：新 run 启动时会中止上一个 run 的 in-flight DeepSeek 请求（管线可中断）
+let _agentAbort: AbortController | null = null
+export function setAgentAbort(ac: AbortController | null): void {
+  if (ac) {
+    if (_agentAbort && _agentAbort !== ac) { try { _agentAbort.abort() } catch {} }
+    _agentAbort = ac
+  } else {
+    _agentAbort = null
+  }
+}
+
 export async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response | null> {
+  // 组合：调用方超时信号 + agent 级中止信号（新 run 启动时中止旧 run 的 in-flight 请求）
+  const timeoutSignal = options.signal
+  const agentSignal = _agentAbort?.signal
+  if (timeoutSignal && agentSignal) {
+    try { options.signal = AbortSignal.any([timeoutSignal, agentSignal]) } catch { options.signal = timeoutSignal }
+  } else if (agentSignal) {
+    options.signal = agentSignal
+  }
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, options)
@@ -32,8 +64,22 @@ export async function fetchWithRetry(url: string, options: RequestInit, retries 
   return null
 }
 
+/** 阻止 SSRF：只允许公开 http(s)，拒绝内网/环回地址（url 来自第三方 RSS，不可信） */
+function isSafeFetchUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
+    const h = u.hostname.toLowerCase()
+    if (h === 'localhost' || h.endsWith('.localhost')) return false
+    if (/^127\.|^10\.|^192\.168\.|^169\.254\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false
+    if (h === '::1' || h === '[::1]' || h === '0:0:0:0:0:0:0:1') return false
+    return true
+  } catch { return false }
+}
+
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null; title: string | null }> {
   try {
+    if (!isSafeFetchUrl(url)) return { content: null, image: null, title: null }
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
       signal: AbortSignal.timeout(6_000),
@@ -83,7 +129,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }], temperature: 0.3, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content; if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content; if (!raw) return null
     const parsed = JSON.parse(raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim())
     return {
       base: { summary: parsed.summary || '无法生成摘要', category: parsed.category || '科技', entities: (parsed.entities || []).slice(0,6).map((e: any) => ({ name: e.name, type: e.type, weight: e.weight || 0.5, role: e.role })), sentiment: parsed.sentiment || { label:'neutral', scores:{ positive:0.3, negative:0.3, neutral:0.4 }, perspective:'' } },
@@ -101,7 +147,7 @@ export async function generateTopicLabels(titleGroups: string[][], apiKey: strin
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TOPIC_LABELS_PROMPT }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
     const parsed = JSON.parse(raw) as { index: number; label: string }[]
     const labels: string[] = []
     for (const r of parsed) { if (r && typeof r.label === 'string' && r.label.trim() && r.index >= 0 && r.index < titleGroups.length) labels[r.index] = r.label.trim().slice(0, 20) }
@@ -121,7 +167,7 @@ export async function generateDigest(candidates: DigestCandidate[], apiKey: stri
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: DIGEST_PROMPT }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }], temperature: 0.2, max_tokens: 4096 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
     const parsed = JSON.parse(raw); const validIds = new Set(candidates.map(c => c.id)); const seen = new Set<number>(); const items: DigestResult['items'] = []
     for (const it of (Array.isArray(parsed.items) ? parsed.items : [])) { const id = Number(it?.news_id); if (!validIds.has(id) || seen.has(id)) continue; seen.add(id); items.push({ news_id: id, why: String(it.why||'').slice(0,60), category: String(it.category||'科技') }); if (items.length >= 20) break }
     if (!items.length) return null
@@ -140,7 +186,7 @@ export async function translateBatch(articles: { id: number; title: string; summ
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TRANSLATION_PROMPT }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
     const parsed = JSON.parse(raw); const validIds = new Set(articles.map(a => a.id)); const out: { id: number; title_zh: string; summary_zh: string }[] = []
     for (const r of (Array.isArray(parsed) ? parsed : [])) { const id = Number(r?.id); if (!validIds.has(id) || typeof r.title_zh !== 'string' || !r.title_zh.trim()) continue; out.push({ id, title_zh: r.title_zh.trim(), summary_zh: typeof r.summary_zh === 'string' ? r.summary_zh.trim() : '' }) }
     return out
@@ -156,7 +202,7 @@ export async function generateStoryline(articles: { title: string; summary: stri
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: STORYLINE_PROMPT }, { role: 'user', content: articles.map(a => `${a.title}\n${(a.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim(); if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.trim(); if (!raw) return null
     return raw.replace(/```[a-z]*\n?/g,'').replace(/^["「]|["」]$/g,'').trim().slice(0,300) || null
   } catch { return null }
 }
@@ -173,7 +219,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: ANSWER_PROMPT }, { role: 'user', content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0,30).map((c,i) => `[${i}] ${c.titleZh||c.title}（${c.source||'未知来源'}${c.publishedAt ? '/'+c.publishedAt.slice(0,10) : ''}）\n${((c.summaryZh||c.summary)||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
     const parsed = JSON.parse(raw); const answer = String(parsed.answer||'').trim(); if (!answer) return null
     const refs: number[] = [...new Set((Array.isArray(parsed.refs) ? parsed.refs as any[] : []).map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < candidates.length))]
     return { answer: answer.slice(0,500), refs }
@@ -195,7 +241,7 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
         body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CROSSREF_PROMPT }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
       })
       if (!res?.ok) continue
-      const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
+      const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
       const parsed = JSON.parse(raw)
       if (parsed.comparison) results.push({ keyword: parsed.keyword || group.map(g => g.title).join(' | ').slice(0,60), sources: sources.map(s => ({ name: s, angle: '' })), comparison: parsed.comparison.slice(0,200), articleIds: [] })
     } catch {}
@@ -215,7 +261,7 @@ export async function batchClassify(
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024 }),
   })
   if (!res?.ok) return []
-  const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
+  const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
   if (!raw) return []
   try { return JSON.parse(raw) as { index: number; category: string }[] } catch { return [] }
 }
@@ -233,7 +279,7 @@ export async function generateNarrativeDevelopment(
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_PROMPT(label) }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
   })
   if (!res?.ok) return null
-  const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim()
+  const raw = (await parseJson(res)).choices?.[0]?.message?.content?.trim()
   return raw?.replace(/```[a-z]*\n?/g,'').replace(/^["\u201c]|["\u201d]$/g,'').trim().slice(0,200) || null
 }
 
@@ -250,7 +296,7 @@ export async function generateNarrativeSummary(
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_SUMMARY_PROMPT(label) }, { role: 'user', content: articles.slice(0,20).map(a => `${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
   })
   if (!res?.ok) return null
-  return (await res.json() as any).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
+  return (await parseJson(res)).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
 }
 
 
@@ -279,7 +325,7 @@ export async function generateResearchReport(
       }),
     })
     if (!res?.ok) return null
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
+    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
     if (!raw) return null
     const parsed = JSON.parse(raw)
     const validIds = new Set(candidates.map(c => c.id))

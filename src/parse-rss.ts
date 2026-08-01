@@ -100,6 +100,9 @@ export async function parseRSS(url: string): Promise<RssFeed> {
     headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
     signal: AbortSignal.timeout(10_000),
   })
+  // 不检查 res.ok 时，WAF/403 返回的 HTML 会被当空 feed 解析，且被记为"抓取成功"（fail_count 清零）。
+  // 抛出后由 fetchAllRSS 的 Promise.allSettled 捕获 → 该源正确记入 last_error/fail_count。
+  if (!res.ok) throw new Error(`RSS fetch failed: HTTP ${res.status}`)
   const xml = await res.text()
 
   let root: any

@@ -42,9 +42,9 @@ export async function loadSingleNarrative(env: Env, keyword: string): Promise<Na
   return (row as Narrative) || null
 }
 
-export async function updateNarratives(env: Env) {
+export async function updateNarratives(env: Env): Promise<{ matched: number; created: number }> {
   const apiKey = env.DEEPSEEK_API_KEY
-  if (!apiKey) return
+  if (!apiKey) return { matched: 0, created: 0 }
 
   // 用与 DB datetime('now') 相同的 "YYYY-MM-DD HH:MM:SS" 格式，
   // 否则 ISO 串与 DB 串字典序比较会漏掉边界当天全部文章。
@@ -56,7 +56,7 @@ export async function updateNarratives(env: Env) {
      FROM news WHERE created_at > ? ORDER BY score DESC LIMIT 100`
   ).bind(lastRun).all<any>()
   const newArticles = rows.results || []
-  if (!newArticles.length && !narratives.length) { await setLastAgentRun(env); return }
+  if (!newArticles.length && !narratives.length) { await setLastAgentRun(env); return { matched: 0, created: 0 } }
 
   const { matched, unmatched } = await matchArticles(newArticles, narratives, apiKey)
 
@@ -69,12 +69,15 @@ export async function updateNarratives(env: Env) {
     if (dev) await appendDevelopment(env, narrative, dev, articles)
   }
 
+  let created = 0
   if (unmatched.length >= MIN_CLUSTER_SIZE) {
-    await seedNarratives(env, unmatched, narratives, apiKey)
+    created = await seedNarratives(env, unmatched, narratives, apiKey)
   }
 
   await archiveStale(env, narratives)
   await setLastAgentRun(env)
+  // 返回 KPI 供报告展示（此前返回 undefined，narrativesMatched/created 永不显示）
+  return { matched: Object.keys(matched).length, created }
 }
 
 function narrTokens(narrative: Narrative): Set<string> {
@@ -206,7 +209,7 @@ async function narrSummary(env: Env, narrative: Narrative, existingIds: number[]
 }
 
 
-async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<void> {
+async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<number> {
   // Index existing narratives by their article_ids for overlap dedup
   const existingArticleIds = new Map<number, Set<number>>()
   for (const n of existing) {
@@ -216,6 +219,7 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
     } catch {}
   }
   const existingKeywords = new Set(existing.map(n => n.keyword))
+  let created = 0
 
   const clusters = clusterNews(articles.map(a => ({ id: a.id, title: a.title || '' })))
   for (const cluster of clusters) {
@@ -248,11 +252,13 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
 
     const srcs: Record<string,number> = {}; for (const a of ca) { const s=a.source||'unknown'; srcs[s]=(srcs[s]||0)+1 }
 
-    await env.DB.prepare(
+    const r = await env.DB.prepare(
       `INSERT OR IGNORE INTO narratives (keyword,label,first_seen,last_updated,status,summary,developments,article_ids,source_stats)
        VALUES (?,?,date('now'),datetime('now'),'active',?,'[]',?,?)`
     ).bind(keyword, nlbl, (ca[0]?.summary||ca[0]?.description||'').slice(0,300), JSON.stringify(ids), JSON.stringify(srcs)).run()
+    if (r.meta.changes > 0) created++
   }
+  return created
 }
 
 async function archiveStale(env: Env, narratives: Narrative[]): Promise<void> {

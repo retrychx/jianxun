@@ -1,5 +1,6 @@
 // GET /api/news/signals — 行业早期信号 + 公司监控 + 来源可信度
 import { json, tryCatch } from '../../../src/handler'
+import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
 
 const CREDIBILITY = [
   ['36氪', '量子位', '虎嗅', '钛媒体', '爱范儿', '品玩', '雷锋网', '动点科技', '中国新闻网', 'IT之家', '凤凰网科技', '搜狐科技', '新浪科技'],
@@ -15,6 +16,8 @@ function sourceCredibility(source: string): { score: number; label: string } {
 export async function onRequestGet(context: any) {
   return tryCatch(async () => {
   const { env } = context
+
+  const cached = await cacheGet<any>('signals'); if (cached) return json(cached)
 
   // 1. 叙事热度变化（今日 vs 昨日）
   const today: any = await env.DB.prepare(`
@@ -81,6 +84,8 @@ export async function onRequestGet(context: any) {
     .sort((a, b) => b[1] - a[1]).slice(0, 8)
     .map(([name, count]) => ({ name, count }))
 
-  return json({ risingNarratives, sources, hotEntities })
+  const payload = { risingNarratives, sources, hotEntities }
+  await cacheSet('signals', payload, CACHE_TTL.briefing)
+  return json(payload)
   })
 }

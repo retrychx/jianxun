@@ -2,8 +2,11 @@ import { json, requireAdmin } from '../../../src/handler'
 import { runAgent } from '../../../src/agent/index.js'
 
 // GET /api/news/agent — agent run status and last log
+// 返回运行报告/KPI/阶段日志等内部运营数据，需 ADMIN_TOKEN
 export async function onRequestGet(context: any) {
-  const { env } = context
+  const { env, request } = context
+  const denied = requireAdmin(request, env)
+  if (denied) return denied
 
   const [lastRun, lastLog, report, kpis] = await Promise.all([
     env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>(),

@@ -33,6 +33,17 @@ export async function cacheDelete(key: string) {
   try { await edgeCache().delete(cacheReq(key)) } catch {}
 }
 
+// ─── Single-flight：同一 key 的并发计算只执行一次（缓存雪崩时的 LLM 调用去重） ───
+const inFlight = new Map<string, Promise<any>>()
+
+export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key)
+  if (existing) return existing as Promise<T>
+  const p = fn().finally(() => inFlight.delete(key))
+  inFlight.set(key, p)
+  return p
+}
+
 // ─── SSE event signaling (Cache API as lightweight pub/sub) ───
 // Signal an event that SSE clients can poll.  Returns an opaque "since"
 // value the caller can store and pass to pollEvent to only get newer events.

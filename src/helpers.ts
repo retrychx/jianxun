@@ -19,6 +19,8 @@ export function json(data: any, status = 200) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      // API 版本化：当前 /api 即 v1，破坏性变更时前端据响应头区分
+      'X-API-Version': 'v1',
     },
   })
 }
@@ -109,13 +111,23 @@ export async function rateLimit(env: Env, scope: string, limit: number, windowSe
   } catch { return true }
 }
 
-// Report configuration status: which env vars are set.
+// Report configuration status: which env vars are set + 最近抓取/运行状态（可观测性）。
 export async function statusCheck(env: Env) {
+  let lastFetch: any = null
+  let lastRun: string | null = null
+  try {
+    const f = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_fetch'").first<any>()
+    if (f?.value) { try { lastFetch = JSON.parse(f.value) } catch {} }
+    const r = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>()
+    lastRun = r?.value || null
+  } catch {}
   return {
     hasDeepSeek: !!env.DEEPSEEK_API_KEY,
     hasAdminToken: !!env.ADMIN_TOKEN,
     hasDB: !!env.DB,
     ok: !!(env.DEEPSEEK_API_KEY && env.ADMIN_TOKEN && env.DB),
+    lastFetch,
+    lastAgentRun: lastRun,
   }
 }
 
@@ -158,7 +170,8 @@ export function validateAnalysisBody(body: any): string | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body must be an object'
   const { summary, entities, sentiment, category } = body
   if (summary !== undefined && typeof summary !== 'string') return 'summary must be a string'
-  if (entities !== undefined && (!Array.isArray(entities) || entities.some(e => typeof e !== 'string'))) return 'entities must be a string array'
+  // 兼容 string[]（旧管理端格式）与 {name,type,weight}[]（AI 管线格式），统一归一
+  if (entities !== undefined && (!Array.isArray(entities) || entities.some(e => !(typeof e === 'string' || (typeof e === 'object' && e && typeof (e as any).name === 'string'))))) return 'entities must be string[] or {name}[]'
   if (sentiment !== undefined && !['positive', 'neutral', 'negative'].includes(sentiment)) return 'sentiment must be positive|neutral|negative'
   if (category !== undefined && typeof category !== 'string') return 'category must be a string'
   return null

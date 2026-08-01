@@ -25,7 +25,7 @@ export async function saveMemory(env: Env, mem: AgentMemory): Promise<void> {
   } catch {}
 }
 
-/** 消费用户信号 → 计算来源点击率 */
+/** 消费用户信号 → 计算来源点击率 + 实体热度（反馈环输入） */
 export async function ingestSignals(env: Env): Promise<SignalSummary> {
   // 来源级 CTR
   const ctrRows = await env.DB.prepare(`
@@ -43,5 +43,16 @@ export async function ingestSignals(env: Env): Promise<SignalSummary> {
     sourceCTR.set(r.source, { total, clicks, rate: total > 0 ? clicks / total : 0 })
   }
 
-  return { sourceCTR, categoryEngagement: new Map() }
+  // 实体级热度（用户点开实体视图的信号）——写入 memory.entityHeat 后
+  // 供 analyzeNewArticles 优先分析标题命中热门实体的文章（学习反馈闭环）
+  const entityRows = await env.DB.prepare(`
+    SELECT target_id, COUNT(*) as cnt
+    FROM signals
+    WHERE target_type = 'entity' AND created_at >= datetime('now', '-7 days')
+    GROUP BY target_id ORDER BY cnt DESC LIMIT 30
+  `).all<any>()
+  const entityClicks = new Map<string, number>()
+  for (const r of (entityRows.results || [])) entityClicks.set(r.target_id, r.cnt || 0)
+
+  return { sourceCTR, entityClicks, categoryEngagement: new Map() }
 }
