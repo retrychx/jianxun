@@ -8,7 +8,12 @@ export function likeEscape(s: string): string {
 }
 
 export async function tryCatch(fn: () => Promise<any>, fallback: any = { ok: false, error: 'Internal error' }): Promise<Response> {
-  try { return json(await fn()) } catch (e: any) { return json(fallback, 500) }
+  try {
+    const result = await fn()
+    // 回调返回 Response（如 json(payload, 4xx)）时直接透传，避免二次 JSON.stringify(Response) = {}
+    if (result instanceof Response) return result
+    return json(result)
+  } catch (e: any) { return json(fallback, 500) }
 }
 
 export function json(data: any, status = 200) {

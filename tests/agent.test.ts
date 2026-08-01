@@ -191,3 +191,19 @@ describe('updateNarratives', () => {
     expect(typeof result.created).toBe('number')
   })
 })
+
+describe('tryCatch', () => {
+  it('回调返回 Response 时透传，不再二次 JSON.stringify 成 {}', async () => {
+    const { tryCatch, json } = await import('../src/helpers.js')
+    const r = await tryCatch(async () => json({ a: 1 }))
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ a: 1 })
+    // 回调返回数据时仍正常 json 序列化
+    const r2 = await tryCatch(async () => ({ b: 2 }))
+    expect(await r2.json()).toEqual({ b: 2 })
+    // 非 200 的 Response 透传
+    const r3 = await tryCatch(async () => json({ error: 'x' }, 400))
+    expect(r3.status).toBe(400)
+    expect(await r3.json()).toEqual({ error: 'x' })
+  })
+})
