@@ -1,244 +1,179 @@
 /**
- * Unit tests for the News Intelligence Agent's core infrastructure.
- * Tests runPhase timeout/logging, pingDeepSeek circuit breaker,
- * and phase logic with a mock D1 database.
+ * Agent 真实逻辑测试：真实 SQLite（node:sqlite）+ migrations/*.sql + mock fetch。
+ * 取代旧的自证式测试（内联拷贝 / 手写 Map / 真实联网 ping）。
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { createTestDB, makeEnv } from './helpers'
+import { analyzeNewArticles } from '../src/agent/analyze.js'
+import { updateNarratives } from '../src/agent/narrative.js'
+import { mergeOverlappingNarratives, flagLowQualityAnalyses } from '../src/agent/quality.js'
+import { ingestSignals } from '../src/agent/memory.js'
+import { tuneSourceWeights } from '../src/agent/health.js'
+import { detectBreakingNews } from '../src/agent/breaking.js'
 
-import { describe, it, expect } from 'vitest'
+const ANALYSIS_JSON = JSON.stringify({
+  summary: '英伟达发布新一代GPU芯片，性能大幅提升。',
+  keyPoints: ['要点1', '要点2'],
+  category: 'AI',
+  entities: [{ name: '英伟达', type: 'company', weight: 0.9, role: '主角' }],
+  sentiment: { label: 'positive', scores: { positive: 0.7, negative: 0.1, neutral: 0.2 }, perspective: '乐观' },
+  significance: '行业重大发布',
+  controversy: false,
+  impact: 'high',
+})
 
-// ─── Mock D1 ───────────────────────────────────────────────────
+const TOPIC_LABELS_JSON = JSON.stringify([{ index: 0, label: '英伟达新GPU' }])
 
-function mockDB(): any {
-  // In-memory tables for stateful queries
-  const tables: Record<string, Map<string, any>> = {
-    news: new Map(),
-    narratives: new Map(),
-    source_stats: new Map(),
-    source_weights: new Map(),
-    agent_meta: new Map(),
-  }
+let env: any
 
-  const exec = (sql: string, params: any[]) => {
-    if (sql.includes('INSERT OR REPLACE INTO agent_meta')) {
-      tables.agent_meta.set(params[0], { key: params[0], value: params[1] })
-      return { meta: { changes: 1 } }
+beforeEach(() => {
+  const { d1 } = createTestDB()
+  env = makeEnv(d1)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+/** mock fetch：api.deepseek.com → AI 结果；其他 URL → 文章 HTML */
+function mockFetch() {
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: any) => {
+    const u = String(url)
+    if (u.includes('api.deepseek.com/chat/completions')) {
+      const body = JSON.parse((init?.body as string) || '{}')
+      const system = body?.messages?.[0]?.content || ''
+      let content = ANALYSIS_JSON
+      if (system.includes('话题标签') || system.includes('新闻话题编辑')) content = TOPIC_LABELS_JSON
+      else if (system.includes('叙事')) content = '这是一条关键进展'
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
-    if (sql.includes('SELECT value FROM agent_meta')) {
-      const row = tables.agent_meta.get(params[0])
-      return { first: <T>() => (row as T) ?? undefined }
-    }
-    if (sql.includes('SELECT id FROM narratives WHERE keyword LIKE')) {
-      return { first: <T>() => undefined as T }
-    }
-    // Default: empty results
-    return {
-      all: <T>() => ({ results: [] as T[] }),
-      first: <T>() => undefined as T,
-      run: () => ({ meta: { changes: 0 } }),
-    }
-  }
-
-  const prepare = (sql: string) => {
-    const bound = (...params: any[]) => ({
-      all: <T>() => exec(sql, params).all<T>(),
-      first: <T>() => exec(sql, params).first<T>(),
-      run: () => exec(sql, params),
-    })
-    return {
-      bind: bound,
-      // Direct call support for test simplicity
-      all: <T>() => exec(sql, []).all<T>(),
-      first: <T>() => exec(sql, []).first<T>(),
-      run: () => exec(sql, []),
-    }
-  }
-
-  return { prepare, batch: () => [{}] }
+    // 文章页：og:image + 正文
+    return new Response(
+      '<html><head><title>Page</title><meta property="og:image" content="https://img.example.com/x.png"></head><body><p>这是一段足够长的正文内容，用来验证内容抽取。</p></body></html>',
+      { status: 200 },
+    )
+  }))
 }
 
-function env(): any {
-  return { DB: mockDB(), DEEPSEEK_API_KEY: 'test-key' }
-}
-
-// ─── Helper: inline runPhase for testability ───────────────────
-
-async function runPhase<T>(
-  _name: string,
-  fn: () => Promise<T>,
-  timeoutMs = 30_000,
-): Promise<{ ok: boolean; result?: T; error?: string; ms: number }> {
-  const start = Date.now()
-  try {
-    const result = await Promise.race([
-      fn(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs),
-      ),
-    ])
-    return { ok: true, result, ms: Date.now() - start }
-  } catch (err: any) {
-    return { ok: false, error: (err?.message || 'unknown').slice(0, 200), ms: Date.now() - start }
-  }
-}
-
-// ===================================================================
-// runPhase
-// ===================================================================
-
-describe('runPhase', () => {
-  it('returns success with result', async () => {
-    const r = await runPhase('test', async () => 42)
-    expect(r.ok).toBe(true)
-    expect(r.result).toBe(42)
+describe('analyzeNewArticles', () => {
+  it('分析待处理文章并写入 summary/analyzed_at，analyze_attempts +1', async () => {
+    env.DB.exec(
+      `INSERT INTO news (title, url, source, lang, description, score, published_at, title_norm)
+       VALUES ('英伟达发布GPU', 'https://example.com/a1', '测试', 'zh', 'short', 80, datetime('now','-1 hour'), 'n1')`,
+    )
+    mockFetch()
+    const done = await analyzeNewArticles(env, 10)
+    expect(done).toBe(1)
+    const row = env.DB._db.prepare('SELECT summary, analyzed_at, analyze_attempts FROM news WHERE id = 1').get()
+    expect(row.summary).toContain('英伟达')
+    expect(row.analyzed_at).toBeTruthy()
+    expect(row.analyze_attempts).toBe(1)
   })
 
-  it('captures failures', async () => {
-    const r = await runPhase('fail', async () => { throw new Error('boom') })
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain('boom')
-  })
-
-  it('timeouts on slow functions', async () => {
-    const r = await runPhase('slow', async () => {
-      await new Promise(r => setTimeout(r, 10_000))
-      return 'x'
-    }, 10) // 10ms timeout
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain('Timed out')
-    expect(r.ms).toBeLessThan(500)
+  it('无 API key 时直接返回 0', async () => {
+    env.DEEPSEEK_API_KEY = ''
+    const done = await analyzeNewArticles(env, 10)
+    expect(done).toBe(0)
   })
 })
 
-// ===================================================================
-// pingDeepSeek
-// ===================================================================
-
-describe('pingDeepSeek', () => {
-  it('returns false when API unreachable', async () => {
-    const ping = async (key: string) => {
-      try {
-        const res = await fetch('https://api.deepseek.com/models', {
-          headers: { Authorization: `Bearer ${key}` },
-          signal: AbortSignal.timeout(500),
-        })
-        return res.ok
-      } catch { return false }
-    }
-    expect(await ping('bad-key')).toBe(false)
+describe('flagLowQualityAnalyses', () => {
+  it('把摘要过短/实体为空的已分析文章重置为待分析', async () => {
+    env.DB.exec(
+      `INSERT INTO news (title, url, source, lang, summary, entities, analyzed_at, title_norm)
+       VALUES ('a', 'https://e.com/1', 'S1', 'zh', 'too short', '[]', datetime('now'), 'na')`,
+    )
+    const flagged = await flagLowQualityAnalyses(env)
+    expect(flagged).toBe(1)
+    const row = env.DB._db.prepare('SELECT analyzed_at, analyze_attempts FROM news WHERE id = 1').get()
+    expect(row.analyzed_at).toBeNull()
+    expect(row.analyze_attempts).toBe(1)
   })
 })
 
-// ===================================================================
-// fixMissingImages
-// ===================================================================
+describe('mergeOverlappingNarratives', () => {
+  it('合并文章重叠 ≥60% 的两个叙事，并归档被合并方', async () => {
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats)
+       VALUES ('k1', 'K1', 'active', date('now'), datetime('now'), '[1,2,3]', '[]', '{}'),
+              ('k2', 'K2', 'active', date('now'), datetime('now'), '[2,3,4]', '[]', '{}')`,
+    )
+    const merged = await mergeOverlappingNarratives(env)
+    expect(merged).toBe(1)
+    const k2 = env.DB._db.prepare("SELECT status FROM narratives WHERE keyword = 'k2'").get()
+    expect(k2.status).toBe('archived')
+  })
 
-describe('fixMissingImages', () => {
-  it('handles empty DB gracefully', async () => {
-    const e = env()
-    const rows = await e.DB.prepare("SELECT id, url FROM news WHERE image IS NULL LIMIT 3").all()
-    expect(Array.isArray(rows.results)).toBe(true)
-    expect(rows.results.length).toBe(0)
+  it('重叠不足时不合并', async () => {
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats)
+       VALUES ('k1', 'K1', 'active', date('now'), datetime('now'), '[1]', '[]', '{}'),
+              ('k2', 'K2', 'active', date('now'), datetime('now'), '[9,8,7]', '[]', '{}')`,
+    )
+    const merged = await mergeOverlappingNarratives(env)
+    expect(merged).toBe(0)
   })
 })
 
-// ===================================================================
-// tuneSourceWeights
-// ===================================================================
+describe('ingestSignals', () => {
+  it('按来源计算点击率', async () => {
+    env.DB.exec(
+      `INSERT INTO news (title, url, source, lang, click_count, created_at, title_norm)
+       VALUES ('a', 'https://e.com/1', 'S1', 'zh', 3, datetime('now'), 'na'),
+              ('b', 'https://e.com/2', 'S1', 'zh', 0, datetime('now'), 'nb')`,
+    )
+    const sig = await ingestSignals(env)
+    const s = sig.sourceCTR.get('S1')!
+    expect(s.total).toBe(2)
+    expect(s.clicks).toBe(3)
+    expect(s.rate).toBeCloseTo(1.5)
+  })
+})
 
 describe('tuneSourceWeights', () => {
-  it('handles empty source_stats', async () => {
-    const stats = await env().DB.prepare('SELECT * FROM source_stats').all()
-    expect(Array.isArray(stats.results)).toBe(true)
-  })
-
-  it('weight formula: max(0.1, 1.0 - fail * 0.1)', () => {
-    const w = (fails: number) => Math.max(0.1, 1.0 - fails * 0.1)
-    expect(w(0)).toBe(1.0)
-    expect(w(1)).toBe(0.9)
-    expect(w(5)).toBe(0.5)
-    expect(w(9)).toBe(0.1)
-    expect(w(99)).toBe(0.1) // floor
+  it('按连续失败次数下调来源权重', async () => {
+    env.DB.exec("INSERT INTO source_stats (source, fail_count) VALUES ('S1', 3)")
+    env.DB.exec("INSERT INTO source_weights (source, weight) VALUES ('S1', 1.0)")
+    const r = await tuneSourceWeights(env)
+    expect(r.tuned).toBe(1)
+    const row = env.DB._db.prepare("SELECT weight FROM source_weights WHERE source = 'S1'").get()
+    expect(row.weight).toBeLessThan(1.0)
+    expect(row.weight).toBeGreaterThan(0)
   })
 })
 
-// ===================================================================
-// Concurrency guard
-// ===================================================================
-
-describe('concurrency guard', () => {
-  it('skips when last_run < 5 min ago', () => {
-    const ago = new Date(Date.now() - 60_000).toISOString() // 1 min ago
-    expect(Date.now() - new Date(ago).getTime()).toBeLessThan(300_000)
-  })
-
-  it('runs when last_run > 5 min ago', () => {
-    const ago = new Date(Date.now() - 600_000).toISOString() // 10 min ago
-    expect(Date.now() - new Date(ago).getTime()).toBeGreaterThanOrEqual(300_000)
+describe('detectBreakingNews', () => {
+  it('多来源 high-impact 文章被创建为突发叙事', async () => {
+    env.DB.exec(
+      `INSERT INTO news (id, title, url, source, lang, analyzed_at, analysis_detail, title_norm)
+       VALUES (1, 'Breaking Event Happened Now', 'https://e.com/1', 'S1', 'zh', datetime('now'), '{"impact":"high"}', 'be1'),
+              (2, 'Breaking Event Happened Now', 'https://e.com/2', 'S2', 'zh', datetime('now'), '{"impact":"high"}', 'be2')`,
+    )
+    const r = await detectBreakingNews(env)
+    expect(r.breaking).toBe(1)
+    const narr = env.DB._db.prepare("SELECT keyword FROM narratives WHERE keyword LIKE '__breaking__%'").get()
+    expect(narr.keyword).toContain('__breaking__')
   })
 })
 
-// ===================================================================
-// Breaking news dedup
-// ===================================================================
-
-describe('breaking news dedup', () => {
-  it('returns undefined when no matching __breaking__ exists', async () => {
-    const prefix = 'Something happened today'.slice(0, 30)
-    const row = await env().DB.prepare(
-      "SELECT id FROM narratives WHERE keyword LIKE ? AND status = 'active' LIMIT 1"
-    ).bind(`__breaking__${prefix}%`).first()
-    expect(row).toBeUndefined()
-  })
-})
-
-// ===================================================================
-// Entity linking LIMIT
-// ===================================================================
-
-describe('entity linking LIMIT', () => {
-  it('query includes LIMIT 100', () => {
-    const sql = "SELECT id, entities FROM news WHERE analyzed_at >= datetime('now', '-12 hours') AND entities IS NOT NULL ORDER BY score DESC LIMIT 100"
-    expect(sql).toContain('LIMIT 100')
-  })
-})
-
-// ===================================================================
-// runAgent orchestration (integration smoke test)
-// ===================================================================
-
-describe('runAgent smoke test', () => {
-  it('phase dependency: Group 2 depends on Group 1 analysis', () => {
-    // If analyzeNewArticles fails, crossRefAnalysis/detectBreakingNews/linkEntities
-    // should be skipped. This tests the guard logic.
-    const analysisDone = false
-    const skipAi = !analysisDone
-
-    // These should be skipped when analysis fails
-    const group2Skipped = [
-      { phase: 'crossRefAnalysis', shouldSkip: !analysisDone && !skipAi },
-      { phase: 'detectBreakingNews', shouldSkip: !analysisDone },
-      { phase: 'linkEntities', shouldSkip: !analysisDone },
-    ]
-
-    // When analysisDone=false and skipAi=false, crossRefAnalysis runs
-    // When analysisDone=false, detectBreakingNews and linkEntities skip
-    expect(group2Skipped.find(p => p.phase === 'detectBreakingNews')!.shouldSkip).toBe(true)
-    expect(group2Skipped.find(p => p.phase === 'linkEntities')!.shouldSkip).toBe(true)
-  })
-
-  it('all Group 1 phases run independently', () => {
-    // fixMissingImages, analyzeNewArticles, refineCategories, translateMissing,
-    // and tuneSourceWeights should all be satisfiable concurrently via Promise.allSettled
-    const group1 = [
-      'fixMissingImages',
-      'analyzeNewArticles',
-      'refineCategories',
-      'translateMissing',
-      'tuneSourceWeights',
-    ]
-    expect(group1.length).toBe(5)
-    // All can fail independently — no Promise.all rejection
-    const result = group1.map(name => ({ ok: false, error: `${name} failed`, ms: 0 }))
-    expect(result.length).toBe(5)
+describe('updateNarratives', () => {
+  it('返回 KPI 计数并跑完既有叙事匹配', async () => {
+    mockFetch()
+    env.DB.exec(
+      `INSERT INTO news (id, title, url, source, lang, description, score, published_at, created_at, title_norm)
+       VALUES (1, '英伟达发布GPU芯片', 'https://e.com/1', 'S1', 'zh', '一篇关于英伟达新产品的报道内容', 90,
+               datetime('now','-1 hour'), datetime('now'), 'n1')`,
+    )
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats)
+       VALUES ('英伟达 · GPU', '英伟达新动向', 'active', date('now'), datetime('now'), '[]', '[]', '{}')`,
+    )
+    const result = await updateNarratives(env)
+    // 至少能跑完并返回计数（具体数值取决于语义匹配，不锁死）
+    expect(typeof result.matched).toBe('number')
+    expect(typeof result.created).toBe('number')
   })
 })

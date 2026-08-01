@@ -1,0 +1,30 @@
+name: D1 Backup
+
+on:
+  schedule:
+    - cron: '13 3 * * 0' # 每周日 03:13 UTC
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Export D1 database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          mkdir -p backup
+          npx wrangler d1 export jianxun --remote --output "backup/jianxun-$(date +%F).sql"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup
+          path: backup/*.sql
+          retention-days: 30
