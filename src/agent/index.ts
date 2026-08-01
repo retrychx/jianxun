@@ -117,7 +117,7 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   // ═══ Cache invalidation: agent 跑完后清相关缓存 ═══
   // 防止用户看到 agent 更新前的旧数据
-  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly', 'sectors', 'signals', 'narrative_heat', 'narratives_timeline', 'digest', 'digests']
+  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly', 'sectors', 'signals', 'narrative_heat', 'narratives_timeline', 'digest', 'digests', 'heat_entities', 'insights']
   for (const key of CACHE_KEYS) cacheDelete(key).catch(() => {})
 
   // ═══ Self-Evaluation: 评估本轮分析质量 ═══

@@ -274,6 +274,30 @@ export function getWeekly(): Promise<WeeklyResponse> {
   return fetchJson(`${BASE}/news/weekly`)
 }
 
+/* ===== 个性化 + 读者洞察（增量接口） ===== */
+
+export interface HeatEntity {
+  name: string
+  count: number
+}
+
+/** 近 7 天点击最多的实体（feed 个性化加权用） */
+export function getHeatEntities(): Promise<{ entities: HeatEntity[] }> {
+  return fetchJson(`${BASE}/news/heat-entities`)
+}
+
+export interface InsightsResponse {
+  topEntities: { name: string; count: number }[]
+  topSources: { name: string; clicks: number }[]
+  mostRead: { id: number; title: string; source: string; clicks: number }[]
+  risingEntities: { name: string; count: number }[]
+}
+
+/** 读者统计（点击数据 → 洞察） */
+export function getInsights(): Promise<InsightsResponse> {
+  return fetchJson(`${BASE}/news/insights`)
+}
+
 /* ===== 叙事追踪（增量接口） ===== */
 
 export interface NarrativeSummary {

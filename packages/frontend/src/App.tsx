@@ -23,6 +23,7 @@ const ResearchView = lazy(() => import('./components/ResearchView').then(m => ({
 const SourcesView = lazy(() => import('./components/SourcesView').then(m => ({ default: m.SourcesView })))
 const SectorsView = lazy(() => import('./components/SectorsView').then(m => ({ default: m.SectorsView })))
 const WeeklyView = lazy(() => import('./components/WeeklyView').then(m => ({ default: m.WeeklyView })))
+const InsightsView = lazy(() => import('./components/InsightsView').then(m => ({ default: m.InsightsView })))
 import type { NewsItem, CategoryCount, TopicCluster, BriefingItem } from './api'
 import { getNews, getTrending, getCategories, getStats, getTopics, getBriefing, getDigests } from './api'
 import { useFollow } from './hooks/useFollow'
@@ -30,7 +31,7 @@ import { useHashRoute, useNavigate, buildHash, type Route, type ViewName } from 
 import { useTheme, THEMES, THEME_META } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { useRealtime } from './hooks/useRealtime'
-import { trackEntityClick } from './hooks/useInterest'
+import { trackEntityClick, getActiveInterests } from './hooks/useInterest'
 import { boostFollowed, matchesFollow, cleanNarrativeLabel, type Lang } from './utils'
 import './App.css'
 
@@ -127,10 +128,23 @@ export default function App() {
   // 供 SSE 处理器读取当前 feed 状态（避免闭包捕获过期 view/cat 导致重新订阅 EventSource）
   const feedStateRef = useRef({ view: 'briefing', cat: '全部' })
   feedStateRef.current = { view, cat: activeCat }
-  // 关注加权（客户端重排）：命中关注实体的条目稳定置顶并加「关注」标记
-  // useMemo：boostFollowed 是 O(n·m)，每次渲染重算 + 数组重建会白白浪费
+  // 个性化 feed（客户端重排）：命中「关注 + 兴趣 + 近 7 天点击热实体」的条目稳定置顶。
+  // 用 useMemo：boostFollowed 是 O(n·m)，每次渲染重算 + 数组重建会白白浪费。
   const followedEntityNames = useMemo(() => follows.filter(f => f.type === 'entity').map(f => f.name), [follows])
-  const boostedNews = useMemo(() => boostFollowed(news, followedEntityNames).filter(n => !hiddenIds.has(n.id)), [news, followedEntityNames, hiddenIds])
+  const interests = useMemo(() => getActiveInterests(), [])
+  const [hotEntityNames, setHotEntityNames] = useState<string[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/news/heat-entities').then(r => r.json()).then(d => {
+      if (!cancelled && Array.isArray(d.entities)) setHotEntityNames(d.entities.map((e: any) => e.name))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const boostNames = useMemo(
+    () => [...new Set([...followedEntityNames, ...interests, ...hotEntityNames])],
+    [followedEntityNames, interests, hotEntityNames],
+  )
+  const boostedNews = useMemo(() => boostFollowed(news, boostNames).filter(n => !hiddenIds.has(n.id)), [news, boostNames, hiddenIds])
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -337,6 +351,7 @@ export default function App() {
       sources: '信源',
       weekly: '周报',
       sectors: '行业雷达',
+      insights: '读者洞察',
     }
     const base = titles[view] || '简讯'
     if (view === 'narrative' && baseRoute.narrative) {
@@ -509,6 +524,8 @@ export default function App() {
             <SectorsView />
           ) : view === 'weekly' ? (
             <WeeklyView />
+          ) : view === 'insights' ? (
+            <InsightsView lang={lang} onEntityClick={openEntity} onNewsClick={openNews} />
           ) : view === 'feed' ? (
             <>
               {loading ? (
@@ -594,7 +611,7 @@ export default function App() {
 
       <footer className="footer" data-version={BUILD}>
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">故事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a>
+        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">故事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a> · <a href="#/insights" className="footer-link">洞察</a>
       </footer>
 
       <BottomNav active={navActive} />
