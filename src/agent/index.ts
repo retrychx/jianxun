@@ -15,7 +15,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 import type { Env } from '../helpers.js'
 import type { PhaseDef } from './types.js'
 import { runPhases } from './scheduler.js'
-import { shouldSkipDueToConcurrency, markAgentRun, saveAgentLog, pingDeepSeek, initBudget } from './state.js'
+import { shouldSkipDueToConcurrency, markAgentRun, saveAgentLog, pingDeepSeek, initBudget, acquireAgentLock, releaseAgentLock } from './state.js'
 import { CONFIG, phaseTimeout } from './config.js'
 import { fixMissingImages, tuneSourceWeights } from './health.js'
 import { analyzeNewArticles, refineCategories } from './analyze.js'
@@ -63,10 +63,10 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   if (!env.DEEPSEEK_API_KEY) return
   if (await shouldSkipDueToConcurrency(env)) return
 
-  // 原子占位：运行开始就把 last_run 写为当前时间。
-  // 否则两个并发实例（cron 触发 + 管理端 POST）都会读到旧的 last_run 而同时通过守卫，
-  // 导致重复 SELECT / 重复调 DeepSeek / analyze_attempts 双倍递增。
-  await markAgentRun(env)
+  // 运行锁：防止并发 run（cron 触发 + 管理端 POST 同时执行）。
+  // 注意：last_run 只在运行完成时写——若在开始写，checkSystemState 会读到 secondsSinceLastRun≈0，
+  // planPhases 永远只跑 analyze+flag，digest/叙事/简报/翻译等阶段全部被跳过（曾导致日报多日不更新）。
+  if (!(await acquireAgentLock(env))) return
 
   // 管线可中断：若上一个 run 仍在 isolate 内运行（超过守卫窗口的极端情况），
   // 启动新 run 时中止其 in-flight DeepSeek 请求
@@ -151,8 +151,9 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
   }
   await saveMemory(env, memory)
 
-  await markAgentRun(env)
+  await markAgentRun(env) // 记录本次完成时间（供下轮 checkSystemState 计划阶段）
   await saveAgentLog(env, { ts: new Date().toISOString(), totalMs, skipAi: !apiOk, results })
+  await releaseAgentLock(env)
 
   // 清理 agent 级中止信号（仅置空，不 abort 更新的 run）
   setAgentAbort(null)

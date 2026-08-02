@@ -111,7 +111,8 @@ export async function stats(env: Env) {
   { const cached = await cacheGet<any>('stats'); if (cached) return cached }
   const [total, today] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as total FROM news").first<{ total: number }>(),
-    env.DB.prepare("SELECT COUNT(*) as total FROM news WHERE created_at >= datetime('now', 'start of day')").first<{ total: number }>(),
+    // "今日"按北京时区（+8h）的零点算，否则北京时间早上看到"今日 0 篇"
+    env.DB.prepare("SELECT COUNT(*) as total FROM news WHERE created_at >= datetime('now', '+8 hours', 'start of day')").first<{ total: number }>(),
   ])
   const data = { total: total?.total || 0, today: today?.total || 0 }
   await cacheSet('stats', data, CACHE_TTL.stats)
@@ -285,7 +286,7 @@ export async function briefing(env: Env) {
 export async function sources(env: Env) {
   const cached = await cacheGet<any>('sources'); if (cached) return cached
   const [counts, stats, cats] = await Promise.all([
-    env.DB.prepare("SELECT source, COUNT(*) as total, SUM(CASE WHEN created_at >= datetime('now', 'start of day') THEN 1 ELSE 0 END) as today FROM news GROUP BY source").all(),
+    env.DB.prepare("SELECT source, COUNT(*) as total, SUM(CASE WHEN created_at >= datetime('now', '+8 hours', 'start of day') THEN 1 ELSE 0 END) as today FROM news GROUP BY source").all(),
     env.DB.prepare('SELECT * FROM source_stats').all(),
     env.DB.prepare("SELECT source, category, COUNT(*) as c FROM news WHERE category IS NOT NULL GROUP BY source, category").all(),
   ])

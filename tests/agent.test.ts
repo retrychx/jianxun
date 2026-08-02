@@ -10,6 +10,7 @@ import { mergeOverlappingNarratives, flagLowQualityAnalyses } from '../src/agent
 import { ingestSignals } from '../src/agent/memory.js'
 import { tuneSourceWeights } from '../src/agent/health.js'
 import { detectBreakingNews } from '../src/agent/breaking.js'
+import { acquireAgentLock, releaseAgentLock } from '../src/agent/state.js'
 
 const ANALYSIS_JSON = JSON.stringify({
   summary: '英伟达发布新一代GPU芯片，性能大幅提升。',
@@ -189,6 +190,24 @@ describe('updateNarratives', () => {
     // 至少能跑完并返回计数（具体数值取决于语义匹配，不锁死）
     expect(typeof result.matched).toBe('number')
     expect(typeof result.created).toBe('number')
+  })
+})
+
+describe('agent run lock', () => {
+  it('未占用时可获取；占用后拒绝；释放后可再获取', async () => {
+    expect(await acquireAgentLock(env)).toBe(true)
+    expect(await acquireAgentLock(env)).toBe(false)
+    await releaseAgentLock(env)
+    expect(await acquireAgentLock(env)).toBe(true)
+    await releaseAgentLock(env)
+  })
+
+  it('残留锁超过 30 分钟视为过期可重新获取', async () => {
+    // 手动写一个 40 分钟前的 running 锁
+    env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('running', ?)")
+      .bind(String(Date.now() - 40 * 60_000)).run()
+    expect(await acquireAgentLock(env)).toBe(true)
+    await releaseAgentLock(env)
   })
 })
 
