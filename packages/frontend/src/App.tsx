@@ -102,6 +102,18 @@ export default function App() {
     localStorage.setItem('hiddenNews', JSON.stringify([...hiddenIds]))
   }, [hiddenIds])
 
+  // ─── 反噪音：屏蔽来源 + 只看重要 ───
+  const [blockedSources, setBlockedSources] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('blockedSources') || '[]')) } catch { return new Set() }
+  })
+  useEffect(() => {
+    localStorage.setItem('blockedSources', JSON.stringify([...blockedSources]))
+  }, [blockedSources])
+  const blockSource = useCallback((source: string) => {
+    setBlockedSources(prev => { const next = new Set(prev); next.add(source); return next })
+  }, [])
+  const [onlyImportant, setOnlyImportant] = useState(false)
+
   // ─── 新文章标记：记录上次访问时间 ───
   // 首次渲染时惰性读一次（不再每次渲染都 getItem/setItem）
   const lastVisitRef = useRef<number>(0)
@@ -144,7 +156,11 @@ export default function App() {
     () => [...new Set([...followedEntityNames, ...interests, ...hotEntityNames])],
     [followedEntityNames, interests, hotEntityNames],
   )
-  const boostedNews = useMemo(() => boostFollowed(news, boostNames).filter(n => !hiddenIds.has(n.id)), [news, boostNames, hiddenIds])
+  const boostedNews = useMemo(
+    () => boostFollowed(news, boostNames)
+      .filter(n => !hiddenIds.has(n.id) && !blockedSources.has(n.source) && (!onlyImportant || n.impact === 'high')),
+    [news, boostNames, hiddenIds, blockedSources, onlyImportant],
+  )
 
   // 记录会话内导航次数：区分「SPA 内打开详情」与「刷新/分享直达详情」
   const navCountRef = useRef(0)
@@ -546,6 +562,17 @@ export default function App() {
                   </div>
                 )
               ) : (
+                <>
+                <div className="feed-toolbar">
+                  <button className={`feed-toggle${onlyImportant ? ' active' : ''}`} onClick={() => setOnlyImportant(v => !v)} title="只看 AI 判定的重要报道">
+                    只看重要
+                  </button>
+                  {blockedSources.size > 0 && (
+                    <button className="feed-toggle" onClick={() => { setBlockedSources(new Set()); localStorage.setItem('blockedSources', '[]') }}>
+                      已屏蔽 {blockedSources.size} 个来源 · 清除
+                    </button>
+                  )}
+                </div>
                 <Virtuoso
                   useWindowScroll
                   data={boostedNews}
@@ -571,10 +598,12 @@ export default function App() {
                         followed={matchesFollow(item, followedEntityNames)}
                         isNew={new Date(item.createdAt).getTime() > lastVisitRef.current}
                         onHide={hideArticle}
+                        onBlockSource={blockSource}
                       />
                     </div>
                   )}
                 />
+                </>
               )}
             </>
           ) : view === 'topics' ? (

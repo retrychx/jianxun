@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, BarChart3, Tags, FileText, ExternalLink, X } from 'lucide-react'
+import { Newspaper, BarChart3, Tags, FileText, ExternalLink, Share2, X } from 'lucide-react'
 import type { NewsDetail, EntityItem, NewsItem, SentimentData } from '../api'
 import { getDetail, getByEntity } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
@@ -43,6 +43,18 @@ export function DetailPanel({ newsId, lang, onClose, onEntityClick, onNewsClick,
   const [closing, setClosing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<number | null>(null)
+
+  // 分享：Web Share API（移动端）→ 剪贴板复制（桌面端）
+  const shareArticle = useCallback(() => {
+    if (!detail) return
+    const title = displayTitle(detail, lang)
+    const text = `${title}\n${(detail.analysis?.summary || detail.description || '').slice(0, 200)}\n${window.location.origin}/#/news/${detail.id}`
+    if (typeof navigator.share === 'function') {
+      navigator.share({ title, text }).catch(() => {})
+    } else {
+      navigator.clipboard?.writeText(text).then(() => {}).catch(() => {})
+    }
+  }, [detail, lang])
 
   // Animate close: set closing → wait → call onClose
   const handleClose = useCallback(() => {
@@ -148,6 +160,9 @@ export function DetailPanel({ newsId, lang, onClose, onEntityClick, onNewsClick,
         {/* Handle */}
         <div className="sheet-handle-wrap">
           <div className="sheet-handle" />
+          <button className="sheet-close" onClick={shareArticle} aria-label="分享" title="分享">
+            <Share2 size={15} />
+          </button>
           <button className="sheet-close" onClick={handleClose} aria-label="关闭">
             <X size={16} />
           </button>

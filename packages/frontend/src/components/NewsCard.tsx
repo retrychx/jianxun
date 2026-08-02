@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from 'react'
-import { Bookmark } from 'lucide-react'
+import { Bookmark, Ban } from 'lucide-react'
 import type { NewsItem } from '../api'
 import { categoryColor, sourceTrust } from '../constants'
 import { displaySummary, displayTitle, formatDate, type Lang } from '../utils'
@@ -12,13 +12,15 @@ interface Props {
   followed?: boolean
   isNew?: boolean
   onHide?: (id: number) => void
+  /** 屏蔽该来源的后续报道（反噪音） */
+  onBlockSource?: (source: string) => void
 }
 
 function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', '') } catch { return url }
 }
 
-export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed, isNew, onHide }: Props) {
+export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, followed, isNew, onHide, onBlockSource }: Props) {
   const [imgError, setImgError] = useState(false)
   const [saved, setSaved] = useState(() => isBookmarked(item.id))
   const showImage = !!item.image && !imgError
@@ -52,7 +54,14 @@ export const NewsCard = memo(function NewsCard({ item, lang = 'zh', onClick, fol
         </div>
       )}
       <div className="card-body">
-        {onHide && <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onHide(item.id) }} title="不感兴趣">×</button>}
+        <div className="card-actions">
+          {onBlockSource && (
+            <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onBlockSource(item.source) }} title={`屏蔽 ${item.source}`} aria-label={`屏蔽 ${item.source}`}>
+              <Ban size={11} />
+            </button>
+          )}
+          {onHide && <button className="card-hide-btn" onClick={e => { e.stopPropagation(); onHide(item.id) }} title="不感兴趣">×</button>}
+        </div>
         <div className="card-header">
           <span className="card-source">{item.source}</span>
           <span className="card-time">{item.publishedAt ? formatDate(item.publishedAt) : ''}</span>

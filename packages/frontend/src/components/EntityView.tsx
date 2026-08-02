@@ -139,6 +139,44 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
         </section>
       )}
 
+      {/* ═══ 实体时间线：结构化事件 + 报道按日期合并（旧→新） ═══ */}
+      {((briefing.events?.length || 0) > 0 || (briefing.articles?.length || 0) > 0) && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="nd-section-title">时间线</h3>
+          <div className="narr-timeline-v">
+            {(() => {
+              const evts = (briefing.events || []).map(e => ({ kind: 'event' as const, date: e.date || '', ev: e }))
+              const arts = (briefing.articles || []).map(a => ({ kind: 'article' as const, date: (a.publishedAt || '').slice(0, 10), art: a }))
+              const tl = [...evts, ...arts].filter(x => x.date).sort((a, b) => a.date.localeCompare(b.date)).slice(-30)
+              return tl.map((x, idx) => (
+                <div
+                  key={idx}
+                  className="tl-v-item"
+                  role={x.kind === 'article' ? 'link' : undefined}
+                  tabIndex={x.kind === 'article' ? 0 : undefined}
+                  onClick={x.kind === 'article' ? () => onNewsClick(x.art.id) : undefined}
+                  onKeyDown={x.kind === 'article' ? (e) => { if (e.key === 'Enter') onNewsClick(x.art.id) } : undefined}
+                >
+                  <div className={`tl-v-dot ${idx === tl.length - 1 ? 'active' : ''}`} />
+                  {idx < tl.length - 1 && <div className="tl-v-line" />}
+                  <div className="tl-v-body">
+                    <div className="tl-v-meta">
+                      <span className="tl-v-source">
+                        {x.kind === 'event' ? (EVENT_META[x.ev.type]?.label || '事件') : (x.art.source || '')}
+                      </span>
+                      <span className="tl-v-time">{x.date}</span>
+                    </div>
+                    <div className="tl-v-title">
+                      {x.kind === 'event' ? x.ev.title : decodeEntities(x.art.title || '')}
+                    </div>
+                  </div>
+                </div>
+              ))
+            })()}
+          </div>
+        </section>
+      )}
+
       {/* ═══ 信源覆盖 ═══ */}
       {briefing.sourceStats.length > 0 && (
         <section style={{ marginBottom: 24 }}>

@@ -4,7 +4,7 @@ import type { DigestResponse } from '../api'
 import { getDigest } from '../api'
 import type { FollowItem } from '../hooks/useFollow'
 import { categoryColor } from '../constants'
-import { displayTitle, formatDigestDate, type Lang } from '../utils'
+import { displayTitle, formatDigestDate, matchesFollow, boostFollowed, type Lang } from '../utils'
 import { FollowWeekly } from './FollowWeekly'
 
 interface ViewProps {
@@ -45,7 +45,9 @@ function DigestSkeleton() {
 }
 
 export function DigestView({ digest, dates, lang, onNewsClick, follows, onEntityClick }: ViewProps) {
-  const items = Array.isArray(digest.items) ? digest.items : []
+  // 个性化日报：关注实体相关条目稳定置顶（客户端重排，不动服务端选择）
+  const followedNames = (follows || []).filter(f => f.type === 'entity').map(f => f.name)
+  const items = boostFollowed(Array.isArray(digest.items) ? digest.items : [], followedNames)
   // 日期列表倒序（新→旧）；当前日期不一定在列表里，按大小关系找相邻
   const sorted = [...new Set(dates)].sort().reverse()
   const newerList = sorted.filter(d => d > digest.date)
@@ -90,6 +92,7 @@ export function DigestView({ digest, dates, lang, onNewsClick, follows, onEntity
                 {item.why && <p className="digest-why">{item.why}</p>}
                 <div className="digest-meta">
                   <span className="briefing-cat" style={{ backgroundColor: categoryColor(item.category) }}>{item.category}</span>
+                  {matchesFollow(item, followedNames) && <span className="briefing-followed">关注</span>}
                   <span className="digest-source">{item.source}</span>
                   {item.heat != null && item.heat > 1 && (
                     <span className="digest-heat">{item.heat} 家媒体报道</span>
