@@ -107,12 +107,12 @@ function mergeClusters(a: Cluster, b: Cluster): Cluster {
   return merged
 }
 
-export async function topics(env: Env) {
+export async function topics(env: Env, ctx?: { waitUntil?: (p: Promise<any>) => void }) {
   { const cached = await cacheGet<any>('topics'); if (cached) return cached }
-  return singleFlight('topics', () => computeTopics(env))
+  return singleFlight('topics', () => computeTopics(env, ctx))
 }
 
-async function computeTopics(env: Env) {
+async function computeTopics(env: Env, ctx?: { waitUntil?: (p: Promise<any>) => void }) {
   // 只取聚类/展示需要的列，避免把大 content 列（每篇 ≤8k 字符）读进内存
   const all = await env.DB.prepare(
     'SELECT id, title, summary, description, entities, source, published_at, score, category FROM news ORDER BY score DESC LIMIT 200'
@@ -175,15 +175,29 @@ async function computeTopics(env: Env) {
   }
   topicList.sort((a, b) => b.count - a.count)
   const top = topicList.slice(0, 15)
-  const aiLabels = await generateTopicLabels(top.map(t => t.topTitles), env.DEEPSEEK_API_KEY)
-  const result = {
-    topics: top.map((t: any, i: number) => {
-      const { topTitles, ...rest } = t
-      return { ...rest, label: aiLabels?.[i] || t.label, items: t.items.map(mapNews) }
-    })
+
+  // 先用 fallback 标签返回（快），AI 标签后台生成后覆盖缓存——
+  // 之前这里阻塞等 generateTopicLabels（~14s），agent 每 3h 清一次缓存，
+  // 每次清完第一个用户都要白等 14 秒。
+  const stripTopTitles = (t: any) => { const { topTitles, ...rest } = t; return rest }
+  const fallback = { topics: top.map((t: any) => ({ ...stripTopTitles(t), label: t.label, items: t.items.map(mapNews) })) }
+  await cacheSet('topics', fallback, CACHE_TTL.topics)
+
+  if (ctx?.waitUntil && env.DEEPSEEK_API_KEY) {
+    ctx.waitUntil(
+      generateTopicLabels(top.map((t: any) => t.topTitles), env.DEEPSEEK_API_KEY).then(aiLabels => {
+        const aiResult = {
+          topics: top.map((t: any, i: number) => ({
+            ...stripTopTitles(t),
+            label: aiLabels?.[i] || t.label,
+            items: t.items.map(mapNews),
+          })),
+        }
+        return cacheSet('topics', aiResult, CACHE_TTL.topics)
+      }).catch(() => {}),
+    )
   }
-  await cacheSet('topics', result, CACHE_TTL.topics)
-  return result
+  return fallback
 }
 
 export async function topic(env: Env, name: string) {
