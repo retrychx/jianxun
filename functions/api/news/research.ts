@@ -26,7 +26,7 @@ export async function onRequestGet(context: any) {
   // Check if agent pre-computed research for a matching topic
   const matchedNarr = await env.DB.prepare(
     "SELECT keyword, summary, developments FROM narratives WHERE keyword LIKE ? AND status = 'active' ORDER BY last_updated DESC LIMIT 1"
-  ).bind(`__research__%${likeEscape(query.slice(0, 20))}%`).first<any>()
+  ).bind(`__research__%${likeEscape(query.slice(0, 20))}%`).first()
   if (matchedNarr?.summary) {
     try {
       const report = JSON.parse(matchedNarr.summary)
@@ -61,8 +61,8 @@ export async function onRequestGet(context: any) {
      WHERE published_at >= datetime('now', '-30 days')
        AND (${clauses})
      ORDER BY score DESC LIMIT 100`
-  ).bind(...params).all<any>()
-  let candidates = (rows.results || [])
+  ).bind(...params).all()
+  let candidates: any[] = ((rows.results || []) as any[])
     .map(r => {
       const hay = `${r.title || ''} ${r.summary || ''} ${r.entities || ''}`.toLowerCase()
       const hits = tokens.filter(t => hay.includes(t.toLowerCase())).length
@@ -75,7 +75,7 @@ export async function onRequestGet(context: any) {
   // Find narratives matching the query
   const narratives = await env.DB.prepare(
     `SELECT keyword, article_ids FROM narratives WHERE status = 'active' AND (keyword LIKE ? OR label LIKE ?) LIMIT 5`
-  ).bind(`%${likeEscape(query)}%`, `%${likeEscape(query)}%`).all<any>()
+  ).bind(`%${likeEscape(query)}%`, `%${likeEscape(query)}%`).all()
   const seenIds = new Set(candidates.map(c => c.id))
 
   for (const n of (narratives.results || [])) {
@@ -85,7 +85,7 @@ export async function onRequestGet(context: any) {
       if (idsToFetch.length) {
         const extra = await env.DB.prepare(
           `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news WHERE id IN (${idsToFetch.map(() => '?').join(',')})`
-        ).bind(...idsToFetch).all<any>()
+        ).bind(...idsToFetch).all()
         for (const a of (extra.results || [])) { candidates.push(a); seenIds.add(a.id) }
       }
     } catch {}
@@ -96,14 +96,14 @@ export async function onRequestGet(context: any) {
   if (entityMatch) {
     const linked = await env.DB.prepare(
       "SELECT original_name, canonical_name FROM entity_links WHERE original_name LIKE ? OR canonical_name LIKE ? LIMIT 20"
-    ).bind(entityMatch, entityMatch).all<any>()
+    ).bind(entityMatch, entityMatch).all()
     for (const e of (linked.results || [])) {
       const like = `%${likeEscape(String(e.canonical_name || e.original_name || ''))}%`
       // 截断排除列表：seenIds 会随候选增长，D1 绑定参数上限 100，超了查询直接失败
       const excludeIds = [...seenIds].slice(0, 60)
       const extra = await env.DB.prepare(
         `SELECT id, title, title_zh, summary, summary_zh, source, published_at FROM news WHERE entities LIKE ? AND id NOT IN (${excludeIds.map(() => '?').join(',')}) ORDER BY score DESC LIMIT 3`
-      ).bind(like, ...excludeIds).all<any>()
+      ).bind(like, ...excludeIds).all()
       for (const a of (extra.results || [])) { if (!seenIds.has(a.id)) { candidates.push(a); seenIds.add(a.id) } }
     }
   }

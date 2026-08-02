@@ -9,10 +9,10 @@ export async function onRequestGet(context: any) {
   if (denied) return denied
 
   const [lastRun, lastLog, report, kpis] = await Promise.all([
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_log'").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_last_report'").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_kpis'").first<any>(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_log'").first(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_last_report'").first(),
+    env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'agent_kpis'").first(),
   ])
 
   // 历史数据可能损坏——单个坏 JSON 不应让整个端点 500

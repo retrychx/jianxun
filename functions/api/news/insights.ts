@@ -14,25 +14,25 @@ export async function onRequestGet(context: any) {
         `SELECT target_id, COUNT(*) as cnt FROM signals
          WHERE target_type = 'entity' AND created_at >= datetime('now', '-7 days')
          GROUP BY target_id ORDER BY cnt DESC LIMIT 10`,
-      ).all<any>(),
+      ).all(),
       // 近 7 天点击最多的来源
       env.DB.prepare(
         `SELECT source, SUM(click_count) as clicks FROM news
          WHERE created_at >= datetime('now', '-7 days') AND click_count > 0
          GROUP BY source ORDER BY clicks DESC LIMIT 8`,
-      ).all<any>(),
+      ).all(),
       // 近 7 天点击最多的文章
       env.DB.prepare(
         `SELECT id, title, source, click_count FROM news
          WHERE click_count > 0 AND created_at >= datetime('now', '-7 days')
          ORDER BY click_count DESC, score DESC LIMIT 10`,
-      ).all<any>(),
+      ).all(),
       // 24h 内点击最多的实体（升温）
       env.DB.prepare(
         `SELECT target_id, COUNT(*) as cnt FROM signals
          WHERE target_type = 'entity' AND created_at >= datetime('now', '-1 day')
          GROUP BY target_id ORDER BY cnt DESC LIMIT 8`,
-      ).all<any>(),
+      ).all(),
     ])
 
     const payload = {

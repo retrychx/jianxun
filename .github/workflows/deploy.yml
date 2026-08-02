@@ -22,6 +22,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 部署前把关：后端（src+functions+tests）类型检查 + 单元/路由冒烟测试。
+      # 曾因 tryCatch 二次序列化把多个端点变成 {} 上线——这里提前拦住。
+      - name: Typecheck backend
+        run: npx tsc -p tsconfig.check.json
+
+      - name: Run tests
+        run: npx vitest run
+
       - name: Build frontend
         run: pnpm build
 

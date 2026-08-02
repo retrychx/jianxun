@@ -13,3 +13,14 @@ declare module 'node:sqlite' {
     run(...params: any[]): { changes: number; lastInsertRowid: number | bigint }
   }
 }
+declare module 'node:fs' {
+  export function readFileSync(path: string, encoding?: string): string
+  export function readdirSync(path: string): string[]
+}
+declare module 'node:path' {
+  export function join(...parts: string[]): string
+  export function dirname(path: string): string
+}
+declare module 'node:url' {
+  export function fileURLToPath(url: string): string
+}
