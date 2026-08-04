@@ -1,0 +1,67 @@
+name: Health Check
+
+# 每小时检查站点健康度：抓取是否新鲜、agent 是否在跑、今日日报是否生成。
+# 任一异常 → 创建 GitHub issue（告警收件箱），避免"坏了没人知道"的静默故障。
+on:
+  schedule:
+    - cron: '7 * * * *' # 每小时 :07（避开整点）
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check site health and alert
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://jianxun.pages.dev' }}
+        run: |
+          node --input-type=module <<'EOF'
+          const SITE = process.env.SITE_URL
+          const since = (s) => Date.now() - new Date(s).getTime()
+          let status, digests
+          try {
+            const [r1, r2] = await Promise.all([
+              fetch(`${SITE}/api/news/status`),
+              fetch(`${SITE}/api/news/digests`),
+            ])
+            status = await r1.json()
+            digests = await r2.json()
+          } catch (e) {
+            console.error('fetch failed:', e.message)
+            process.exit(2)
+          }
+          const now = new Date()
+          // 日报按北京时间（+8h）标注日期
+          const today = new Date(now.getTime() + 8 * 3600e3).toISOString().slice(0, 10)
+          const issues = []
+          if (!status.lastFetch?.ts || since(status.lastFetch.ts) > 2 * 3600e3) {
+            issues.push(`RSS 抓取停更：lastFetch=${status.lastFetch?.ts || '无'}`)
+          }
+          if (!status.lastAgentRun || since(status.lastAgentRun) > 3 * 3600e3) {
+            issues.push(`Agent 停更：lastRun=${status.lastAgentRun || '无'}`)
+          }
+          if (!digests?.dates?.includes(today)) {
+            issues.push(`今日日报缺失：${today}（现有：${digests?.dates?.slice(0, 3).join(', ') || '无'}）`)
+          }
+          if (issues.length) {
+            const title = `[监控] ${today} ${now.toTimeString().slice(0, 5)} 系统异常`
+            const body = issues.map(i => `- ${i}`).join('\n')
+            // 当天已有告警则不重复建（避免刷屏）
+            const repo = process.env.GITHUB_REPOSITORY
+            const existing = await fetch(`https://api.github.com/repos/${repo}/issues?state=open&per_page=20`, {
+              headers: { Authorization: `token ${process.env.GH_TOKEN}` },
+            }).then(r => r.json())
+            const dup = (Array.isArray(existing) ? existing : []).find(i => i.title.startsWith('[监控]') && i.title.includes(today))
+            if (!dup) {
+              await fetch(`https://api.github.com/repos/${repo}/issues`, {
+                method: 'POST',
+                headers: { Authorization: `token ${process.env.GH_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, body }),
+              })
+            }
+            console.log('⚠️ ' + issues.join('；'))
+            process.exit(1)
+          }
+          console.log(`✅ 健康 lastFetch=${status.lastFetch.ts} lastRun=${status.lastAgentRun} today=${today}`)
+          EOF

@@ -24,8 +24,8 @@ export async function listNews(env: Env, url: URL) {
     params.push(category); countParams.push(category)
   }
   // 时间衰减排序：高分新文章靠前，旧文章自然下沉
-  // formula: score / (1 + hours_old × 0.05)
-  query += " ORDER BY (n.score * COALESCE(sw.weight, 1.0)) / (1 + CAST((julianday('now') - julianday(n.published_at)) * 24 AS INTEGER) * 0.05) DESC LIMIT ? OFFSET ?"
+  // formula: score / (1 + hours_old × 0.05) + 点击量 × 0.1（数据驱动：读者点击多的加权）
+  query += " ORDER BY (n.score * COALESCE(sw.weight, 1.0)) / (1 + CAST((julianday('now') - julianday(n.published_at)) * 24 AS INTEGER) * 0.05) + COALESCE(n.click_count, 0) * 0.1 DESC LIMIT ? OFFSET ?"
   params.push(pageSize, offset)
 
   const [items, totalResult] = await Promise.all([
@@ -41,7 +41,7 @@ export async function trending(env: Env) {
   const cached = await cacheGet<any>('trending'); if (cached) return cached
 
   const rows = await env.DB.prepare(
-    `SELECT id, title, title_norm, url, image, source, lang, description, published_at, category, score, summary, entities, sentiment, created_at
+    `SELECT id, title, title_norm, url, image, source, lang, description, published_at, category, score, summary, entities, sentiment, created_at, click_count
      FROM news WHERE published_at >= datetime('now', '-3 days')
      ORDER BY score DESC LIMIT 200`
   ).all<any>()
@@ -89,7 +89,8 @@ export async function trending(env: Env) {
     .filter(a => { const k = a.title_norm || a.title; if (seen.has(k)) return false; seen.add(k); return true })
     .map(a => {
       const heat = heatMap.get(a.id) || 1
-      return { ...mapNews(a), heat, trendingScore: (a.score || 50) + 25 * heat }
+      // 数据驱动：读者点击多的实体/文章加权
+      return { ...mapNews(a), heat, trendingScore: (a.score || 50) + 25 * heat + (a.click_count || 0) * 0.5 }
     })
     .sort((a, b) => b.trendingScore - a.trendingScore)
     .slice(0, 30)

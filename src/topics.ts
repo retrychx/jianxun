@@ -277,7 +277,7 @@ async function computeWeekly(env: Env) {
       "SELECT id, title, entities FROM news WHERE created_at >= datetime('now', '-7 days') ORDER BY score DESC LIMIT 1000"
     ).all(),
     env.DB.prepare(`
-      SELECT keyword, label, first_seen, last_updated, article_ids, source_stats
+      SELECT keyword, label, first_seen, last_updated, article_ids, source_stats, developments
       FROM narratives WHERE status = 'active'
       ORDER BY last_updated DESC LIMIT 10
     `).all<any>(),
@@ -308,11 +308,13 @@ async function computeWeekly(env: Env) {
   const aiLabels = await generateTopicLabels(clusters.map(c => c.items.slice(0, 3).map(i => i.title)), env.DEEPSEEK_API_KEY)
   const topTopics = clusters.map((c, i) => ({ label: aiLabels?.[i] || fallbackLabel(c.words), count: c.items.length }))
 
-  // 本周叙事动态（新增）
+  // 本周叙事动态（新增）——含最新一条进展，供周报"本周故事线"展示
   const narratives = ((narrRows.results || []) as any[]).map(n => {
     const ids: number[] = (() => { try { return JSON.parse(n.article_ids || '[]') } catch { return [] } })()
     const srcs: Record<string, number> = (() => { try { return JSON.parse(n.source_stats || '{}') } catch { return {} } })()
     const daysRunning = Math.max(1, Math.round((Date.now() - new Date(n.first_seen).getTime()) / 86400000))
+    const devs: any[] = (() => { try { return JSON.parse(n.developments || '[]') } catch { return [] } })()
+    const latest = devs[devs.length - 1]
     return {
       keyword: n.keyword,
       label: (n.label || n.keyword).replace(/^__\w+__/, '').replace(/^[🔴⚡📖📍]\s*/, '').trim(),
@@ -320,6 +322,8 @@ async function computeWeekly(env: Env) {
       sourceCount: Object.keys(srcs).length,
       daysRunning,
       lastUpdated: n.last_updated,
+      latest: latest?.text || null,
+      latestDate: latest?.date || null,
     }
   })
 

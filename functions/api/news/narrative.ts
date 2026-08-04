@@ -90,17 +90,24 @@ export async function onRequestGet(context: any) {
   }
 
   const narratives = await loadActiveNarratives(env)
-  const list = narratives.map(n => ({
-    keyword: n.keyword,
-    label: n.label || n.keyword,
-    status: n.status,
-    firstSeen: n.first_seen,
-    lastUpdated: n.last_updated,
-    summary: n.summary,
-    developmentCount: (JSON.parse(n.developments || '[]') as any[]).length,
-    articleCount: (JSON.parse(n.article_ids || '[]') as number[]).length,
-    sourceStats: JSON.parse(n.source_stats || '{}'),
-  }))
+  const list = narratives.map(n => {
+    const devs = (() => { try { return JSON.parse(n.developments || '[]') } catch { return [] } })() as any[]
+    const latest = devs[devs.length - 1]
+    return {
+      keyword: n.keyword,
+      label: n.label || n.keyword,
+      status: n.status,
+      firstSeen: n.first_seen,
+      lastUpdated: n.last_updated,
+      summary: n.summary,
+      developmentCount: devs.length,
+      articleCount: (JSON.parse(n.article_ids || '[]') as number[]).length,
+      sourceStats: JSON.parse(n.source_stats || '{}'),
+      // 叙事周报：最新一条进展
+      latest: latest?.text || null,
+      latestDate: latest?.date || null,
+    }
+  })
 
   return json({ narratives: list })
 }

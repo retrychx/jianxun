@@ -110,7 +110,11 @@ export function WeeklyView() {
             {narratives.filter(n => n.status === 'active').slice(0, 5).map(n => (
               <a key={n.keyword} href={`#/narrative/${encodeURIComponent(n.keyword)}`} className="weekly-narr-row">
                 <span className="weekly-narr-label">{cleanLabel(n.label || n.keyword)}</span>
-                <span className="weekly-narr-meta">{n.articleCount} 篇 · {Object.keys(n.sourceStats).length} 个来源{n.summary ? ` · ${n.summary.slice(0, 40)}` : ''}</span>
+                <span className="weekly-narr-meta">{n.articleCount} 篇 · {Object.keys(n.sourceStats).length} 个来源</span>
+                {/* 叙事周报：最新一条进展 */}
+                {(n as any).latest && (
+                  <span className="weekly-narr-latest">📌 {(n as any).latest.slice(0, 60)}{(n as any).latest.length > 60 ? '…' : ''}</span>
+                )}
               </a>
             ))}
           </div>
