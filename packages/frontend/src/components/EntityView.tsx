@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Hash, Globe, TrendingUp, GitBranch, Newspaper, Clock, Smile, Frown, Meh, Coins, Package, UserCog, Scale, LineChart, Handshake, Pin } from 'lucide-react'
 import type { NewsItem, NarrativeSummary } from '../api'
 import { decodeEntities } from '../utils'
@@ -70,6 +70,27 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
 
   const maxSrc = Math.max(...briefing.sourceStats.map(s => s.count), 1)
   const maxSent = Math.max(...briefing.sentimentTrend.map(s => s.total), 1)
+
+  // 知识图谱·关联实体：与当前实体同现最多的其他实体（从相关报道的 entities 计算）
+  const relatedEntities = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const a of briefing.articles || []) {
+      const raw = a.entities
+      if (!raw) continue
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (Array.isArray(parsed)) {
+          for (const e of parsed) {
+            const n = e?.name?.trim()
+            if (n && n.length >= 2 && n.toLowerCase() !== entity.toLowerCase()) {
+              counts.set(n, (counts.get(n) || 0) + 1)
+            }
+          }
+        }
+      } catch {}
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([name, count]) => ({ name, count }))
+  }, [briefing, entity])
 
   return (
     <div className="entity-view">
@@ -217,6 +238,21 @@ export function EntityView({ entity, lang, onBack, onNewsClick, onNarrativeClick
               <span key={p.name} className="eb-person-chip" onClick={() => onEntityClick?.(p.name)} style={{ cursor: 'pointer' }}>
                 <span className="eb-person-name">{p.name}</span>
                 <span className="eb-person-count">{p.count} 篇</span>
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ═══ 关联实体（知识图谱） ═══ */}
+      {relatedEntities.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="nd-section-title">关联实体 <span className="nd-section-sub">同现关系 · 点击查看</span></h3>
+          <div className="nd-entity-strip" style={{ flexWrap: 'wrap' }}>
+            {relatedEntities.map(re => (
+              <span key={re.name} className="nd-entity-chip concept" onClick={() => onEntityClick?.(re.name)} style={{ cursor: 'pointer' }}>
+                {re.name}
+                <span className="nd-entity-chip-count" style={{ opacity: .6, marginLeft: 4 }}>{re.count}</span>
               </span>
             ))}
           </div>

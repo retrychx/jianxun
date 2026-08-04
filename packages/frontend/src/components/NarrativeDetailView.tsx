@@ -60,6 +60,13 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
   }, [narrative])
 
+  // 故事弧起点：firstSeen + 最早一篇报道
+  const firstSignal = useMemo(() => {
+    if (!narrative) return null
+    const sorted = [...(narrative.articles || [])].filter(a => a.publishedAt).sort((a, b) => (a.publishedAt || '').localeCompare(b.publishedAt || ''))
+    return { date: (narrative.firstSeen || '').slice(0, 10), title: sorted[0]?.title }
+  }, [narrative])
+
   // ── Entity evolution per phase ──
   const entityTimeline = useMemo(() => {
     if (!narrative?.articles.length) return []
@@ -254,11 +261,34 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
         </section>
       )}
 
-      {/* ═══ ② Timeline ═══ */}
-      {phases.length > 0 && (
+      {/* ═══ ② 故事弧：起点 → 逐日进展 → 展望 ═══ */}
+      {(phases.length > 0 || firstSignal) && (
         <section className="nd-timeline-section">
-          <h3 className="nd-section-title">演变时间线</h3>
+          <h3 className="nd-section-title">故事弧</h3>
           <div className="nd-timeline">
+            {/* 起点 */}
+            {firstSignal && (
+              <div className="nd-phase">
+                <div className="nd-phase-header" style={{ cursor: 'default' }}>
+                  <span className="nd-phase-date">{firstSignal.date || '起点'}</span>
+                  <span className="nd-phase-count">首次信号</span>
+                </div>
+                {firstSignal.title && (
+                  <div className="nd-phase-body">
+                    <div className="nd-dev-item">
+                      <div className="nd-dev-marker">
+                        <div className="nd-dev-dot" />
+                        <div className="nd-dev-line" />
+                      </div>
+                      <div className="nd-dev-body">
+                        <p className="nd-dev-text">{decodeEntities(firstSignal.title)}</p>
+                        <div className="nd-dev-footer"><span className="nd-dev-articles">故事起点</span></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {phases.map(([day, devs], phaseIdx) => {
               const isExpanded = expandedPhase === day || phases.length <= 3 || phaseIdx >= phases.length - 2
               return (
@@ -292,6 +322,22 @@ export function NarrativeDetailView({ keyword, lang, onBack, onNewsClick, isFoll
                 </div>
               )
             })}
+
+            {/* 展望终点 */}
+            {narrative.outlook && (
+              <div className="nd-phase">
+                <div className="nd-phase-header" style={{ cursor: 'default' }}>
+                  <span className="nd-phase-date">下一步</span>
+                  <span className="nd-phase-count">展望</span>
+                </div>
+                <div className="nd-phase-body">
+                  <div className="nd-dev-item">
+                    <div className="nd-dev-marker"><div className="nd-dev-dot latest" /></div>
+                    <div className="nd-dev-body"><p className="nd-dev-text">{decodeEntities(narrative.outlook)}</p></div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

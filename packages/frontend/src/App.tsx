@@ -86,6 +86,18 @@ export default function App() {
   } = useSearch()
   const { follows, isFollowing, toggleFollow } = useFollow()
 
+  // 设备 ID（localStorage 持久化，用于信号去重和个性化）
+  const deviceId = useRef('')
+  useEffect(() => {
+    let did = localStorage.getItem('jianxun_device_id')
+    if (!did) { did = crypto.randomUUID?.() || Math.random().toString(36).slice(2, 12); localStorage.setItem('jianxun_device_id', did) }
+    deviceId.current = did
+  }, [])
+
+  const trackSignal = useCallback((type: string, id: string, action = 'click') => {
+    fetch('/api/signal/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, action, deviceId: deviceId.current }) }).catch(() => {})
+  }, [])
+
   // ─── 不感兴趣：隐藏的文章 ID ───
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('hiddenNews') || '[]')) } catch { return new Set() }
@@ -96,7 +108,9 @@ export default function App() {
       const next = new Set(prev); next.add(id)
       return next
     })
-  }, [])
+    // AI 反馈闭环：隐藏 = 负反馈信号，agent 会据此重分析/降权同类文章
+    trackSignal('article', String(id), 'hide')
+  }, [trackSignal])
   // localStorage 写入放在 effect（updater 必须是纯函数，渲染期也不该读写 localStorage）
   useEffect(() => {
     localStorage.setItem('hiddenNews', JSON.stringify([...hiddenIds]))
@@ -302,6 +316,8 @@ export default function App() {
     feedState: feedStateRef.current,
     showToast,
     notifyBrowser,
+    // 追更订阅：只对已关注的叙事推浏览器通知
+    isFollowingNarrative: (kw) => follows.some(f => f.id === `narrative:${kw}`),
   })
 
   // 预加载：用户可能在当前页面停留时提前加载下一个 tab 的数据
@@ -402,18 +418,6 @@ export default function App() {
     navCountRef.current++
     navigate(buildHash({ view: 'feed', cat }))
   }
-
-  // 设备 ID（localStorage 持久化，用于信号去重和个性化）
-  const deviceId = useRef('')
-  useEffect(() => {
-    let did = localStorage.getItem('jianxun_device_id')
-    if (!did) { did = crypto.randomUUID?.() || Math.random().toString(36).slice(2, 12); localStorage.setItem('jianxun_device_id', did) }
-    deviceId.current = did
-  }, [])
-
-  const trackSignal = useCallback((type: string, id: string) => {
-    fetch('/api/signal/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, deviceId: deviceId.current }) }).catch(() => {})
-  }, [])
 
   const openNews = useCallback((id: number) => {
     navCountRef.current++

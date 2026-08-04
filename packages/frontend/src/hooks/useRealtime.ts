@@ -9,6 +9,8 @@ interface Props {
   feedState: { view: string; cat: string }
   showToast: (t: string) => void
   notifyBrowser: (title: string, body: string, url?: string) => void
+  /** 追更订阅：该叙事是否被用户关注（决定是否推浏览器通知） */
+  isFollowingNarrative?: (keyword: string) => boolean
 }
 
 const SW_VERSION_KEY = 'sw_version_seen'
@@ -17,14 +19,14 @@ const SW_VERSION_KEY = 'sw_version_seen'
  * 实时事件：SSE（新文章/突发/叙事更新/争议）+ Service Worker 消息
  * （无感刷新 / 离线提示 / 版本检测）。从 App.tsx 抽出以减轻巨石组件。
  */
-export function useRealtime({ loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser }: Props) {
+export function useRealtime({ loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser, isFollowingNarrative }: Props) {
   const [isOffline, setIsOffline] = useState(false)
   const [showUpdate, setShowUpdate] = useState(false)
   const [sseEpoch, setSseEpoch] = useState(0)
 
   // 用 ref 包住回调，SSE/SW 监听器不重新订阅也能读到最新值（避免闭包过期）
-  const handlers = useRef({ loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser })
-  handlers.current = { loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser }
+  const handlers = useRef({ loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser, isFollowingNarrative })
+  handlers.current = { loadAll, loadStats, loadDigestDates, loadNews, feedState, showToast, notifyBrowser, isFollowingNarrative }
 
   // ─── SSE: 实时推送 ───
   useEffect(() => {
@@ -59,7 +61,10 @@ export function useRealtime({ loadAll, loadStats, loadDigestDates, loadNews, fee
       try {
         const data = JSON.parse(e.data)
         h.showToast(`📖 ${data.label || ''}: ${data.text || ''}`)
-        h.notifyBrowser('📖 叙事更新', `${data.label || ''}: ${(data.text || '').slice(0, 80)}`, `#/narrative/${encodeURIComponent(data.keyword || '')}`)
+        // 追更订阅：只有已关注的叙事才推浏览器通知（避免打扰）
+        if (h.isFollowingNarrative?.(data.keyword || '')) {
+          h.notifyBrowser('📖 叙事更新', `${data.label || ''}: ${(data.text || '').slice(0, 80)}`, `#/narrative/${encodeURIComponent(data.keyword || '')}`)
+        }
       } catch {}
       h.loadAll().catch(() => {})
     })

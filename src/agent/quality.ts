@@ -8,8 +8,14 @@ export async function flagLowQualityAnalyses(env: Env): Promise<number> {
   const rows = await env.DB.prepare(`
     SELECT id, summary, entities, analyzed_at
     FROM news WHERE analyzed_at IS NOT NULL
-    AND (summary IS NULL OR length(summary) < 10 OR entities IS NULL OR entities = '[]')
     AND analyze_attempts < 3
+    AND (
+      (summary IS NULL OR length(summary) < 10 OR entities IS NULL OR entities = '[]')
+      -- AI 反馈闭环：用户点过"不感兴趣"的文章也纳入重分析
+      OR id IN (SELECT CAST(target_id AS INTEGER) FROM signals
+                WHERE target_type='article' AND action='hide'
+                  AND created_at >= datetime('now', '-7 days'))
+    )
     LIMIT 20
   `).all<any>()
   let flagged = 0

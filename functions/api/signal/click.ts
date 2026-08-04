@@ -1,8 +1,9 @@
-// POST /api/signal/click — record user click signal (no auth needed)
-// target_type 保持纯类型名（'article'/'narrative'/'entity'），deviceId 为可选字段
+// POST /api/signal/click — record user click / hide signal (no auth needed)
+// target_type 保持纯类型名（'article'/'narrative'/'entity'），action='click'|'hide'，deviceId 为可选字段
 import { json, rateLimit, clientIp } from '../../../src/handler'
 
 const VALID_TYPES = new Set(['article', 'narrative', 'entity'])
+const VALID_ACTIONS = new Set(['click', 'hide'])
 
 export async function onRequestPost(context: any) {
   const { env, request } = context
@@ -17,16 +18,18 @@ export async function onRequestPost(context: any) {
 
   const targetType = String(body.type || '')
   const targetId = String(body.id ?? '').trim()
+  const action = VALID_ACTIONS.has(String(body.action || 'click')) ? String(body.action) : 'click'
   if (!VALID_TYPES.has(targetType) || !targetId) return json({ ok: false }, 400)
   // target_id 长度上限，防止灌入超长垃圾数据
   if (targetId.length > 200) return json({ ok: false }, 400)
 
   try {
     await env.DB.prepare(
-      "INSERT INTO signals (target_type, target_id) VALUES (?, ?)"
-    ).bind(targetType, targetId).run()
+      "INSERT INTO signals (target_type, target_id, action) VALUES (?, ?, ?)"
+    ).bind(targetType, targetId, action).run()
 
-    if (targetType === 'article') {
+    // 只有 'click' 计入 click_count（hide 是负反馈，不计）
+    if (targetType === 'article' && action === 'click') {
       const id = Number(targetId)
       if (!Number.isInteger(id) || id <= 0) return json({ ok: false }, 400)
       await env.DB.prepare(

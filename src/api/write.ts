@@ -75,12 +75,27 @@ export async function ask(env: Env, q: string): Promise<Response> {
   const escTokens = tokens.map(t => likeEscape(t))
   const clauses = tokens.map(() => "(title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR entities LIKE ? ESCAPE '\\')").join(' OR ')
   const params = escTokens.flatMap(t => [`%${t}%`, `%${t}%`, `%${t}%`])
+
+  // 时间感知：识别查询里的时间范围（"最近N天/昨天/本周/上周"），默认近 7 天
+  let where = "published_at >= datetime('now', ?)"
+  let timeParams: any[] = ['-7 days']
+  const dayMatch = query.match(/(\d+)\s*天/)
+  if (dayMatch) {
+    const n = Math.max(1, Math.min(60, Number(dayMatch[1])))
+    timeParams = [`-${n} days`]
+  } else if (query.includes('昨天') || query.includes('昨日') || query.includes('今天')) {
+    timeParams = ['-1 day']
+  } else if (query.includes('上周') || query.includes('上周的')) {
+    where = "published_at >= datetime('now', ?) AND published_at < datetime('now', ?)"
+    timeParams = ['-14 days', '-7 days']
+  }
+
   const rows = await env.DB.prepare(
     `SELECT id, title, title_zh, summary, summary_zh, source, published_at, entities FROM news
-     WHERE published_at >= datetime('now', '-7 days')
+     WHERE ${where}
        AND (${clauses})
      ORDER BY score DESC LIMIT 80`
-  ).bind(...params).all()
+  ).bind(...timeParams, ...params).all()
 
   const ranked = (rows.results as any[])
     .map(r => {
