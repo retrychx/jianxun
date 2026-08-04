@@ -9,6 +9,7 @@ import { onRequestGet as heatGet } from '../functions/api/news/heat-entities'
 import { onRequestPost as signalPost } from '../functions/api/signal/click'
 import { onRequestGet as agentGet } from '../functions/api/news/agent'
 import { onRequestGet as detailGet } from '../functions/api/news/[id]/detail'
+import { onRequestGet as ideasGet } from '../functions/api/news/product-ideas'
 
 let env: any
 
@@ -40,6 +41,13 @@ describe('缓存端点返回真实 JSON（回归：tryCatch 二次序列化成 {
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(Array.isArray(data.entities)).toBe(true)
+  })
+
+  it('GET /api/news/product-ideas 返回 ideas 数组', async () => {
+    const res = await ideasGet(ctx())
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(Array.isArray(data.ideas)).toBe(true)
   })
 
   it('GET /api/news/1/detail 无此 id 时返回 404 而非 {}', async () => {

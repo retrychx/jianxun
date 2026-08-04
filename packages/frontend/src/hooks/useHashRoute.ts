@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative' | 'trending' | 'sectors' | 'insights'
+export type ViewName = 'briefing' | 'feed' | 'topics' | 'entity' | 'search' | 'research' | 'digest' | 'topic' | 'sources' | 'weekly' | 'narratives' | 'narrative' | 'trending' | 'sectors' | 'insights' | 'ideas'
 
 export interface Route {
   view: ViewName
@@ -63,6 +63,8 @@ export function parseHash(hash: string): Route {
       return { view: 'sources', newsId: null }
     case 'insights':
       return { view: 'insights', newsId: null }
+    case 'ideas':
+      return { view: 'ideas', newsId: null }
     case 'news': {
       // Only accept strictly numeric IDs — reject hex/exp notation
       const id = /^\d+$/.test(segs[1]) ? Number(segs[1]) : NaN
@@ -103,6 +105,8 @@ export function buildHash(r: { view: ViewName; cat?: string; entity?: string; q?
       return '#/sources'
     case 'insights':
       return '#/insights'
+    case 'ideas':
+      return '#/ideas'
     default:
       return '#/'
   }

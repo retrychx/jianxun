@@ -35,6 +35,7 @@ import { evaluateQuality, saveKPI, estimateAPICost, generateReport, saveReport }
 import { getTokenCount, resetTokenCount, setAgentAbort } from '../analysis/deepseek.js'
 import { cleanup, recordError } from './cleanup.js'
 import { generateNarrativeOutlooks, extractTopEntityEvents } from './intel.js'
+import { generateProductIdeas } from './ideas.js'
 import { cacheDelete } from '../cache.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
@@ -56,6 +57,7 @@ const ALL_PHASES: PhaseDef[] = [
   { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low' },
   { name: 'generateNarrativeOutlooks', run: (e: Env) => generateNarrativeOutlooks(e), dependsOn: ['updateNarratives'], priority: 'low' },
   { name: 'extractTopEntityEvents', run: (e: Env) => extractTopEntityEvents(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
+  { name: 'generateProductIdeas', run: (e: Env) => generateProductIdeas(e), priority: 'low' },
 ]
 
 export async function runAgent(env: Env, ctx?: ExecutionContext) {
@@ -117,7 +119,7 @@ export async function runAgent(env: Env, ctx?: ExecutionContext) {
 
   // ═══ Cache invalidation: agent 跑完后清相关缓存 ═══
   // 防止用户看到 agent 更新前的旧数据
-  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly', 'sectors', 'signals', 'narrative_heat', 'narratives_timeline', 'digest', 'digests', 'heat_entities', 'insights']
+  const CACHE_KEYS = ['trending', 'topics', 'categories', 'stats', 'sources', 'briefing', 'weekly', 'sectors', 'signals', 'narrative_heat', 'narratives_timeline', 'digest', 'digests', 'heat_entities', 'insights', 'product_ideas']
   for (const key of CACHE_KEYS) cacheDelete(key).catch(() => {})
 
   // ═══ Self-Evaluation: 评估本轮分析质量 ═══
