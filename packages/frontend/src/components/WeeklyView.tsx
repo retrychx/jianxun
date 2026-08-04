@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Hash, Newspaper, TrendingUp, GitBranch, Clock } from 'lucide-react'
 import type { WeeklyResponse, NarrativeSummary } from '../api'
 import { getWeekly, getNarratives } from '../api'
-import { cleanNarrativeLabel as cleanLabel } from '../utils'
+import { cleanNarrativeLabel as cleanLabel, decodeEntities } from '../utils'
 
 // 近 7 天日期范围：'7月20日 – 7月26日'
 function weekRange(): string {
@@ -111,9 +111,9 @@ export function WeeklyView() {
               <a key={n.keyword} href={`#/narrative/${encodeURIComponent(n.keyword)}`} className="weekly-narr-row">
                 <span className="weekly-narr-label">{cleanLabel(n.label || n.keyword)}</span>
                 <span className="weekly-narr-meta">{n.articleCount} 篇 · {Object.keys(n.sourceStats).length} 个来源</span>
-                {/* 叙事周报：最新一条进展 */}
+                {/* 叙事周报：最新一条进展（解码 HTML 实体） */}
                 {(n as any).latest && (
-                  <span className="weekly-narr-latest">📌 {(n as any).latest.slice(0, 60)}{(n as any).latest.length > 60 ? '…' : ''}</span>
+                  <span className="weekly-narr-latest">📌 {decodeEntities((n as any).latest.slice(0, 60))}{(n as any).latest.length > 60 ? '…' : ''}</span>
                 )}
               </a>
             ))}

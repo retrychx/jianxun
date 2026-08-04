@@ -64,9 +64,9 @@ export function matchesFollow(item: { title: string; entities?: string | null },
   return followedNames.some(n => n && hay.includes(n.toLowerCase()))
 }
 
-/** 清洗叙事/话题标签：去 __前缀__、表情前缀、类型前缀（突发/争议/研究/多源对比:），规整间隔 */
+/** 清洗叙事/话题标签：解码实体 → 去 __前缀__、表情前缀、类型前缀（突发/争议/研究/多源对比:），规整间隔 */
 export function cleanNarrativeLabel(label: string): string {
-  return label
+  return decodeEntities(label)
     .replace(/^__\w+__/, '')
     .replace(/^[🔴⚡📖📍]\s*/, '')
     .replace(/^(?:突发|争议|研究|多源对比:)\s*/, '')

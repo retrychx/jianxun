@@ -6,6 +6,20 @@ import type { D1Database } from '@cloudflare/workers-types'
 
 const DEFAULT_MAX = 20
 
+/** 解码 HTML 实体（RSS 原文常含 &#8217;、&amp; 等；源头解码，避免存库/生成文本带原始实体） */
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(parseInt(n, 10)))
+}
+
 function extractImage(item: RssItem): string | null {
   if (item.mediaContent) return item.mediaContent
   if (item.mediaThumbnail) return item.mediaThumbnail
@@ -54,13 +68,13 @@ async function fetchOne(source: RssSource, DB: D1Database) {
 
   for (const item of feed.items) {
     if (candidates.length >= maxItems) break
-    const title = item.title?.trim()
+    const title = decodeHtml(item.title?.trim() || '')
     const link = item.link?.trim()
     if (!title || !link || seen.has(link)) continue
     seen.add(link)
 
     const rawDesc = (item.contentSnippet || item.content || '').slice(0, 2000)
-    const desc = rawDesc.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    const desc = decodeHtml(rawDesc.replace(/<[^>]+>/g, ''))
     const { category, score } = keywordClassify(title, desc, source.lang)
 
     candidates.push({

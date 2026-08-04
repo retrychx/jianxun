@@ -60,7 +60,8 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
   const planned: PhaseDef[] = []
 
   // 总是跑的阶段（含简报和日报——最可见的输出，不应被预算跳过）
-  const always: string[] = ['flagLowQualityAnalyses', 'mergeOverlappingNarratives', 'fixMissingImages', 'curateBriefing', 'generateDailyDigest']
+  // generateProductIdeas 内部按北京日期去重，每天只真正生成一次
+  const always: string[] = ['flagLowQualityAnalyses', 'mergeOverlappingNarratives', 'fixMissingImages', 'curateBriefing', 'generateDailyDigest', 'generateProductIdeas']
   for (const name of always) {
     const p = basePhases.find(b => b.name === name)
     if (p) planned.push(p)
