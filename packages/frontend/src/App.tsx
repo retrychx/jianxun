@@ -648,7 +648,8 @@ export default function App() {
 
       <footer className="footer" data-version={BUILD}>
         {stats.total > 0 && <>共 {stats.total} 篇 · 今日 {stats.today} 篇 · </>}
-        <a href="#/trending" className="footer-link">热门</a> · <a href="#/narratives" className="footer-link">故事</a> · <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a> · <a href="#/insights" className="footer-link">洞察</a> · <a href="#/ideas" className="footer-link">灵感</a>
+        {/* 只放二级视图；主 tab（日报/故事/新闻/话题/热门）已由 header + BottomNav 承担 */}
+        <a href="#/sources" className="footer-link">信源</a> · <a href="#/weekly" className="footer-link">周报</a> · <a href="#/insights" className="footer-link">洞察</a> · <a href="#/ideas" className="footer-link">灵感</a>
       </footer>
 
       <BottomNav active={navActive} />
