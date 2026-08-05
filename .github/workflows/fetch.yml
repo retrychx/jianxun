@@ -1,0 +1,22 @@
+name: Fetch RSS (fallback)
+
+# 兜底抓取：cron-fetch Worker 的 cron 偶发停摆（已发生多次），
+# 用 GitHub Action 每小时再触发一次 /api/news/fetch 保证文章不断更。
+# 错开 worker 的 :23（这里用 :47）；worker 正常时多抓一次无害（URL 去重）。
+# 健康告警由 health-check.yml 负责；本 workflow 失败（红色）也是可见信号。
+on:
+  schedule:
+    - cron: '47 * * * *' # 每小时 :47
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://jianxun.pages.dev' }}
+    steps:
+      - name: Trigger RSS fetch
+        run: |
+          curl -s --max-time 300 -X POST \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
+            "$SITE_URL/api/news/fetch"
