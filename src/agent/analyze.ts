@@ -3,6 +3,7 @@
 import { extractContent, analyzeWithDeepSeek, batchClassify } from '../analysis/deepseek.js'
 import { likeEscape, type Env } from '../helpers.js'
 import { loadMemory } from './memory.js'
+import { CONFIG } from './config.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
 export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> {
