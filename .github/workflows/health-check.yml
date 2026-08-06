@@ -7,6 +7,11 @@ on:
     - cron: '7 * * * *' # 每小时 :07（避开整点）
   workflow_dispatch:
 
+# 明确授予 GITHUB_TOKEN 建 issue 的权限（私有仓库默认没有 issues:write）
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -54,11 +59,14 @@ jobs:
             }).then(r => r.json())
             const dup = (Array.isArray(existing) ? existing : []).find(i => i.title.startsWith('[监控]') && i.title.includes(today))
             if (!dup) {
-              await fetch(`https://api.github.com/repos/${repo}/issues`, {
+              const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
                 method: 'POST',
                 headers: { Authorization: `token ${process.env.GH_TOKEN}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, body }),
               })
+              if (!res.ok) {
+                console.error(`❌ 创建 issue 失败 HTTP ${res.status}: ${(await res.text()).slice(0, 200)}（token 可能缺 issues:write 权限）`)
+              }
             }
             console.log('⚠️ ' + issues.join('；'))
             process.exit(1)
