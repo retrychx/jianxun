@@ -20,25 +20,27 @@ export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> 
       .map(([k]) => k)
   } catch {}
 
+  // 窗口用 CONFIG.analyze.windowDays（7 天）：让积压能被排空，而不是 2 天后直接掉落
+  const windowExpr = `datetime('now', '-${CONFIG.analyze.windowDays} days')`
   let query: string
   let params: any[]
   if (hotNames.length) {
     const esc = hotNames.map(n => `%${likeEscape(n)}%`)
     const clauses = hotNames.map(() => "(title LIKE ? ESCAPE '\\')").join(' OR ')
     query = `SELECT id, url, title, description FROM news
-      WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days')
+      WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= ${windowExpr}
       ORDER BY CASE WHEN ${clauses} THEN 1 ELSE 0 END DESC, score DESC LIMIT ?`
     params = [...esc, limit]
   } else {
-    query = "SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days') ORDER BY score DESC LIMIT ?"
+    query = `SELECT id, url, title, description FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= ${windowExpr} ORDER BY score DESC LIMIT ?`
     params = [limit]
   }
   const rows = await env.DB.prepare(query).bind(...params).all<any>()
   const pending = rows.results || []
 
-  // 限并发分析：20 篇顺序分析最坏 ~180s 撞上阶段超时，4 篇并行可降到 ~50s。
+  // 限并发分析：40 篇顺序分析最坏会撞上阶段超时，6 篇并行降到可接受区间。
   // 并发 DeepSeek 调用由 fetchWithRetry 的 429 重试兜底。
-  const CONCURRENCY = 4
+  const CONCURRENCY = 6
   let done = 0
   const queue = [...pending]
   await Promise.all(
