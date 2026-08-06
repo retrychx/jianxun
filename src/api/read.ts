@@ -25,14 +25,22 @@ export async function listNews(env: Env, url: URL) {
   }
   // 时间衰减排序：高分新文章靠前，旧文章自然下沉
   // formula: score / (1 + hours_old × 0.05) + 点击量 × 0.1（数据驱动：读者点击多的加权）
+  // 加 30 天窗口：时衰减后 30 天前的文章分数≈0，不可能进前 50，提前过滤缩小计算排序集
+  query += ' AND n.published_at >= datetime(\'now\', \'-30 days\')'
   query += " ORDER BY (n.score * COALESCE(sw.weight, 1.0)) / (1 + CAST((julianday('now') - julianday(n.published_at)) * 24 AS INTEGER) * 0.05) + COALESCE(n.click_count, 0) * 0.1 DESC LIMIT ? OFFSET ?"
   params.push(pageSize, offset)
 
-  const [items, totalResult] = await Promise.all([
-    env.DB.prepare(query).bind(...params).all(),
-    env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>(),
-  ])
-  const result = { items: (items.results as any[]).map(mapNews), total: totalResult?.total || 0, page, pageSize }
+  // COUNT 单独缓存（按分类，300s）：避免每次冷命中都全表 COUNT
+  const totalKey = `news_total:${category && category !== '全部' ? category : 'all'}`
+  let total = await cacheGet<number>(totalKey)
+  if (total == null) {
+    const totalResult = await env.DB.prepare(countQuery).bind(...countParams).first<{ total: number }>()
+    total = totalResult?.total || 0
+    await cacheSet(totalKey, total, 300)
+  }
+
+  const items = await env.DB.prepare(query).bind(...params).all()
+  const result = { items: (items.results as any[]).map(mapNews), total, page, pageSize }
   await cacheSet(cacheKey, result, CACHE_TTL.list)
   return result
 }

@@ -63,9 +63,5 @@ jobs:
         working-directory: workers/cron-analyze
         run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler secret put ADMIN_TOKEN
 
-      - name: Verify cron-analyze health
-        continue-on-error: true
-        env:
-          ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID || '863129776' }}
-        run: |
-          curl -s "https://jianxun-cron-analyze.${ACCOUNT_ID}.workers.dev/health" --max-time 10 || echo "health check skipped (expected if cold start)"
+      # 注：此前这里有个错误的 health-check URL（用账户 ID 当子域名，HTTP 000 一直静默失败）。
+      # 真正的健康监控由 .github/workflows/health-check.yml（每小时的抓取/日报新鲜度检查）承担。

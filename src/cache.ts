@@ -5,7 +5,7 @@
  */
 
 export const CACHE_TTL = {
-  list: 60, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
+  list: 120, trending: 120, stats: 300, categories: 300, topics: 600, briefing: 300, detail: 3600,
   digest: 600, digests: 600, topic: 600, sources: 300, weekly: 3600, ask: 3600,
 }
 
