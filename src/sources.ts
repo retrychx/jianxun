@@ -51,6 +51,11 @@ export const RSS_SOURCES: RssSource[] = [
   { name: 'Simon Willison', weight: 1.0,  url: 'https://simonwillison.net/atom/everything/',   lang: 'en' },
   { name: 'Quanta Magazine', weight: 1.0, url: 'https://www.quantamagazine.org/feed/',         lang: 'en' },
   { name: 'IEEE Spectrum', weight: 1.0,   url: 'https://spectrum.ieee.org/feeds/feed.rss',    lang: 'en' },
+  // --- 补充：AI 商业 / 学术 / 开源深度（补齐信号缺口） ---
+  { name: 'VentureBeat AI', weight: 1.0, url: 'https://venturebeat.com/category/ai/feed/',    lang: 'en' },
+  { name: 'MIT News', weight: 1.0,        url: 'https://news.mit.edu/rss/feed',                lang: 'en' },
+  { name: 'Phoronix', weight: 0.9,        url: 'https://www.phoronix.com/rss.php',             lang: 'en' },
+  { name: 'LWN', weight: 0.95,            url: 'https://lwn.net/headlines/rss',                lang: 'en' },
   { name: 'Nature', weight: 1.0,          url: 'https://www.nature.com/nature.rss',            lang: 'en' },
   { name: 'Physics World', weight: 1.0,   url: 'https://physicsworld.com/feed/',               lang: 'en' },
   // --- 科技商业 ---

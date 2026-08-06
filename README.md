@@ -1,6 +1,6 @@
 # 简讯 · AI 智能新闻聚合
 
-每日自动抓取 35+ 中英文科技/财经/科学资讯，AI 自动分类、摘要、实体识别、情感分析。
+每日自动抓取 44 个中英文科技/财经/科学资讯，AI 自动分类、摘要、实体识别、情感分析。
 
 ## 技术栈
 
@@ -9,12 +9,12 @@
 | **前端** | React 19 + Vite 8 + TypeScript 7 |
 | **后端** | Cloudflare Pages Functions + D1 + KV |
 | **AI** | DeepSeek API（分类/摘要/实体/情感） |
-| **RSS** | 35 个中英文源，自研轻量解析 |
+| **RSS** | 44 个中英文源，自研轻量解析 |
 | **DB** | Cloudflare D1（SQLite） |
 
 ## 功能
 
-- 35 个 RSS 源自动抓取（36氪、TechCrunch、Hacker News、GitHub Trending 等）
+- 44 个 RSS 源自动抓取（36氪、TechCrunch、Hacker News、GitHub Trending 等）
 - AI 自动分类（科技/AI/财经/国际/游戏等 12 类）
 - 话题聚类 — 同一话题的不同来源聚合
 - AI 摘要 + 关联实体 + 情感分析
@@ -115,7 +115,7 @@ curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
 
 ## RSS 源
 
-共 35 个源，覆盖中英文科技、财经、科学、游戏、综合：
+共 44 个源，覆盖中英文科技、财经、科学、游戏、综合：
 
 <details>
 <summary>中文源（13 个）</summary>
