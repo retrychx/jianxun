@@ -16,6 +16,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # 保证有可用的 node（runner 默认版本不稳，fetch 可能缺失）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Check site health and alert
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
