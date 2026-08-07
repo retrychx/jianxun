@@ -222,7 +222,7 @@ export function NarrativesView({ onNarrativeClick, onNewsClick, onResearchCreate
           {signals.map(s => (
             <button key={s.keyword} className="nv-signal-item" onClick={() => onNarrativeClick(s.keyword)}>
               <span className="signal-arrow up">▲</span>
-              <span className="nv-signal-label">{s.label}</span>
+              <span className="nv-signal-label">{decodeEntities(s.label)}</span>
               <span className="nv-signal-meta">{s.sourceCount} 信源</span>
             </button>
           ))}

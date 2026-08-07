@@ -8,7 +8,7 @@ import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSum
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
 import { STOPWORDS } from '../stopwords.js'
-import { fallbackLabel, parseDBTime, toDBTime, type Env } from '../helpers.js'
+import { fallbackLabel, parseDBTime, toDBTime, decodeHtml, type Env } from '../helpers.js'
 import { markAgentRun as setLastAgentRun } from './state.js'
 import { CONFIG } from './config.js'
 
@@ -187,7 +187,7 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
   if (existing.length === 0 || existing.length % 3 === 0) {
     summary = await narrSummary(env, narrative, ids, articles)
   }
-  existing.push({ date: new Date().toISOString().slice(0,10), text, articleCount: newIds.length, sources: Object.keys(sources) })
+  existing.push({ date: new Date().toISOString().slice(0,10), text: decodeHtml(text), articleCount: newIds.length, sources: Object.keys(sources) })
   ids.push(...newIds)
   await env.DB.prepare(
     `UPDATE narratives SET last_updated=datetime('now'), developments=?, article_ids=?,
@@ -248,14 +248,15 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
 
     // 用 AI 生成标签；失败时用第一篇标题的前半段
     const lbl = await generateTopicLabels([ca.slice(0,3).map((a:any)=>a.title)], apiKey).then(l=>l?.[0]||null)
-    const nlbl = lbl || ca[0]?.title?.slice(0, 30) || fallbackLabel(cleanWords)
+    // 存库前解码 HTML 实体（AI 可能把源标题里的 &#8217; 抄进标签）
+    const nlbl = decodeHtml(lbl || ca[0]?.title?.slice(0, 30) || fallbackLabel(cleanWords))
 
     const srcs: Record<string,number> = {}; for (const a of ca) { const s=a.source||'unknown'; srcs[s]=(srcs[s]||0)+1 }
 
     const r = await env.DB.prepare(
       `INSERT OR IGNORE INTO narratives (keyword,label,first_seen,last_updated,status,summary,developments,article_ids,source_stats)
        VALUES (?,?,date('now'),datetime('now'),'active',?,'[]',?,?)`
-    ).bind(keyword, nlbl, (ca[0]?.summary||ca[0]?.description||'').slice(0,300), JSON.stringify(ids), JSON.stringify(srcs)).run()
+    ).bind(keyword, nlbl, decodeHtml((ca[0]?.summary||ca[0]?.description||'').slice(0,300)), JSON.stringify(ids), JSON.stringify(srcs)).run()
     if (r.meta.changes > 0) created++
   }
   return created

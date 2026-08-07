@@ -7,6 +7,20 @@ export function likeEscape(s: string): string {
   return s.replace(/[%_\\]/g, '\\$&')
 }
 
+/** 解码 HTML 实体（RSS/AI 文本里可能带 &#8217;、&amp; 等；存库前清洗避免残留原始实体） */
+export function decodeHtml(s: string): string {
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(parseInt(n, 10)))
+}
+
 export async function tryCatch(fn: () => Promise<any>, fallback: any = { ok: false, error: 'Internal error' }): Promise<Response> {
   try {
     const result = await fn()

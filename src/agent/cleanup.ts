@@ -3,7 +3,7 @@
  * 注意：不删除 articles（agent 训练数据 + 叙事引用）
  * 只清理 signals（增长最快）和深度归档叙事
  */
-import type { Env } from '../helpers.js'
+import { decodeHtml, type Env } from '../helpers.js'
 import { cacheDelete } from '../cache.js'
 import { CONFIG } from './config.js'
 
@@ -33,9 +33,34 @@ export async function cleanup(env: Env): Promise<{ archivedNarratives: number; d
     ).run()
   } catch (e: any) { console.error('[cleanup] delete rate_limits:', e?.message) }
 
+  // 解码历史遗留的 HTML 实体（RSS 解码修复前存下的 &#8217; 等，分批处理）
+  try { await cleanupEntities(env) } catch (e: any) { console.error('[cleanup] entities:', e?.message) }
+
   cacheDelete('weekly').catch(() => {})
 
   return result
+}
+
+/** 分批解码 news / narratives 里的 HTML 实体，清理历史遗留数据 */
+export async function cleanupEntities(env: Env): Promise<number> {
+  let fixed = 0
+  const newsRows = await env.DB.prepare(
+    "SELECT id, title, description, summary FROM news WHERE title LIKE '%&#%' OR description LIKE '%&#%' OR summary LIKE '%&#%' LIMIT 200",
+  ).all<any>()
+  for (const r of (newsRows.results || [])) {
+    await env.DB.prepare('UPDATE news SET title=?, description=?, summary=? WHERE id=?')
+      .bind(r.title ? decodeHtml(r.title) : null, r.description ? decodeHtml(r.description) : null, r.summary ? decodeHtml(r.summary) : null, r.id).run()
+    fixed++
+  }
+  const narrRows = await env.DB.prepare(
+    "SELECT id, label, keyword, summary, developments FROM narratives WHERE label LIKE '%&#%' OR keyword LIKE '%&#%' OR summary LIKE '%&#%' OR developments LIKE '%&#%' LIMIT 100",
+  ).all<any>()
+  for (const r of (narrRows.results || [])) {
+    await env.DB.prepare('UPDATE narratives SET label=?, summary=?, developments=? WHERE id=?')
+      .bind(r.label ? decodeHtml(r.label) : null, r.summary ? decodeHtml(r.summary) : null, r.developments ? decodeHtml(r.developments) : r.developments, r.id).run()
+    fixed++
+  }
+  return fixed
 }
 
 export async function systemHealth(env: Env): Promise<any> {
