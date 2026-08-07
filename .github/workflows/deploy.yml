@@ -43,11 +43,12 @@ jobs:
         run: cd apps/api && npx wrangler pages deploy --project-name jianxun --branch main
 
       # printf（而非 echo）避免把末尾换行符写进 secret
+      # wrangler.toml 在 apps/api（不在 cwd），secret 命令需显式 --project-name
       - name: Set DeepSeek API Key
-        run: printf '%s' "${{ secrets.DEEPSEEK_API_KEY }}" | npx wrangler pages secret put DEEPSEEK_API_KEY
+        run: printf '%s' "${{ secrets.DEEPSEEK_API_KEY }}" | npx wrangler pages secret put DEEPSEEK_API_KEY --project-name jianxun
 
       - name: Set Admin Token
-        run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN
+        run: printf '%s' "${{ secrets.ADMIN_TOKEN }}" | npx wrangler pages secret put ADMIN_TOKEN --project-name jianxun
 
       - name: Deploy cron-analyze Worker
         run: npx wrangler deploy -c workers/cron-analyze/wrangler.toml

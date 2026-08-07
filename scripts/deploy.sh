@@ -90,7 +90,7 @@ pnpm build
 # ─── Deploy ───
 echo ""
 echo "🚀 部署到 Cloudflare Pages（config 式部署，确保 functions/ 一起发布）..."
-cd apps/api && npx wrangler pages deploy --branch main
+cd apps/api && npx wrangler pages deploy --branch main --project-name jianxun
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
