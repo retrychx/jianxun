@@ -1,6 +1,14 @@
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types'
+import { META, metaGet, metaGetJSON } from './db.js'
 
 export type Env = { DB: D1Database; KV?: KVNamespace; DEEPSEEK_API_KEY?: string; ADMIN_TOKEN?: string }
+
+/**
+ * 最小执行上下文：能被 Pages EventContext 满足（waitUntil 延长后台任务）。
+ * 不要用 @cloudflare/workers-types 的 ExecutionContext——v5 要求 exports/props/tracing，
+ * Pages 路由的 context 结构上不满足，反而会把 HandlerContext 挡在门外。
+ */
+export type CtxLike = { waitUntil?: (p: Promise<any>) => void; passThroughOnException?: () => void }
 
 /** Escape % and _ in user input for SQL LIKE queries (ESCAPE '\' required in the query). */
 export function likeEscape(s: string): string {
@@ -135,10 +143,8 @@ export async function statusCheck(env: Env) {
   let lastFetch: any = null
   let lastRun: string | null = null
   try {
-    const f = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_fetch'").first<any>()
-    if (f?.value) { try { lastFetch = JSON.parse(f.value) } catch {} }
-    const r = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'last_run'").first<any>()
-    lastRun = r?.value || null
+    lastFetch = await metaGetJSON(env, META.lastFetch)
+    lastRun = await metaGet(env, META.lastRun)
   } catch {}
   return {
     hasDeepSeek: !!env.DEEPSEEK_API_KEY,

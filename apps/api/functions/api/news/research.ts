@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../../src/pages.js'
 import { json, rateLimit, clientIp } from '../../../src/handler'
 import { generateResearchReport } from '../../../src/analysis/deepseek.js'
 import { tokenize } from '../../../src/tokenize.js'
@@ -9,7 +10,7 @@ import { likeEscape } from '../../../src/helpers.js'
 //   2. Entity/narrative expansion → more context
 //   3. DeepSeek multi-chapter report generation
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { request, env } = context
   const url = new URL(request.url)
   const query = (url.searchParams.get('q') || '').trim()
@@ -26,7 +27,7 @@ export async function onRequestGet(context: any) {
   // Check if agent pre-computed research for a matching topic
   const matchedNarr = await env.DB.prepare(
     "SELECT keyword, summary, developments FROM narratives WHERE keyword LIKE ? AND status = 'active' ORDER BY last_updated DESC LIMIT 1"
-  ).bind(`__research__%${likeEscape(query.slice(0, 20))}%`).first()
+  ).bind(`__research__%${likeEscape(query.slice(0, 20))}%`).first<any>()
   if (matchedNarr?.summary) {
     try {
       const report = JSON.parse(matchedNarr.summary)
@@ -75,7 +76,7 @@ export async function onRequestGet(context: any) {
   // Find narratives matching the query
   const narratives = await env.DB.prepare(
     `SELECT keyword, article_ids FROM narratives WHERE status = 'active' AND (keyword LIKE ? OR label LIKE ?) LIMIT 5`
-  ).bind(`%${likeEscape(query)}%`, `%${likeEscape(query)}%`).all()
+  ).bind(`%${likeEscape(query)}%`, `%${likeEscape(query)}%`).all<any>()
   const seenIds = new Set(candidates.map(c => c.id))
 
   for (const n of (narratives.results || [])) {

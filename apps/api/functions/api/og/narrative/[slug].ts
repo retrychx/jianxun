@@ -1,6 +1,7 @@
+import type { HandlerContext } from '../../../../src/pages.js'
 import { ogPage } from '../_helpers'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { env, params, request } = context
   // 优先使用 ?kw= 参数查找；没有则尝试用 slug 直接匹配
   const url = new URL(request.url)

@@ -203,7 +203,7 @@ export async function generateStoryline(articles: { title: string; summary: stri
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content?.trim(); if (!raw) return null
-    return raw.replace(/```[a-z]*\n?/g,'').replace(/^["「]|["」]$/g,'').trim().slice(0,300) || null
+    return raw.replace(/```[a-z]*\n?/g,'').replace(/^["“「]|["”」]$/g,'').trim().slice(0,300) || null
   } catch { return null }
 }
 

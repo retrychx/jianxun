@@ -6,9 +6,7 @@
 
 import { fetchWithRetry, DEEPSEEK_MODEL } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
-
-const IDEAS_KEY = 'product_ideas'
-const DATE_KEY = 'product_ideas_date'
+import { META, metaGet, metaSet, metaSetJSON } from '../db.js'
 
 export async function generateProductIdeas(env: Env): Promise<number> {
   const apiKey = env.DEEPSEEK_API_KEY
@@ -18,8 +16,8 @@ export async function generateProductIdeas(env: Env): Promise<number> {
   const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<any>()
   const today = dateRow?.d
   if (!today) return 0
-  const doneRow = await env.DB.prepare('SELECT value FROM agent_meta WHERE key = ?').bind(DATE_KEY).first<any>()
-  if (doneRow?.value === today) return 0
+  const doneDate = await metaGet(env, META.productIdeasDate)
+  if (doneDate === today) return 0
 
   // 收集今日热门信号：高分文章 + 升温叙事
   const [articles, narrs] = await Promise.all([
@@ -77,10 +75,8 @@ ${hotList.join('\n')}`
     const ideas = Array.isArray(parsed.ideas) ? parsed.ideas.slice(0, 3).filter((i: any) => i?.title && i?.concept) : []
     if (!ideas.length) return 0
 
-    await env.DB.prepare('INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)')
-      .bind(IDEAS_KEY, JSON.stringify({ date: today, ideas })).run()
-    await env.DB.prepare('INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)')
-      .bind(DATE_KEY, today).run()
+    await metaSetJSON(env, META.productIdeas, { date: today, ideas })
+    await metaSet(env, META.productIdeasDate, today)
     return ideas.length
   } catch (e: any) {
     console.error('[ideas] generate failed:', e?.message)

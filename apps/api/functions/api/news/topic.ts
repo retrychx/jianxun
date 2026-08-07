@@ -1,6 +1,7 @@
+import type { HandlerContext } from '../../../src/pages.js'
 import { topic, json, tryCatch, rateLimit, clientIp } from '../../../src/handler'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { request, env } = context
   const name = new URL(request.url).searchParams.get('name') || ''
   if (!name) return json({ error: 'missing name' }, 400)

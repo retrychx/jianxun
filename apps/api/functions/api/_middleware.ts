@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../src/pages.js'
 import { requireAdmin } from '../../src/handler'
 
 /**
@@ -5,7 +6,7 @@ import { requireAdmin } from '../../src/handler'
  * 此前 narrative/refresh 是唯一漏掉鉴权的写端点——统一在中间件兜底，
  * 未来新增写端点不再依赖各路由手动调用 requireAdmin。
  */
-export async function onRequest(context: any) {
+export async function onRequest(context: HandlerContext) {
   const { request, env } = context
   const url = new URL(request.url)
   const path = url.pathname

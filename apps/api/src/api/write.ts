@@ -1,12 +1,12 @@
-import type { ExecutionContext } from '@cloudflare/workers-types'
 import { cacheDelete, CACHE_TTL, cacheSet, cacheGet, signalEvent } from '../cache.js'
 import { fetchAllRSS, saveArticles } from '../rss.js'
 import { generateAnswer } from '../analysis.js'
-import { json, likeEscape, type Env } from '../helpers.js'
+import { json, likeEscape, type CtxLike, type Env } from '../helpers.js'
 import { tokenize } from '../tokenize.js'
+import { META, metaSetJSON } from '../db.js'
 
 /** Fetch latest RSS articles, save new ones, then launch the full AI agent pipeline. */
-export async function fetchNews(env: Env, ctx: ExecutionContext) {
+export async function fetchNews(env: Env, ctx: CtxLike) {
   const articles = await fetchAllRSS(env.DB)
   const saved = await saveArticles(env.DB, articles)
   if (saved > 0) {
@@ -15,12 +15,10 @@ export async function fetchNews(env: Env, ctx: ExecutionContext) {
   }
 
   // 记录抓取结果供 /api/news/status 观测（cron 抓取健康度）
-  await env.DB.prepare(
-    "INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('last_fetch', ?)"
-  ).bind(JSON.stringify({ ts: new Date().toISOString(), fetched: saved })).run().catch(() => {})
+  await metaSetJSON(env, META.lastFetch, { ts: new Date().toISOString(), fetched: saved }).catch(() => {})
 
   // Launch the unified intelligence agent as a background task
-  ctx.waitUntil((async () => {
+  ctx.waitUntil?.((async () => {
     const { runAgent } = await import('../agent/index.js')
     await runAgent(env).catch((e: any) => console.error('[fetchNews] agent crashed:', e?.message))
   })())

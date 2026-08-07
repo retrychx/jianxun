@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../../src/pages.js'
 // GET /api/news/sectors — 行业雷达：赛道 + 公司竞争格局 + 热度走势
 import { json, tryCatch } from '../../../src/handler'
 import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
@@ -14,7 +15,7 @@ const SECTORS: Record<string, { label: string; keywords: string[] }> = {
   '生物科技': { label: '生物科技', keywords: ['AI制药', '创新药', '基因', 'mRNA', '生物科技'] },
 }
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
   const { env } = context
 

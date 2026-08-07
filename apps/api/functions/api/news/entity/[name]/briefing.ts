@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../../../src/pages.js'
 // GET /api/news/entity/:name/briefing — Entity Story Board
 import { json, mapNews, likeEscape } from '../../../../../src/handler'
 import { getEntityEvents } from '../../../../../src/agent/intel'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { env, params } = context
   // Pages Functions 已对路径参数做 URL 解码——不要再 decodeURIComponent
   // （二次解码会把含 %/+ 的实体名变形；单个 % 还会抛 URIError 直接 500）

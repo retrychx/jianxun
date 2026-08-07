@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../src/pages.js'
 import { json } from '../../../src/handler'
 import { loadActiveNarratives } from '../../../src/agent'
 import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   try {
     const { env } = context
 

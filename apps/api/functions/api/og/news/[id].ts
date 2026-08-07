@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../../src/pages.js'
 import { ogPage } from '../_helpers'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { env, params } = context
-  const id = parseInt(params.id)
+  const id = parseInt(String(params.id))
   if (!Number.isInteger(id) || id <= 0) return new Response('Not Found', { status: 404 })
 
   try {

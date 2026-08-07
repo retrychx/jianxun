@@ -2,6 +2,7 @@ import { cacheGet, cacheSet, CACHE_TTL } from '../cache.js'
 import { tokenize } from '../tokenize.js'
 import { mapNews, likeEscape, isoZ, type Env } from '../helpers.js'
 import { RSS_SOURCES } from '../sources.js'
+import { META, metaGetJSON } from '../db.js'
 
 export async function listNews(env: Env, url: URL) {
   const category = url.searchParams.get('category')
@@ -226,26 +227,23 @@ export async function detail(env: Env, id: number) {
 export async function briefing(env: Env) {
   // Prefer agent-curated briefing if available
   try {
-    const curated = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = 'briefing_curated'").first<any>()
-    if (curated?.value) {
-      const data = JSON.parse(curated.value)
-      if (data?.items?.length) {
-        const ids = data.items.map((i: any) => i.id)
-        const rows = await env.DB.prepare(
-          `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
-           FROM news n WHERE n.id IN (${ids.map(() => '?').join(',')})`
-        ).bind(...ids).all<any>()
-        const byId = new Map((rows.results || []).map(r => [r.id, r]))
-        const result = data.items.flatMap((cur: any) => {
-          const row = byId.get(cur.id)
-          if (!row) return []
-          return [{ ...mapNews(row), heat: row.heat || 1, reason: cur.reason || '' }]
-        })
-        if (result.length >= 3) {
-          const payload = { items: result }
-          await cacheSet('briefing', payload, CACHE_TTL.briefing)
-          return payload
-        }
+    const curated = await metaGetJSON<{ items: { id: number; reason?: string }[] }>(env, META.briefingCurated)
+    if (curated?.items?.length) {
+      const ids = curated.items.map((i: any) => i.id)
+      const rows = await env.DB.prepare(
+        `SELECT n.*, (SELECT COUNT(*) FROM news n2 WHERE n2.title_norm = n.title_norm) AS heat
+         FROM news n WHERE n.id IN (${ids.map(() => '?').join(',')})`
+      ).bind(...ids).all<any>()
+      const byId = new Map((rows.results || []).map(r => [r.id, r]))
+      const result = curated.items.flatMap((cur: any) => {
+        const row = byId.get(cur.id)
+        if (!row) return []
+        return [{ ...mapNews(row), heat: row.heat || 1, reason: cur.reason || '' }]
+      })
+      if (result.length >= 3) {
+        const payload = { items: result }
+        await cacheSet('briefing', payload, CACHE_TTL.briefing)
+        return payload
       }
     }
   } catch (e: any) { console.warn("[briefing] agent_meta error:", e?.message) }

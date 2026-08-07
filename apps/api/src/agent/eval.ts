@@ -2,6 +2,7 @@
  * Agent Self-Evaluation — KPI tracking, exploration, cost awareness, reporting.
  */
 import type { Env } from '../helpers.js'
+import { META, metaGetJSON, metaSetJSON } from '../db.js'
 
 // ═══ 1. 自我评估：KPI 追踪 ═══
 
@@ -64,16 +65,13 @@ export async function evaluateQuality(env: Env): Promise<Partial<AgentKPI>> {
 }
 
 /** 持久化 KPI 历史 */
-const KPI_KEY = 'agent_kpis'
-
 export async function saveKPI(env: Env, kpi: Partial<AgentKPI>): Promise<void> {
   try {
-    const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(KPI_KEY).first<any>()
-    const history: Partial<AgentKPI>[] = row?.value ? JSON.parse(row.value) : []
+    const history: Partial<AgentKPI>[] = (await metaGetJSON(env, META.agentKpis)) ?? []
     history.push({ ...kpi, totalMs: kpi.totalMs })
     // 只保留最近 30 条
     if (history.length > 30) history.splice(0, history.length - 30)
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)").bind(KPI_KEY, JSON.stringify(history)).run()
+    await metaSetJSON(env, META.agentKpis, history)
   } catch {}
 }
 
@@ -147,6 +145,6 @@ export function generateReport(kpi: Partial<AgentKPI>, phaseResults: Record<stri
 /** 保存报告到 agent_meta */
 export async function saveReport(env: Env, report: AgentReport): Promise<void> {
   try {
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('agent_last_report', ?)").bind(JSON.stringify(report)).run()
+    await metaSetJSON(env, META.agentReport, report)
   } catch {}
 }

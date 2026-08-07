@@ -11,8 +11,7 @@
  *  - Merges duplicate narratives
  */
 
-import type { ExecutionContext } from '@cloudflare/workers-types'
-import type { Env } from '../helpers.js'
+import type { CtxLike, Env } from '../helpers.js'
 import type { PhaseDef } from './types.js'
 import { runPhases } from './scheduler.js'
 import { shouldSkipDueToConcurrency, markAgentRun, saveAgentLog, pingDeepSeek, initBudget, acquireAgentLock, releaseAgentLock } from './state.js'
@@ -39,28 +38,33 @@ import { generateProductIdeas } from './ideas.js'
 import { cacheDelete } from '../cache.js'
 
 // 所有阶段的定义（作为模板供决策引擎选择）
+// schedule 是调度元数据（单一事实源）——planPhases 据此决定是否纳入本轮，
+// 不再手写名字列表，杜绝"加了阶段但忘了调度"的漏注册 bug。
 const ALL_PHASES: PhaseDef[] = [
-  { name: 'flagLowQualityAnalyses', run: (e: Env) => flagLowQualityAnalyses(e), priority: 'critical' },
-  { name: 'mergeOverlappingNarratives', run: (e: Env) => mergeOverlappingNarratives(e), priority: 'critical' },
-  { name: 'fixMissingImages', run: (e: Env) => fixMissingImages(e), priority: 'critical' },
-  { name: 'analyzeNewArticles', run: (e: Env) => analyzeNewArticles(e, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, priority: 'critical' },
-  { name: 'updateNarratives', run: (e: Env) => updateNarratives(e), timeout: CONFIG.narrative.phaseTimeoutMs, priority: 'critical' },
-  { name: 'generateDailyDigest', run: (e: Env) => generateTodayDigest(e), timeout: CONFIG.digest.phaseTimeoutMs, priority: 'critical' },
-  { name: 'refineCategories', run: (e: Env) => refineCategories(e), timeout: CONFIG.refine.phaseTimeoutMs },
-  { name: 'translateMissing', run: (e: Env) => translateMissing(e), timeout: CONFIG.translate.phaseTimeoutMs },
-  { name: 'crossRefAnalysis', run: (e: Env) => runCrossRefAnalysis(e), timeout: CONFIG.crossRef.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
-  { name: 'detectBreakingNews', run: (e: Env) => detectBreakingNews(e), timeout: CONFIG.breaking.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'] },
-  { name: 'tuneSourceWeights', run: (e: Env) => tuneSourceWeights(e), timeout: CONFIG.health.phaseTimeoutMs },
-  { name: 'linkEntities', run: (e: Env) => linkEntities(e), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low' },
-  { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), timeout: CONFIG.briefing.phaseTimeoutMs, dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low' },
-  { name: 'detectControversy', run: (e: Env) => detectControversy(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
-  { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low' },
-  { name: 'generateNarrativeOutlooks', run: (e: Env) => generateNarrativeOutlooks(e), dependsOn: ['updateNarratives'], priority: 'low' },
-  { name: 'extractTopEntityEvents', run: (e: Env) => extractTopEntityEvents(e), dependsOn: ['analyzeNewArticles'], priority: 'low' },
-  { name: 'generateProductIdeas', run: (e: Env) => generateProductIdeas(e), priority: 'low' },
+  { name: 'flagLowQualityAnalyses', run: (e: Env) => flagLowQualityAnalyses(e), priority: 'critical', schedule: 'always' },
+  { name: 'mergeOverlappingNarratives', run: (e: Env) => mergeOverlappingNarratives(e), priority: 'critical', schedule: 'always' },
+  { name: 'fixMissingImages', run: (e: Env) => fixMissingImages(e), priority: 'critical', schedule: 'always' },
+  { name: 'analyzeNewArticles', run: (e: Env) => analyzeNewArticles(e, CONFIG.analyze.limitPerRun), timeout: CONFIG.analyze.phaseTimeoutMs, priority: 'critical', schedule: 'analysis' },
+  { name: 'updateNarratives', run: (e: Env) => updateNarratives(e), timeout: CONFIG.narrative.phaseTimeoutMs, priority: 'critical', schedule: 'narrative' },
+  { name: 'generateDailyDigest', run: (e: Env) => generateTodayDigest(e), timeout: CONFIG.digest.phaseTimeoutMs, priority: 'critical', schedule: 'always' },
+  { name: 'refineCategories', run: (e: Env) => refineCategories(e), timeout: CONFIG.refine.phaseTimeoutMs, schedule: 'onSignals' },
+  { name: 'translateMissing', run: (e: Env) => translateMissing(e), timeout: CONFIG.translate.phaseTimeoutMs, schedule: 'onSignals' },
+  { name: 'crossRefAnalysis', run: (e: Env) => runCrossRefAnalysis(e), timeout: CONFIG.crossRef.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], schedule: 'postAnalysis' },
+  { name: 'detectBreakingNews', run: (e: Env) => detectBreakingNews(e), timeout: CONFIG.breaking.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], schedule: 'postAnalysis' },
+  { name: 'tuneSourceWeights', run: (e: Env) => tuneSourceWeights(e), timeout: CONFIG.health.phaseTimeoutMs, schedule: 'onSignals' },
+  { name: 'linkEntities', run: (e: Env) => linkEntities(e), timeout: CONFIG.entity.phaseTimeoutMs, dependsOn: ['analyzeNewArticles'], priority: 'low', schedule: 'postAnalysis' },
+  { name: 'curateBriefing', run: (e: Env) => curateBriefing(e), timeout: CONFIG.briefing.phaseTimeoutMs, dependsOn: ['detectBreakingNews', 'updateNarratives', 'crossRefAnalysis'], priority: 'low', schedule: 'always' },
+  { name: 'detectControversy', run: (e: Env) => detectControversy(e), dependsOn: ['analyzeNewArticles'], priority: 'low', schedule: 'postAnalysis' },
+  { name: 'generateResearchBriefs', run: (e: Env) => generateResearchBriefs(e), dependsOn: ['updateNarratives'], priority: 'low', schedule: 'budget' },
+  { name: 'generateNarrativeOutlooks', run: (e: Env) => generateNarrativeOutlooks(e), dependsOn: ['updateNarratives'], priority: 'low', schedule: 'narrative' },
+  { name: 'extractTopEntityEvents', run: (e: Env) => extractTopEntityEvents(e), dependsOn: ['analyzeNewArticles'], priority: 'low', schedule: 'postAnalysis' },
+  { name: 'generateProductIdeas', run: (e: Env) => generateProductIdeas(e), priority: 'low', schedule: 'always' },
 ]
 
-export async function runAgent(env: Env, ctx?: ExecutionContext) {
+/** 供 decider 与测试使用 */
+export { ALL_PHASES }
+
+export async function runAgent(env: Env, _ctx?: CtxLike) {
   const start = Date.now()
   if (!env.DEEPSEEK_API_KEY) return
   if (await shouldSkipDueToConcurrency(env)) return

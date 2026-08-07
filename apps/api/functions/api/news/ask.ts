@@ -1,6 +1,7 @@
+import type { HandlerContext } from '../../../src/pages.js'
 import { ask, tryCatch, rateLimit, clientIp } from '../../../src/handler'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { request, env } = context
   const q = new URL(request.url).searchParams.get('q') || ''
   if (!q) return new Response(JSON.stringify({ error: 'missing q' }), { status: 400, headers: { 'Content-Type': 'application/json' } })

@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../../src/pages.js'
 // GET /api/news/signals — 行业早期信号 + 公司监控 + 来源可信度
 import { json, tryCatch } from '../../../src/handler'
 import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
@@ -13,7 +14,7 @@ function sourceCredibility(source: string): { score: number; label: string } {
   return { score: 2, label: '一般' }
 }
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
   const { env } = context
 

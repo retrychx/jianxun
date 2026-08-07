@@ -6,6 +6,7 @@
 import { decodeHtml, type Env } from '../helpers.js'
 import { cacheDelete } from '../cache.js'
 import { CONFIG } from './config.js'
+import { META, metaGet, metaGetJSON, metaSetJSON } from '../db.js'
 
 export async function cleanup(env: Env): Promise<{ archivedNarratives: number; deletedSignals: number }> {
   const result = { archivedNarratives: 0, deletedSignals: 0 }
@@ -68,28 +69,27 @@ export async function systemHealth(env: Env): Promise<any> {
     env.DB.prepare("SELECT COUNT(*) as c FROM news").first<any>(),
     env.DB.prepare("SELECT COUNT(*) as c FROM narratives WHERE status='active'").first<any>(),
     env.DB.prepare("SELECT COUNT(*) as c FROM signals").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key='last_run'").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key='agent_errors'").first<any>(),
+    metaGet(env, META.lastRun),
+    metaGetJSON<any[]>(env, META.agentErrors),
   ])
 
-  const errors = errorCount?.value ? (() => { try { return JSON.parse(errorCount.value) } catch { return [] } })() : []
+  const errors = errorCount ?? []
 
   return {
     status: 'ok',
     articles: articleCount?.c || 0,
     activeNarratives: narrCount?.c || 0,
     totalSignals: signalCount?.c || 0,
-    lastRun: lastRun?.value || null,
+    lastRun,
     recentErrors: (Array.isArray(errors) ? errors.slice(-5) : []),
   }
 }
 
 export async function recordError(env: Env, source: string, message: string): Promise<void> {
   try {
-    const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key='agent_errors'").first<any>()
-    const errors: any[] = row?.value ? JSON.parse(row.value) : []
+    const errors: any[] = (await metaGetJSON(env, META.agentErrors)) ?? []
     errors.push({ ts: new Date().toISOString(), source, message: message.slice(0, 200) })
     if (errors.length > 50) errors.splice(0, errors.length - 50)
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('agent_errors', ?)").bind(JSON.stringify(errors)).run()
+    await metaSetJSON(env, META.agentErrors, errors)
   } catch {}
 }

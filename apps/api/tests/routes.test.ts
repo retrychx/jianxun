@@ -18,12 +18,17 @@ beforeEach(() => {
   env = makeEnv(d1)
 })
 
+// 构造完整 EventContext（handler 参数已类型化为 HandlerContext，需补齐全部字段）
 function ctx(overrides: any = {}) {
   return {
     env,
     request: overrides.request ?? new Request('https://x.test/api', { method: 'GET' }),
     params: overrides.params ?? {},
-    next: () => new Response('next'),
+    functionPath: '/api',
+    data: {},
+    waitUntil: () => {},
+    passThroughOnException: () => {},
+    next: async () => new Response('next'),
   }
 }
 

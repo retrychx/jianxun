@@ -11,8 +11,8 @@ export async function generateResearchBriefs(env: Env) {
   // Pick top narratives that aren't already researched
   const narratives = await env.DB.prepare(
     `SELECT keyword, label, summary, article_ids FROM narratives
-     WHERE status = 'active' AND keyword NOT LIKE '__%'
-     ORDER BY (SELECT COUNT(*) FROM json_each(article_ids)) DESC LIMIT 5`
+     WHERE status = 'active' AND keyword NOT GLOB '__*'
+     ORDER BY json_array_length(article_ids) DESC LIMIT 5`
   ).all<any>()
   if (!narratives.results?.length) return { briefs: 0 }
 

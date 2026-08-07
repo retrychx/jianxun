@@ -4,9 +4,7 @@
  */
 import type { Env } from '../helpers.js'
 import { generateNarrativeOutlook, extractEntityEvents } from './insights.js'
-
-const OUTLOOK_KEY = 'narrative_outlooks'
-const EVENTS_KEY = 'entity_events'
+import { META, metaGetJSON, metaSetJSON } from '../db.js'
 
 /** 为活跃叙事生成"下一步关注" */
 export async function generateNarrativeOutlooks(env: Env): Promise<number> {
@@ -14,8 +12,7 @@ export async function generateNarrativeOutlooks(env: Env): Promise<number> {
   if (!k) return 0
 
   // 读取已有 outlook 避免重复生成
-  const existingRow = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(OUTLOOK_KEY).first<any>()
-  const existing: Record<string, { outlook: string; ts: string }> = existingRow?.value ? JSON.parse(existingRow.value) : {}
+  const existing: Record<string, { outlook: string; ts: string }> = (await metaGetJSON(env, META.narrativeOutlooks)) ?? {}
 
   // 取最近更新的 5 个活跃叙事
   const narrRows = await env.DB.prepare(`
@@ -37,7 +34,7 @@ export async function generateNarrativeOutlooks(env: Env): Promise<number> {
   }
 
   if (generated > 0) {
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)").bind(OUTLOOK_KEY, JSON.stringify(existing)).run()
+    await metaSetJSON(env, META.narrativeOutlooks, existing)
   }
   return generated
 }
@@ -68,8 +65,7 @@ export async function extractTopEntityEvents(env: Env): Promise<number> {
   const topEntities = [...entityCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0])
 
   // 读取已有事件避免重复
-  const existingRow = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(EVENTS_KEY).first<any>()
-  const existing: Record<string, any> = existingRow?.value ? JSON.parse(existingRow.value) : {}
+  const existing: Record<string, any> = (await metaGetJSON(env, META.entityEvents)) ?? {}
 
   let extracted = 0
   for (const entity of topEntities) {
@@ -86,23 +82,19 @@ export async function extractTopEntityEvents(env: Env): Promise<number> {
   }
 
   if (extracted > 0) {
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)").bind(EVENTS_KEY, JSON.stringify(existing)).run()
+    await metaSetJSON(env, META.entityEvents, existing)
   }
   return extracted
 }
 
 /** 读取叙事前瞻 */
 export async function getNarrativeOutlook(env: Env, keyword: string): Promise<string | null> {
-  const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(OUTLOOK_KEY).first<any>()
-  if (!row?.value) return null
-  const outlooks = JSON.parse(row.value)
-  return outlooks[keyword]?.outlook || null
+  const outlooks = await metaGetJSON<Record<string, { outlook: string; ts: string }>>(env, META.narrativeOutlooks)
+  return outlooks?.[keyword]?.outlook || null
 }
 
 /** 读取实体事件 */
 export async function getEntityEvents(env: Env, entity: string): Promise<any[] | null> {
-  const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(EVENTS_KEY).first<any>()
-  if (!row?.value) return null
-  const events = JSON.parse(row.value)
-  return events[entity]?.events || null
+  const events = await metaGetJSON<Record<string, any>>(env, META.entityEvents)
+  return events?.[entity]?.events || null
 }

@@ -85,7 +85,7 @@ export async function refineCategories(env: Env) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { refined: 0 }
   const rows = await env.DB.prepare(
-    "SELECT id, title FROM news WHERE category = '科技' AND score = 50 AND analyze_attempts > 0 ORDER BY RANDOM() LIMIT 40"
+    "SELECT id, title, category FROM news WHERE category = '科技' AND score = 50 AND analyze_attempts > 0 ORDER BY RANDOM() LIMIT 40"
   ).all<any>()
   const batch = (rows.results || []); if (!batch.length) return { refined: 0 }
   let refined = 0

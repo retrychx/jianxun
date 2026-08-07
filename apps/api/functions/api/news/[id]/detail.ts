@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../../src/pages.js'
 import { detail, saveAnalysis, validateAnalysisBody, json, requireAdmin, tryCatch } from '../../../../src/handler'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
-    const id = parseInt(context.params.id)
+    const id = parseInt(String(context.params.id))
     if (!Number.isInteger(id) || id <= 0) return json({ error: 'invalid id' }, 400)
     const result = await detail(context.env, id)
     if (!result) return json({ message: 'Not Found' }, 404)
@@ -10,10 +11,10 @@ export async function onRequestGet(context: any) {
   })
 }
 
-export async function onRequestPost(context: any) {
+export async function onRequestPost(context: HandlerContext) {
   const denied = requireAdmin(context.request, context.env)
   if (denied) return denied
-  const id = parseInt(context.params.id)
+  const id = parseInt(String(context.params.id))
   let body: any
   try { body = await context.request.json() } catch { return json({ ok: false, error: 'Invalid JSON body' }, 400) }
   const invalid = validateAnalysisBody(body)

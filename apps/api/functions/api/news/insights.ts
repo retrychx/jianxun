@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../src/pages.js'
 // GET /api/news/insights — 读者统计：点击数据 → 可读洞察
 import { json, tryCatch } from '../../../src/handler'
 import { cacheGet, cacheSet, CACHE_TTL } from '../../../src/cache.js'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
     const { env } = context
     const cached = await cacheGet<any>('insights')

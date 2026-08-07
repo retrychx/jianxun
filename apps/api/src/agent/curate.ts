@@ -4,8 +4,7 @@ import { fetchWithRetry } from '../analysis/deepseek.js'
 import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 import { CONFIG } from './config.js'
-
-const BRIEFING_META_KEY = 'briefing_curated'
+import { META, metaSetJSON } from '../db.js'
 
 export async function curateBriefing(env: Env) {
   const apiKey = env.DEEPSEEK_API_KEY
@@ -39,7 +38,7 @@ export async function curateBriefing(env: Env) {
 
   // ── Narrative-tracked stories ──
   const narratives = await env.DB.prepare(
-    "SELECT keyword, article_ids FROM narratives WHERE status = 'active' AND keyword NOT LIKE '__%' ORDER BY last_updated DESC LIMIT 10"
+    "SELECT keyword, article_ids FROM narratives WHERE status = 'active' AND keyword NOT GLOB '__*' ORDER BY last_updated DESC LIMIT 10"
   ).all<any>()
   for (const n of (narratives.results || [])) {
     const ids = await env.DB.prepare("SELECT id, title, summary, source, score, published_at FROM news WHERE id IN (SELECT value FROM json_each((SELECT article_ids FROM narratives WHERE keyword = ?))) ORDER BY score DESC LIMIT 3").bind(n.keyword).all<any>()
@@ -118,9 +117,7 @@ export async function curateBriefing(env: Env) {
     if (!curated.length) return { briefing: 0 }
 
     // Store in cache-friendly format
-    await env.DB.prepare(
-      "INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)"
-    ).bind(BRIEFING_META_KEY, JSON.stringify({ items: curated, updatedAt: new Date().toISOString() })).run()
+    await metaSetJSON(env, META.briefingCurated, { items: curated, updatedAt: new Date().toISOString() })
 
     return { briefing: curated.length }
   } catch {

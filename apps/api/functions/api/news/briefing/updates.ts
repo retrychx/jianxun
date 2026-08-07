@@ -1,7 +1,8 @@
+import type { HandlerContext } from '../../../../src/pages.js'
 // GET /api/news/briefing/updates — 今日叙事动态 + 升温实体
 import { json, tryCatch } from '../../../../src/handler'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
   const { env } = context
 

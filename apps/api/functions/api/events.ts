@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../src/pages.js'
 import { pollEvent } from '../../src/cache'
 
 // SSE endpoint: pushes real-time events to the frontend.
@@ -5,7 +6,7 @@ import { pollEvent } from '../../src/cache'
 // After a fetch completes, the admin endpoint writes an event via signalEvent()
 // and connected SSE clients receive a `new-articles` event.
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { request } = context
 
   let lastEventTs = 0

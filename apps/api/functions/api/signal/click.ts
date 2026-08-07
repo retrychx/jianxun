@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../../src/pages.js'
 // POST /api/signal/click — record user click / hide signal (no auth needed)
 // target_type 保持纯类型名（'article'/'narrative'/'entity'），action='click'|'hide'，deviceId 为可选字段
 import { json, rateLimit, clientIp } from '../../../src/handler'
@@ -5,7 +6,7 @@ import { json, rateLimit, clientIp } from '../../../src/handler'
 const VALID_TYPES = new Set(['article', 'narrative', 'entity'])
 const VALID_ACTIONS = new Set(['click', 'hide'])
 
-export async function onRequestPost(context: any) {
+export async function onRequestPost(context: HandlerContext) {
   const { env, request } = context
 
   // 限流：防止脚本刷量（click_count 会流入来源权重，影响排序，可被用于操纵）

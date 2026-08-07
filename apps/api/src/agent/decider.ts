@@ -5,8 +5,8 @@
  */
 
 import type { Env } from '../helpers.js'
-import type { PhaseDef } from './types.js'
-import { CONFIG } from './config.js'
+import type { PhaseDef, PhaseSchedule } from './types.js'
+import { META, metaGet } from '../db.js'
 
 export interface SystemState {
   /** 是否有新文章待分析 */
@@ -29,13 +29,13 @@ export async function checkSystemState(env: Env): Promise<SystemState> {
     env.DB.prepare("SELECT COUNT(*) as c FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days')").first<any>(),
     env.DB.prepare("SELECT COUNT(*) as c FROM signals WHERE created_at >= datetime('now','-1 hour')").first<any>(),
     env.DB.prepare("SELECT COUNT(*) as c FROM narratives WHERE status='active'").first<any>(),
-    env.DB.prepare("SELECT value FROM agent_meta WHERE key='last_run'").first<any>(),
+    metaGet(env, META.lastRun),
   ])
 
   const now = Date.now()
   let secondsSinceLastRun = 99999
-  if (lastRun?.value) {
-    try { secondsSinceLastRun = Math.round((now - new Date(lastRun.value).getTime()) / 1000) } catch {}
+  if (lastRun) {
+    try { secondsSinceLastRun = Math.round((now - new Date(lastRun).getTime()) / 1000) } catch {}
   }
 
   return {
@@ -50,50 +50,38 @@ export async function checkSystemState(env: Env): Promise<SystemState> {
   }
 }
 
+/** 按调度元数据过滤阶段——单一事实源是 PhaseDef.schedule（见 types.ts），不再手写名字列表 */
+function bySchedule(basePhases: PhaseDef[], schedule: PhaseSchedule): PhaseDef[] {
+  return basePhases.filter(p => (p.schedule || 'always') === schedule)
+}
+
 /** 根据系统状态决定本周期跑哪些阶段 */
 export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef[] {
   if (state.secondsSinceLastRun < 120) {
-    // 2 分钟内刚跑过 → 只跑最关键的
-    return basePhases.filter(p => p.name === 'analyzeNewArticles' || p.name === 'flagLowQualityAnalyses')
+    // 2 分钟内刚跑过 → 只跑最关键：分析 + critical 级 always 阶段。
+    // generateDailyDigest 内部按北京日期去重，重复调用会短路返回 'exists'，不会重复烧钱。
+    return basePhases.filter(p => p.schedule === 'analysis' || (p.schedule === 'always' && p.priority === 'critical'))
   }
 
-  const planned: PhaseDef[] = []
+  // 完整周期：always → analysis → narrative → postAnalysis（依赖分析的阶段放最后）。
+  // 分析阶段无论有没有待分析文章都跑（内部自己查 DB）——之前 pendingArticles>0 的条件
+  // 曾导致新文章来了但 agent 不分析。
+  const planned: PhaseDef[] = [
+    ...bySchedule(basePhases, 'always'),
+    ...bySchedule(basePhases, 'analysis'),
+    ...bySchedule(basePhases, 'narrative'),
+    ...bySchedule(basePhases, 'postAnalysis'),
+  ]
 
-  // 总是跑的阶段（含简报和日报——最可见的输出，不应被预算跳过）
-  // generateProductIdeas 内部按北京日期去重，每天只真正生成一次
-  const always: string[] = ['flagLowQualityAnalyses', 'mergeOverlappingNarratives', 'fixMissingImages', 'curateBriefing', 'generateDailyDigest', 'generateProductIdeas']
-  for (const name of always) {
-    const p = basePhases.find(b => b.name === name)
-    if (p) planned.push(p)
-  }
-
-  // 分析阶段：无论有没有待分析文章都跑（内部自己查 DB）
-  // 之前 pendingArticles > 0 条件导致新文章来了但 agent 不分析
-  const analysis = basePhases.find(b => b.name === 'analyzeNewArticles')
-  if (analysis) planned.push(analysis)
-  const narrative = basePhases.find(b => b.name === 'updateNarratives')
-  if (narrative) planned.push(narrative)
-  for (const name of ['detectBreakingNews', 'crossRefAnalysis', 'linkEntities', 'detectControversy']) {
-    const p = basePhases.find(b => b.name === name)
-    if (p) planned.push(p)
-  }
-
-  // 有信号才跑学习阶段
+  // 有信号或间隔久 → 学习/补齐阶段（来源权重、分类、翻译）
   if (state.pendingSignals > 0 || state.secondsSinceLastRun > 3600) {
-    for (const name of ['tuneSourceWeights', 'refineCategories', 'translateMissing']) {
-      const p = basePhases.find(b => b.name === name)
-      if (p) planned.push(p)
-    }
+    planned.push(...bySchedule(basePhases, 'onSignals'))
   }
 
-  // 低优先级阶段：只在预算充足时跑
-  // 注意：curateBriefing / generateDailyDigest 已在 always 列表，绝不在此重复加入，
-  // 否则同一周期会并发执行两份同名阶段（scheduler 按 name 去重只对已完成生效）。
+  // 低优先级研究简报：仅预算充足时跑。
+  // 注意：always 组已含简报/日报，schedule 组互斥，绝不重复加入。
   if (state.remainingBudget > 30_000) {
-    for (const name of ['generateResearchBriefs']) {
-      const p = basePhases.find(b => b.name === name)
-      if (p) planned.push({ ...p, priority: 'low' })
-    }
+    planned.push(...bySchedule(basePhases, 'budget').map(p => ({ ...p, priority: 'low' as const })))
   }
 
   return planned

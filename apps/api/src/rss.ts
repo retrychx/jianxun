@@ -53,8 +53,9 @@ export async function fetchAllRSS(DB: D1Database) {
   })
   // Health stats must not break fetching
   await Promise.allSettled(statUpdates)
-  // Age out stale failures: reset fail_count for sources whose last error was >7 days ago
-  await DB.prepare("UPDATE source_stats SET fail_count = 0 WHERE last_error IS NOT NULL AND last_error < datetime('now', '-7 days')").run().catch(() => {})
+  // Age out stale failures: reset fail_count for sources whose last error was >7 days ago.
+  // try/catch 而非 .run().catch()——不依赖 run() 一定返回 Promise，健康统计绝不能阻断抓取。
+  try { await DB.prepare("UPDATE source_stats SET fail_count = 0 WHERE last_error IS NOT NULL AND last_error < datetime('now', '-7 days')").run() } catch {}
   return all
 }
 

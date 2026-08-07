@@ -13,6 +13,18 @@ export interface PhaseResult {
 
 export type PhasePriority = 'critical' | 'normal' | 'low'
 
+/**
+ * 调度元数据：决定 planPhases 是否把该阶段纳入本轮运行。
+ * 由阶段自身声明（单一事实源），避免手写名字列表导致漏注册（generateProductIdeas 曾因此永不运行）。
+ * - always    每轮完整运行都跑（日报/灵感内部按天去重）
+ * - analysis  总是跑的分析
+ * - narrative 叙事相关
+ * - postAnalysis 依赖分析结果（突发/多源对比/实体链接等）
+ * - onSignals 有信号或间隔久才跑（来源权重/翻译等）
+ * - budget    预算充足才跑（低优先级）
+ */
+export type PhaseSchedule = 'always' | 'analysis' | 'narrative' | 'postAnalysis' | 'onSignals' | 'budget'
+
 export interface PhaseDef {
   name: string
   run: (env: Env) => Promise<any>
@@ -20,6 +32,8 @@ export interface PhaseDef {
   dependsOn?: string[]
   shouldSkip?: boolean
   priority?: PhasePriority
+  /** 调度元数据：缺省时按 'always' 处理 */
+  schedule?: PhaseSchedule
 }
 
 export interface AgentRunLog {

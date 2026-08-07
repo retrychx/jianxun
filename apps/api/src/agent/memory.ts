@@ -4,14 +4,13 @@
  */
 import type { Env } from '../helpers.js'
 import type { AgentMemory, SignalSummary } from './types.js'
-
-const MEMORY_KEY = 'agent_memory'
+import { META, metaGetJSON, metaSetJSON } from '../db.js'
 
 /** 从 DB 加载上次记忆 */
 export async function loadMemory(env: Env): Promise<AgentMemory> {
   try {
-    const row = await env.DB.prepare("SELECT value FROM agent_meta WHERE key = ?").bind(MEMORY_KEY).first<any>()
-    if (row?.value) return JSON.parse(row.value)
+    const mem = await metaGetJSON<AgentMemory>(env, META.agentMemory)
+    if (mem) return mem
   } catch {}
   return { sourceMemory: {}, entityHeat: {}, categoryConfidence: {}, lastRunAt: '', totalAnalyses: 0 }
 }
@@ -21,7 +20,7 @@ export async function saveMemory(env: Env, mem: AgentMemory): Promise<void> {
   const now = new Date().toISOString()
   mem.lastRunAt = now
   try {
-    await env.DB.prepare("INSERT OR REPLACE INTO agent_meta (key, value) VALUES (?, ?)").bind(MEMORY_KEY, JSON.stringify(mem)).run()
+    await metaSetJSON(env, META.agentMemory, mem)
   } catch {}
 }
 

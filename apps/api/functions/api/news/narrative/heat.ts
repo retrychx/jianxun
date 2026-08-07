@@ -1,8 +1,9 @@
+import type { HandlerContext } from '../../../../src/pages.js'
 // GET /api/news/narrative/heat — 叙事热度 + 升温检测
 import { json, tryCatch } from '../../../../src/handler'
 import { cacheGet, cacheSet, CACHE_TTL } from '../../../../src/cache.js'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   return tryCatch(async () => {
     const { env } = context
 

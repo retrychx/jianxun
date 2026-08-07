@@ -1,3 +1,4 @@
+import type { HandlerContext } from '../../../src/pages.js'
 import { json, mapNews } from '../../../src/handler'
 import { loadActiveNarratives, loadSingleNarrative } from '../../../src/agent'
 import { getNarrativeOutlook } from '../../../src/agent/intel'
@@ -6,7 +7,7 @@ import { getNarrativeOutlook } from '../../../src/agent/intel'
 //   GET /api/news/narrative — list of all active/stale narratives
 //   GET /api/news/narrative?keyword=xxx — single narrative detail
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: HandlerContext) {
   const { request, env } = context
   const url = new URL(request.url)
   const keyword = url.searchParams.get('keyword')
