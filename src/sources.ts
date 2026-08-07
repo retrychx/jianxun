@@ -62,4 +62,8 @@ export const RSS_SOURCES: RssSource[] = [
   { name: 'ZDNet', weight: 0.9,           url: 'https://www.zdnet.com/news/rss.xml',           lang: 'en' },
   // --- 财经 ---
   { name: 'MarketWatch', url: 'https://feeds.marketwatch.com/marketwatch/topstories', lang: 'en', weight: 0.8 },
+  { name: 'Fortune', weight: 1.0,    url: 'https://fortune.com/feed/',                      lang: 'en' },
+  // --- 科学（平衡科技/AI 占比） ---
+  { name: 'Live Science', weight: 0.9, url: 'https://www.livescience.com/feeds/all',       lang: 'en' },
+  { name: 'phys.org', weight: 0.9,     url: 'https://phys.org/rss-feed/',                 lang: 'en' },
 ]

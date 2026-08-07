@@ -1,6 +1,6 @@
 # 简讯 · AI 智能新闻聚合
 
-每日自动抓取 45 个中英文科技/财经/科学资讯，AI 自动分类、摘要、实体识别、情感分析。
+每日自动抓取 48 个中英文科技/财经/科学资讯，AI 自动分类、摘要、实体识别、情感分析。
 
 ## 技术栈
 
@@ -9,12 +9,12 @@
 | **前端** | React 19 + Vite 8 + TypeScript 7 |
 | **后端** | Cloudflare Pages Functions + D1 + KV |
 | **AI** | DeepSeek API（分类/摘要/实体/情感） |
-| **RSS** | 45 个中英文源，自研轻量解析 |
+| **RSS** | 48 个中英文源，自研轻量解析 |
 | **DB** | Cloudflare D1（SQLite） |
 
 ## 功能
 
-- 45 个 RSS 源自动抓取（36氪、TechCrunch、Hacker News、GitHub Trending 等）
+- 48 个 RSS 源自动抓取（36氪、TechCrunch、Hacker News、GitHub Trending 等）
 - AI 自动分类（科技/AI/财经/国际/游戏等 12 类）
 - 话题聚类 — 同一话题的不同来源聚合
 - AI 摘要 + 关联实体 + 情感分析
@@ -34,7 +34,7 @@
 ### 数据流
 
 ```
-45 个 RSS 源
+48 个 RSS 源
   │ 定时抓取（cron-fetch Worker :23 或 GitHub Action 兜底 :47）
   ▼
 fetchAllRSS → parse-rss（解析 + HTML 实体解码）→ 去重 → news 表
@@ -187,7 +187,7 @@ curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
 
 ## RSS 源
 
-共 45 个源，覆盖中英文科技、财经、科学、开源、AI：
+共 48 个源，覆盖中英文科技、财经、科学、开源、AI：
 
 <details>
 <summary>中文源（16 个）</summary>
@@ -197,13 +197,13 @@ curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
 </details>
 
 <details>
-<summary>英文源（29 个）</summary>
+<summary>英文源（32 个）</summary>
 
 Hacker News、TechCrunch、The Verge、Ars Technica、Wired、Engadget、Dev.to、
 Android Central、New Scientist、ScienceDaily、Space.com、NPR、Nature、
 Quanta Magazine、IEEE Spectrum、Physics World、MIT News、GitHub Blog、
 Simon Willison、arXiv AI、arXiv Robot、OpenAI、MIT Tech Review、
-VentureBeat AI、Phoronix、LWN、动点科技、ZDNet、MarketWatch
+VentureBeat AI、Phoronix、LWN、动点科技、ZDNet、MarketWatch、Fortune、Live Science、phys.org
 </details>
 
 > 源列表在 `src/sources.ts`，可自由增删；`weight` 控制排序权重（UGC/SEO 重的源降低权重）。
