@@ -47,7 +47,7 @@ fi
 # ─── Migrate ───
 echo ""
 echo "🗄️  运行数据库迁移（--remote 迁移生产库，不加则只迁移本地）..."
-npx wrangler d1 migrations apply jianxun --remote -c apps/api/wrangler.toml
+cd apps/api && npx wrangler d1 migrations apply jianxun --remote
 
 # ─── DeepSeek API Key ───
 echo ""
@@ -90,7 +90,7 @@ pnpm build
 # ─── Deploy ───
 echo ""
 echo "🚀 部署到 Cloudflare Pages（config 式部署，确保 functions/ 一起发布）..."
-npx wrangler pages deploy --branch main -c apps/api/wrangler.toml
+cd apps/api && npx wrangler pages deploy --branch main
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
