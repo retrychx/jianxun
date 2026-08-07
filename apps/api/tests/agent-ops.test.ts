@@ -228,7 +228,9 @@ describe('cleanup', () => {
 
 describe('eval 纯函数', () => {
   it('estimateAPICost 按 token 与按调用数估算', () => {
-    expect(estimateAPICost(0, 1000)).toBe(0.5) // $0.5/M × 1000 token
+    // 修正后的成本估算：$0.5/M × 1000 token = $0.0005（此前误算成 $0.5，夸大 1000 倍）
+    expect(estimateAPICost(0, 1000)).toBeCloseTo(0.0005, 4)
+    expect(estimateAPICost(0, 1_000_000)).toBeCloseTo(0.5, 3)
     expect(estimateAPICost(5)).toBe(0.01) // 5 × $0.002
   })
 

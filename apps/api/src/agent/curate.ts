@@ -1,12 +1,11 @@
 /** Phase 11: AI-curated daily briefing — replaces the rule-based selection. */
 
-import { fetchWithRetry } from '../analysis/deepseek.js'
-import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { callDeepSeekJSON } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 import { CONFIG } from './config.js'
 import { META, metaSetJSON } from '../db.js'
 
-export async function curateBriefing(env: Env) {
+export async function curateBriefing(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { briefing: 0 }
 
@@ -14,8 +13,10 @@ export async function curateBriefing(env: Env) {
   const candidates: any[] = []
 
   // ── Breaking news (top priority) ──
+  // 转义 __breaking__ 里的下划线（LIKE 通配符）——不转义会匹配到 "xxbreakingxx..." 这类
+  // 误写关键字。GLOB 分支（line 41 的 keyword NOT GLOB '__*'）天然字面匹配 _ 和 %，无需处理。
   const breaking = await env.DB.prepare(
-    "SELECT keyword, label FROM narratives WHERE keyword LIKE '__breaking__%' AND status = 'active' ORDER BY last_updated DESC LIMIT 5"
+    "SELECT keyword, label FROM narratives WHERE keyword LIKE '\\_\\_breaking\\_\\_%' ESCAPE '\\' AND status = 'active' ORDER BY last_updated DESC LIMIT 5"
   ).all<any>()
   for (const n of (breaking.results || [])) {
     const ids = await env.DB.prepare("SELECT id, title, summary, source, score, published_at, analysis_detail FROM news WHERE id IN (SELECT value FROM json_each((SELECT article_ids FROM narratives WHERE keyword = ?)))").bind(n.keyword).all<any>()
@@ -87,15 +88,10 @@ export async function curateBriefing(env: Env) {
   }).join('\n\n')
 
   try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: articlesText }], temperature: 0.2, max_tokens: 2048 }),
-    })
-    if (!res?.ok) return { briefing: 0 }
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
-    if (!raw) return { briefing: 0 }
-    const items = JSON.parse(raw) as { id: number; why: string }[]
+    const items = await callDeepSeekJSON<{ id: number; why: string }[]>(
+      apiKey, prompt, articlesText,
+      { maxTokens: 2048, temperature: 0.2, timeoutMs: CONFIG.deepseek.timeouts.briefing, signal },
+    )
     if (!Array.isArray(items) || !items.length) return { briefing: 0 }
 
     // Validate IDs and build enriched response

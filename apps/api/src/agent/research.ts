@@ -1,10 +1,10 @@
 /** Phase: pre-generate research briefs for hot topics — agent-processed, user-instant. */
 
-import { fetchWithRetry, generateResearchReport, DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { generateResearchReport } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 
 /** Pre-compute research for top active narratives. Stores as __research__ in narratives. */
-export async function generateResearchBriefs(env: Env) {
+export async function generateResearchBriefs(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { briefs: 0 }
 
@@ -42,7 +42,7 @@ export async function generateResearchBriefs(env: Env) {
     }))
     if (articles.length < 3) continue
 
-    const report = await generateResearchReport(n.label || n.keyword, articles, apiKey)
+    const report = await generateResearchReport(n.label || n.keyword, articles, apiKey, signal)
     if (!report || !report.sections.length) continue
 
     const reportText = JSON.stringify(report)

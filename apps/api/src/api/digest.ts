@@ -5,7 +5,7 @@ import { type Env } from '../helpers.js'
 // Incremental daily digest: first generation creates a full digest from the
 // day's top candidates; subsequent calls only process articles not yet in it,
 // appending new picks.  This saves API cost and keeps selections stable.
-export async function generateTodayDigest(env: Env): Promise<'exists' | 'insufficient' | 'failed' | 'generated'> {
+export async function generateTodayDigest(env: Env, signal?: AbortSignal): Promise<'exists' | 'insufficient' | 'failed' | 'generated'> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 'failed'
   const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<{ d: string }>()
@@ -54,7 +54,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
 
   if (!existing) {
     if (totalCount < 5) return 'insufficient'
-    const digest = await generateDigest(all, apiKey)
+    const digest = await generateDigest(all, apiKey, signal)
     if (!digest) return 'failed'
     await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')
       .bind(date, digest.intro, JSON.stringify(digest.items), digest.extra ? JSON.stringify(digest.extra) : null).run()
@@ -66,7 +66,7 @@ export async function generateTodayDigest(env: Env): Promise<'exists' | 'insuffi
   const newArticles = all.filter(c => !existingIds.has(c.id))
   if (newArticles.length < 3) return 'exists'
 
-  const digest = await generateDigest(newArticles, apiKey)
+  const digest = await generateDigest(newArticles, apiKey, signal)
   if (!digest) return 'failed'
 
   // Merge: keep existing items, append new ones (dedup by news_id)

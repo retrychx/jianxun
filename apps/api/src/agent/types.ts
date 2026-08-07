@@ -27,7 +27,8 @@ export type PhaseSchedule = 'always' | 'analysis' | 'narrative' | 'postAnalysis'
 
 export interface PhaseDef {
   name: string
-  run: (env: Env) => Promise<any>
+  /** 第二个参数是阶段级 AbortSignal：阶段超时会被 abort，帮助中止 in-flight DeepSeek/fetch */
+  run: (env: Env, signal?: AbortSignal) => Promise<any>
   timeout?: number
   dependsOn?: string[]
   shouldSkip?: boolean

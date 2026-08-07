@@ -2,12 +2,12 @@
  * 智能洞察阶段 — 为活跃叙事生成前瞻、为热门实体抽取事件
  * 产出存 agent_meta，前端按需读取
  */
-import type { Env } from '../helpers.js'
+import { likeEscape, type Env } from '../helpers.js'
 import { generateNarrativeOutlook, extractEntityEvents } from './insights.js'
 import { META, metaGetJSON, metaSetJSON } from '../db.js'
 
 /** 为活跃叙事生成"下一步关注" */
-export async function generateNarrativeOutlooks(env: Env): Promise<number> {
+export async function generateNarrativeOutlooks(env: Env, signal?: AbortSignal): Promise<number> {
   const k = env.DEEPSEEK_API_KEY
   if (!k) return 0
 
@@ -26,7 +26,7 @@ export async function generateNarrativeOutlooks(env: Env): Promise<number> {
     // 24h 内已生成过就跳过
     if (existing[n.keyword] && Date.now() - new Date(existing[n.keyword].ts).getTime() < 86400000) continue
     const devs: any[] = (() => { try { return JSON.parse(n.developments || '[]') } catch { return [] } })()
-    const outlook = await generateNarrativeOutlook(env, n.keyword, n.label || n.keyword, n.summary || '', devs.map((d: any) => d.text || ''))
+    const outlook = await generateNarrativeOutlook(env, n.keyword, n.label || n.keyword, n.summary || '', devs.map((d: any) => d.text || ''), signal)
     if (outlook) {
       existing[n.keyword] = { outlook, ts: new Date().toISOString() }
       generated++
@@ -40,14 +40,15 @@ export async function generateNarrativeOutlooks(env: Env): Promise<number> {
 }
 
 /** 为热门实体抽取结构化事件 */
-export async function extractTopEntityEvents(env: Env): Promise<number> {
+export async function extractTopEntityEvents(env: Env, signal?: AbortSignal): Promise<number> {
   const k = env.DEEPSEEK_API_KEY
   if (!k) return 0
 
-  // 最近 7 天提及最多的 3 个实体
+  // 最近 7 天提及最多的 3 个实体（按时间排序，保证每次抽样到的是同一批 300 篇）
   const entityRows = await env.DB.prepare(`
     SELECT entities FROM news
     WHERE entities IS NOT NULL AND entities != '' AND created_at >= datetime('now', '-7 days')
+    ORDER BY created_at DESC
     LIMIT 300
   `).all<any>()
   const entityCount = new Map<string, number>()
@@ -70,11 +71,11 @@ export async function extractTopEntityEvents(env: Env): Promise<number> {
   let extracted = 0
   for (const entity of topEntities) {
     if (existing[entity] && Date.now() - new Date(existing[entity].ts).getTime() < 86400000) continue
-    // 取该实体的文章
+    // 取该实体的文章（likeEscape 转义实体名里的 %/_ 通配符，避免误匹配）
     const articleRows = await env.DB.prepare(`
-      SELECT title, summary FROM news WHERE entities LIKE ? ORDER BY published_at DESC LIMIT 10
-    `).bind(`%${entity}%`).all<any>()
-    const events = await extractEntityEvents(env, entity, (articleRows.results || []).map((a: any) => ({ title: a.title, summary: a.summary || '' })))
+      SELECT title, summary FROM news WHERE entities LIKE ? ESCAPE '\\' ORDER BY published_at DESC LIMIT 10
+    `).bind(`%${likeEscape(entity)}%`).all<any>()
+    const events = await extractEntityEvents(env, entity, (articleRows.results || []).map((a: any) => ({ title: a.title, summary: a.summary || '' })), signal)
     if (events.length > 0) {
       existing[entity] = { events, ts: new Date().toISOString() }
       extracted++

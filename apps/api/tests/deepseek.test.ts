@@ -11,6 +11,7 @@ import {
   fetchWithRetry, extractContent, analyzeWithDeepSeek, generateTopicLabels,
   generateDigest, translateBatch, generateAnswer, crossRefAnalysis,
   generateStoryline, batchClassify, resetTokenCount, getTokenCount, setAgentAbort,
+  callDeepSeekText, callDeepSeekJSON,
 } from '../src/analysis/deepseek.js'
 
 beforeEach(() => { resetTokenCount(); setAgentAbort(null) })
@@ -69,6 +70,67 @@ describe('fetchWithRetry', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(await p2).toBeNull()
     expect(fail).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('fetchWithRetry 中止短路', () => {
+  it('signal 已中止时立即返回 null，不做退避重试', async () => {
+    const mock = vi.fn().mockRejectedValue(new Error('aborted'))
+    vi.stubGlobal('fetch', mock)
+    const ac = new AbortController()
+    ac.abort()
+    expect(await fetchWithRetry('https://api.deepseek.com/x', { signal: ac.signal })).toBeNull()
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+
+  it('phaseSignal 中止也短路（阶段超时经组合信号传导）', async () => {
+    const mock = vi.fn().mockRejectedValue(new Error('aborted'))
+    vi.stubGlobal('fetch', mock)
+    const phase = new AbortController()
+    phase.abort()
+    expect(await fetchWithRetry('https://api.deepseek.com/x', { phaseSignal: phase.signal })).toBeNull()
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+
+  it('agent 级中止信号经 callDeepSeekText 短路（新 run 顶替旧 run）', async () => {
+    const mock = vi.fn().mockRejectedValue(new Error('aborted'))
+    vi.stubGlobal('fetch', mock)
+    const ac = new AbortController()
+    setAgentAbort(ac)
+    ac.abort()
+    expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('callDeepSeekText / callDeepSeekJSON（通用助手）', () => {
+  it('callDeepSeekText 剥代码围栏并 trim，累计 token 用量', async () => {
+    stubAI('```json\n{\n  "a": 1\n}\n```', 200, { total_tokens: 7 })
+    const text = await callDeepSeekText('key', 'sys', 'user')
+    expect(text).toBe('{\n  "a": 1\n}')
+    expect(getTokenCount()).toBe(7)
+  })
+
+  it('callDeepSeekText 非 2xx / 空内容返回 null', async () => {
+    stubAI('', 400) // 非重试 4xx → 立即失败
+    expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
+    stubAI('')
+    expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
+  })
+
+  it('callDeepSeekJSON 解析合法 JSON；坏 JSON 返回 null', async () => {
+    stubAI(JSON.stringify({ ideas: [1, 2] }))
+    expect(await callDeepSeekJSON<{ ideas: number[] }>('key', 'sys', 'user')).toEqual({ ideas: [1, 2] })
+    stubAI('not json')
+    expect(await callDeepSeekJSON('key', 'sys', 'user')).toBeNull()
+  })
+
+  it('无 apiKey 时返回 null 且不调 fetch', async () => {
+    const spy = vi.fn()
+    vi.stubGlobal('fetch', spy)
+    expect(await callDeepSeekText('', 'sys', 'user')).toBeNull()
+    expect(await callDeepSeekJSON('', 'sys', 'user')).toBeNull()
+    expect(spy).not.toHaveBeenCalled()
   })
 })
 

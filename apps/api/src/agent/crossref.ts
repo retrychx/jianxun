@@ -3,7 +3,7 @@
 import { crossRefAnalysis as deepseekCrossRef } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 
-export async function runCrossRefAnalysis(env: Env) {
+export async function runCrossRefAnalysis(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { crossRefs: 0 }
   const rows = await env.DB.prepare(
@@ -23,7 +23,7 @@ export async function runCrossRefAnalysis(env: Env) {
   }
   if (!multi.length) return { crossRefs: 0 }
 
-  const results = await deepseekCrossRef(multi.slice(0,5), apiKey)
+  const results = await deepseekCrossRef(multi.slice(0,5), apiKey, signal)
   if (!results) return { crossRefs: 0 }
 
   let stored = 0

@@ -4,12 +4,11 @@
  */
 
 import { cacheDelete, signalEvent } from '../cache.js'
-import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary, fetchWithRetry } from '../analysis/deepseek.js'
+import { generateTopicLabels, generateNarrativeDevelopment, generateNarrativeSummary, callDeepSeekText } from '../analysis/deepseek.js'
 import { tokenize } from '../tokenize.js'
 import { clusterNews } from '../topics.js'
 import { STOPWORDS } from '../stopwords.js'
 import { fallbackLabel, parseDBTime, toDBTime, decodeHtml, type Env } from '../helpers.js'
-import { markAgentRun as setLastAgentRun } from './state.js'
 import { CONFIG } from './config.js'
 
 const MATCH_THRESHOLD = CONFIG.narrative.matchThreshold
@@ -42,7 +41,7 @@ export async function loadSingleNarrative(env: Env, keyword: string): Promise<Na
   return (row as Narrative) || null
 }
 
-export async function updateNarratives(env: Env): Promise<{ matched: number; created: number }> {
+export async function updateNarratives(env: Env, signal?: AbortSignal): Promise<{ matched: number; created: number }> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { matched: 0, created: 0 }
 
@@ -56,26 +55,25 @@ export async function updateNarratives(env: Env): Promise<{ matched: number; cre
      FROM news WHERE created_at > ? ORDER BY score DESC LIMIT 100`
   ).bind(lastRun).all<any>()
   const newArticles = rows.results || []
-  if (!newArticles.length && !narratives.length) { await setLastAgentRun(env); return { matched: 0, created: 0 } }
+  if (!newArticles.length && !narratives.length) return { matched: 0, created: 0 }
 
-  const { matched, unmatched } = await matchArticles(newArticles, narratives, apiKey)
+  const { matched, unmatched } = await matchArticles(newArticles, narratives, apiKey, signal)
 
   for (const narrativeId of Object.keys(matched)) {
     const id = Number(narrativeId)
     const narrative = narratives.find(n => n.id === id)
     if (!narrative) continue
     const articles = matched[id]
-    const dev = await generateDevelopment(narrative, articles, apiKey)
-    if (dev) await appendDevelopment(env, narrative, dev, articles)
+    const dev = await generateDevelopment(narrative, articles, apiKey, signal)
+    if (dev) await appendDevelopment(env, narrative, dev, articles, signal)
   }
 
   let created = 0
   if (unmatched.length >= MIN_CLUSTER_SIZE) {
-    created = await seedNarratives(env, unmatched, narratives, apiKey)
+    created = await seedNarratives(env, unmatched, narratives, apiKey, signal)
   }
 
   await archiveStale(env, narratives)
-  await setLastAgentRun(env)
   // 返回 KPI 供报告展示（此前返回 undefined，narrativesMatched/created 永不显示）
   return { matched: Object.keys(matched).length, created }
 }
@@ -110,29 +108,18 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 }
 
 /** AI 语义匹配：用 DeepSeek 判断未匹配文章是否属于某个叙事 */
-async function semanticMatch(article: any, narrative: Narrative, apiKey: string): Promise<boolean> {
+async function semanticMatch(article: any, narrative: Narrative, apiKey: string, signal?: AbortSignal): Promise<boolean> {
   const label = narrative.label || narrative.keyword || ''
   const summary = narrative.summary || ''
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(8000),
-      body: JSON.stringify({
-        model: CONFIG.deepseek.model,
-        messages: [
-          { role: 'system', content: '你是新闻分类助手。判断以下文章标题是否属于该叙事。只返回 true 或 false。' },
-          { role: 'user', content: `叙事：${label}\n叙事摘要：${summary.slice(0,200)}\n\n文章标题：${article.title || ''}\n\n属于这个叙事吗？` },
-        ],
-        temperature: 0.01, max_tokens: 10,
-      }),
-    })
-    if (!res?.ok) return false
-    const raw = (await res.json() as any).choices?.[0]?.message?.content?.trim().toLowerCase() || ''
-    return raw === 'true'
-  } catch { return false }
+  const text = await callDeepSeekText(apiKey,
+    '你是新闻分类助手。判断以下文章标题是否属于该叙事。只返回 true 或 false。',
+    `叙事：${label}\n叙事摘要：${summary.slice(0,200)}\n\n文章标题：${article.title || ''}\n\n属于这个叙事吗？`,
+    { maxTokens: 10, temperature: 0.01, timeoutMs: CONFIG.narrative.semanticMatchTimeoutMs, signal },
+  )
+  return (text || '').trim().toLowerCase() === 'true'
 }
 
-async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string): Promise<{ matched: Record<number, any[]>; unmatched: any[] }> {
+async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: string, signal?: AbortSignal): Promise<{ matched: Record<number, any[]>; unmatched: any[] }> {
   const matched: Record<number, any[]> = {}; const unmatched: any[] = []
   const narrTokenCache = new Map<number, Set<string>>()
   for (const n of narratives) narrTokenCache.set(n.id, narrTokens(n))
@@ -154,7 +141,7 @@ async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: 
     if (!found && apiKey && Math.random() < 0.05) {
       const candidates = narratives.filter(n => jaccard(artTokens, narrTokenCache.get(n.id) || new Set()) >= MATCH_THRESHOLD * 0.5).slice(0, 2)
       for (const narrative of candidates) {
-        if (await semanticMatch(article, narrative, apiKey)) {
+        if (await semanticMatch(article, narrative, apiKey, signal)) {
           if (!matched[narrative.id]) matched[narrative.id] = []
           matched[narrative.id].push(article); found = true; break
         }
@@ -165,16 +152,16 @@ async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: 
   return { matched, unmatched }
 }
 
-async function generateDevelopment(narrative: Narrative, articles: any[], apiKey: string): Promise<string | null> {
+async function generateDevelopment(narrative: Narrative, articles: any[], apiKey: string, signal?: AbortSignal): Promise<string | null> {
   const label = narrative.label || narrative.keyword
   return generateNarrativeDevelopment(
     articles.map(a => ({ source: a.source, title: a.title, summary: a.summary || a.description || '' })),
-    label, apiKey
+    label, apiKey, signal
   )
 }
 
 
-async function appendDevelopment(env: Env, narrative: Narrative, text: string, articles: any[]): Promise<void> {
+async function appendDevelopment(env: Env, narrative: Narrative, text: string, articles: any[], signal?: AbortSignal): Promise<void> {
   const existing: any[] = JSON.parse(narrative.developments || '[]')
   const ids: number[] = JSON.parse(narrative.article_ids || '[]')
   const newIds = articles.map(a => Number(a.id)).filter(id => !ids.includes(id))
@@ -185,7 +172,7 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
   for (const [s, c] of Object.entries(sources)) existingSources[s] = (existingSources[s] || 0) + (c as number)
   let summary = narrative.summary
   if (existing.length === 0 || existing.length % 3 === 0) {
-    summary = await narrSummary(env, narrative, ids, articles)
+    summary = await narrSummary(env, narrative, ids, articles, signal)
   }
   existing.push({ date: new Date().toISOString().slice(0,10), text: decodeHtml(text), articleCount: newIds.length, sources: Object.keys(sources) })
   ids.push(...newIds)
@@ -197,19 +184,19 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
   signalEvent('narrative', { keyword: narrative.keyword, label: narrative.label || narrative.keyword, text, articleCount: newIds.length }).catch(() => {})
 }
 
-async function narrSummary(env: Env, narrative: Narrative, existingIds: number[], newBatch: any[]): Promise<string | null> {
+async function narrSummary(env: Env, narrative: Narrative, existingIds: number[], newBatch: any[], signal?: AbortSignal): Promise<string | null> {
   const apiKey = env.DEEPSEEK_API_KEY; if (!apiKey) return null
   const allIds = [...new Set([...existingIds, ...newBatch.map(a => a.id)])]
   const rows = await env.DB.prepare(`SELECT title,summary,description FROM news WHERE id IN (${allIds.map(()=>'?').join(',')})`).bind(...allIds).all<any>()
   const label = narrative.label || narrative.keyword
   return generateNarrativeSummary(
     (rows.results || []).map((a: any) => ({ title: a.title, summary: a.summary || a.description || '' })),
-    label, apiKey
+    label, apiKey, signal
   )
 }
 
 
-async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string): Promise<number> {
+async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string, signal?: AbortSignal): Promise<number> {
   // Index existing narratives by their article_ids for overlap dedup
   const existingArticleIds = new Map<number, Set<number>>()
   for (const n of existing) {
@@ -247,7 +234,7 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
     const ca = rows.results || []
 
     // 用 AI 生成标签；失败时用第一篇标题的前半段
-    const lbl = await generateTopicLabels([ca.slice(0,3).map((a:any)=>a.title)], apiKey).then(l=>l?.[0]||null)
+    const lbl = await generateTopicLabels([ca.slice(0,3).map((a:any)=>a.title)], apiKey, signal).then(l=>l?.[0]||null)
     // 存库前解码 HTML 实体（AI 可能把源标题里的 &#8217; 抄进标签）
     const nlbl = decodeHtml(lbl || ca[0]?.title?.slice(0, 30) || fallbackLabel(cleanWords))
 

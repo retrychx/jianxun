@@ -9,26 +9,18 @@ import type { PhaseDef, PhaseSchedule } from './types.js'
 import { META, metaGet } from '../db.js'
 
 export interface SystemState {
-  /** 是否有新文章待分析 */
-  pendingArticles: number
   /** 是否有未处理的用户信号 */
   pendingSignals: number
-  /** 是否有活跃的叙事 */
-  activeNarratives: number
   /** 最后运行距今秒数 */
   secondsSinceLastRun: number
   /** API 是否可用 */
   apiOk: boolean
-  /** 预计剩余 CPU 时间（ms） */
-  remainingBudget: number
 }
 
 /** 检查系统状态 */
 export async function checkSystemState(env: Env): Promise<SystemState> {
-  const [pendingArticles, pendingSignals, activeNarratives, lastRun] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) as c FROM news WHERE analyzed_at IS NULL AND analyze_attempts < 3 AND published_at >= datetime('now','-2 days')").first<any>(),
+  const [pendingSignals, lastRun] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as c FROM signals WHERE created_at >= datetime('now','-1 hour')").first<any>(),
-    env.DB.prepare("SELECT COUNT(*) as c FROM narratives WHERE status='active'").first<any>(),
     metaGet(env, META.lastRun),
   ])
 
@@ -39,14 +31,9 @@ export async function checkSystemState(env: Env): Promise<SystemState> {
   }
 
   return {
-    pendingArticles: pendingArticles?.c || 0,
     pendingSignals: pendingSignals?.c || 0,
-    activeNarratives: activeNarratives?.c || 0,
     secondsSinceLastRun,
     apiOk: true, // 由调用方设置
-    // 粗粒度预筛选阈值（>30s 才考虑低优先级阶段）；真正的 CPU 预算由
-    // state.ts 的 checkBudget（25s 安全值）在运行时逐阶段实时控制。
-    remainingBudget: 60_000,
   }
 }
 
@@ -78,11 +65,11 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
     planned.push(...bySchedule(basePhases, 'onSignals'))
   }
 
-  // 低优先级研究简报：仅预算充足时跑。
-  // 注意：always 组已含简报/日报，schedule 组互斥，绝不重复加入。
-  if (state.remainingBudget > 30_000) {
-    planned.push(...bySchedule(basePhases, 'budget').map(p => ({ ...p, priority: 'low' as const })))
-  }
+  // 低优先级研究简报等（schedule='budget'）：完整周期一律纳入并标记 low 优先级，
+  // 真正是否跑由 scheduler 的 checkBudget（25s 安全值）在运行时逐阶段跳过——
+  // 不再用假的 remainingBudget 门槛（此前恒 60s 导致门槛从未真正生效）。
+  // 注意：schedule 组互斥，always 组已含简报/日报，绝不重复加入。
+  planned.push(...bySchedule(basePhases, 'budget').map(p => ({ ...p, priority: 'low' as const })))
 
   return planned
 }

@@ -6,7 +6,7 @@ import { loadMemory } from './memory.js'
 import { CONFIG } from './config.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
-export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> {
+export async function analyzeNewArticles(env: Env, limit = 10, signal?: AbortSignal): Promise<number> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 0
 
@@ -48,7 +48,7 @@ export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> 
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
       while (queue.length) {
         const row = queue.shift()!
-        if (await analyzeOne(env, row, apiKey)) done++
+        if (await analyzeOne(env, row, apiKey, signal)) done++
       }
     }),
   )
@@ -56,7 +56,7 @@ export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> 
 }
 
 /** 分析单篇文章（限并发池内执行）；成功返回 true */
-async function analyzeOne(env: Env, row: any, apiKey: string): Promise<boolean> {
+async function analyzeOne(env: Env, row: any, apiKey: string, signal?: AbortSignal): Promise<boolean> {
   await env.DB.prepare('UPDATE news SET analyze_attempts = analyze_attempts + 1 WHERE id = ?').bind(row.id).run()
   try {
     // RSS description 足够长时跳过全文抓取（节省 6s/article）
@@ -67,7 +67,7 @@ async function analyzeOne(env: Env, row: any, apiKey: string): Promise<boolean> 
       pageTitle = result.title
     }
     const content = (extracted || row.description || row.title).slice(0, 2000)
-    const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle)
+    const result = await analyzeWithDeepSeek(row.title, content, apiKey, pageTitle, signal)
     if (result) {
       await env.DB.prepare(
         `UPDATE news SET summary=?, entities=?, sentiment=?, category=?, content=COALESCE(?,content),
@@ -81,7 +81,7 @@ async function analyzeOne(env: Env, row: any, apiKey: string): Promise<boolean> 
 }
 
 /** DeepSeek batch reclassify low-confidence articles. */
-export async function refineCategories(env: Env) {
+export async function refineCategories(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { refined: 0 }
   const rows = await env.DB.prepare(
@@ -92,7 +92,7 @@ export async function refineCategories(env: Env) {
   for (let i = 0; i < batch.length; i += 10) {
     const chunk = batch.slice(i, i + 10)
     try {
-      const results = await batchClassify(chunk.map(a => ({ id: a.id, title: a.title })), apiKey)
+      const results = await batchClassify(chunk.map(a => ({ id: a.id, title: a.title })), apiKey, signal)
       for (const r of results) { if (r.index >= 0 && r.index < chunk.length && r.category && chunk[r.index].category !== r.category) { await env.DB.prepare('UPDATE news SET category = ? WHERE id = ?').bind(r.category, chunk[r.index].id).run(); refined++ } }
     } catch (e: any) { console.error('[analyze] article analysis failed:', e?.message) }
   }

@@ -1,12 +1,11 @@
 /** Phase: Controversy detection — extracts pro/con stances from disputed articles. */
 
-import { fetchWithRetry } from '../analysis/deepseek.js'
-import { DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { callDeepSeekJSON } from '../analysis/deepseek.js'
 import { signalEvent } from '../cache.js'
 import type { Env } from '../helpers.js'
 import { CONFIG } from './config.js'
 
-export async function detectControversy(env: Env) {
+export async function detectControversy(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { debates: 0 }
 
@@ -36,14 +35,9 @@ export async function detectControversy(env: Env) {
     if (group.length < 2) continue
 
     try {
-      const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(30_000),
-        body: JSON.stringify({
-          model: DEEPSEEK_MODEL,
-          messages: [{
-            role: 'system',
-            content: `你是新闻争议分析编辑。以下是多家媒体对同一争议事件的报道。提取核心争议点，归纳正反两方观点。只返回 JSON（不要其他文字）：
+      const parsed = await callDeepSeekJSON<any>(
+        apiKey,
+        `你是新闻争议分析编辑。以下是多家媒体对同一争议事件的报道。提取核心争议点，归纳正反两方观点。只返回 JSON（不要其他文字）：
 
 {
   "topic": "争议话题（≤20字中文）",
@@ -51,19 +45,10 @@ export async function detectControversy(env: Env) {
   "stanceCon": "反方观点：≤60字，谁持什么立场",
   "keyDisagreement": "核心分歧点（≤40字）"
 }`,
-          }, {
-            role: 'user',
-            content: group.map(a => `[${a.source}]\n标题：${a.title}\n摘要：${(a.summary || '').slice(0, 200)}`).join('\n\n'),
-          }],
-          temperature: 0.2,
-          max_tokens: 512,
-        }),
-      })
-      if (!res?.ok) continue
-      const raw = (await res.json() as any).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
-      if (!raw) continue
-      const parsed = JSON.parse(raw)
-      if (!parsed.stancePro && !parsed.stanceCon) continue
+        group.map(a => `[${a.source}]\n标题：${a.title}\n摘要：${(a.summary || '').slice(0, 200)}`).join('\n\n'),
+        { maxTokens: 512, temperature: 0.2, timeoutMs: CONFIG.deepseek.timeouts.debate, signal },
+      )
+      if (!parsed || (!parsed.stancePro && !parsed.stanceCon)) continue
 
       const keyword = `__debate__${parsed.topic || group[0].title.slice(0, 30)}`
       const ids = group.map(a => a.id)

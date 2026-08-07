@@ -42,14 +42,19 @@ export function setAgentAbort(ac: AbortController | null): void {
   }
 }
 
-export async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response | null> {
-  // 组合：调用方超时信号 + agent 级中止信号（新 run 启动时中止旧 run 的 in-flight 请求）
+type FetchOptions = RequestInit & { phaseSignal?: AbortSignal }
+
+export async function fetchWithRetry(url: string, options: FetchOptions, retries = 2): Promise<Response | null> {
+  // 组合三类信号：调用方超时 + agent 级中止（新 run 顶替旧 run）+ 阶段级中止（阶段超时）。
+  // 任一中止都会让底层 fetch 抛 AbortError，从而真正停掉 in-flight 请求（不再"超时后仍在后台跑"）。
   const timeoutSignal = options.signal
   const agentSignal = _agentAbort?.signal
-  if (timeoutSignal && agentSignal) {
-    try { options.signal = AbortSignal.any([timeoutSignal, agentSignal]) } catch { options.signal = timeoutSignal }
-  } else if (agentSignal) {
-    options.signal = agentSignal
+  const phaseSignal = options.phaseSignal
+  const signals = [timeoutSignal, agentSignal, phaseSignal].filter(Boolean) as AbortSignal[]
+  if (signals.length > 1) {
+    try { options.signal = AbortSignal.any(signals) } catch { options.signal = timeoutSignal }
+  } else if (signals.length === 1) {
+    options.signal = signals[0]
   }
   for (let i = 0; i <= retries; i++) {
     try {
@@ -57,11 +62,48 @@ export async function fetchWithRetry(url: string, options: RequestInit, retries 
       if (res.ok || i === retries) return res
       // 429（限流）应当重试；其余 4xx（参数错/鉴权失败等）重试无意义，直接放弃
       if (res.status >= 400 && res.status < 500 && res.status !== 429) return res
-    } catch { if (i === retries) return null }
+    } catch {
+      // 已中止（阶段超时/新 run 顶替）：立即放弃，不再退避重试
+      if (options.signal?.aborted) return null
+      if (i === retries) return null
+    }
     // 指数退避 + 轻微抖动，避免同时重试打满限流窗口
     await new Promise(r => setTimeout(r, (1000 * (i + 1)) + Math.floor(Math.random() * 300)))
   }
   return null
+}
+
+export interface CallDeepSeekOpts {
+  maxTokens?: number
+  temperature?: number
+  timeoutMs?: number
+  /** 阶段级中止信号：阶段超时时随 AbortController 一起 abort */
+  signal?: AbortSignal
+}
+
+/** 通用 DeepSeek 文本调用：走 parseJson 累计 token、统一剥代码围栏，失败返回 null。 */
+export async function callDeepSeekText(apiKey: string, system: string, user: string, opts: CallDeepSeekOpts = {}): Promise<string | null> {
+  if (!apiKey) return null
+  const { maxTokens = 1024, temperature = 0.2, timeoutMs = CONFIG.deepseek.timeouts.default, signal } = opts
+  try {
+    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(timeoutMs),
+      phaseSignal: signal,
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature, max_tokens: maxTokens }),
+    })
+    if (!res?.ok) return null
+    const raw = (await parseJson(res))?.choices?.[0]?.message?.content || ''
+    return raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim() || null
+  } catch { return null }
+}
+
+/** 通用 DeepSeek JSON 调用：文本解析为 JSON；坏 JSON / 失败返回 null。 */
+export async function callDeepSeekJSON<T = any>(apiKey: string, system: string, user: string, opts: CallDeepSeekOpts = {}): Promise<T | null> {
+  const text = await callDeepSeekText(apiKey, system, user, opts)
+  if (!text) return null
+  try { return JSON.parse(text) as T } catch { return null }
 }
 
 /** 阻止 SSRF：只允许公开 http(s)，拒绝内网/环回地址（url 来自第三方 RSS，不可信） */
@@ -120,12 +162,13 @@ export interface AnalysisDetail {
   impact: 'short' | 'medium' | 'high'
 }
 
-export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string, pageTitle?: string | null): Promise<{ base: DeepSeekResult; detail: AnalysisDetail } | null> {
+export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string, pageTitle?: string | null, signal?: AbortSignal): Promise<{ base: DeepSeekResult; detail: AnalysisDetail } | null> {
   const prompt = ANALYSIS_PROMPT
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
+      phaseSignal: signal,
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }], temperature: 0.3, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
@@ -138,12 +181,13 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
   } catch { return null }
 }
 
-export async function generateTopicLabels(titleGroups: string[][], apiKey: string | undefined): Promise<string[] | null> {
+export async function generateTopicLabels(titleGroups: string[][], apiKey: string | undefined, signal?: AbortSignal): Promise<string[] | null> {
   if (!apiKey || !titleGroups.length) return null
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
+      phaseSignal: signal,
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TOPIC_LABELS_PROMPT }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
     })
     if (!res || !res.ok) return null
@@ -158,12 +202,13 @@ export async function generateTopicLabels(titleGroups: string[][], apiKey: strin
 export interface DigestCandidate { id: number; title: string; summary?: string | null; category?: string; source?: string; heat?: number; _significance?: string; _controversy?: boolean }
 export interface DigestResult { intro: string; items: { news_id: number; why: string; category: string }[]; extra: { news_id: number; why: string } | null }
 
-export async function generateDigest(candidates: DigestCandidate[], apiKey: string | undefined): Promise<DigestResult | null> {
+export async function generateDigest(candidates: DigestCandidate[], apiKey: string | undefined, signal?: AbortSignal): Promise<DigestResult | null> {
   if (!apiKey || !candidates.length) return null
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
+      phaseSignal: signal,
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: DIGEST_PROMPT }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }], temperature: 0.2, max_tokens: 4096 }),
     })
     if (!res || !res.ok) return null
@@ -177,12 +222,13 @@ export async function generateDigest(candidates: DigestCandidate[], apiKey: stri
   } catch { return null }
 }
 
-export async function translateBatch(articles: { id: number; title: string; summary: string }[], apiKey: string | undefined): Promise<{ id: number; title_zh: string; summary_zh: string }[] | null> {
+export async function translateBatch(articles: { id: number; title: string; summary: string }[], apiKey: string | undefined, signal?: AbortSignal): Promise<{ id: number; title_zh: string; summary_zh: string }[] | null> {
   if (!apiKey || !articles.length) return null
   try {
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
+      phaseSignal: signal,
       body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TRANSLATION_PROMPT }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048 }),
     })
     if (!res || !res.ok) return null
@@ -228,7 +274,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
 
 export interface CrossRefResult { keyword: string; sources: { name: string; angle: string }[]; comparison: string; articleIds: number[] }
 
-export async function crossRefAnalysis(groups: { source: string; title: string; summary: string }[][], apiKey: string | undefined): Promise<CrossRefResult[] | null> {
+export async function crossRefAnalysis(groups: { source: string; title: string; summary: string }[][], apiKey: string | undefined, signal?: AbortSignal): Promise<CrossRefResult[] | null> {
   if (!apiKey || !groups.length) return null
   const results: CrossRefResult[] = []
   for (const group of groups) {
@@ -238,6 +284,7 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
       const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(30_000),
+        phaseSignal: signal,
         body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CROSSREF_PROMPT }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
       })
       if (!res?.ok) continue
@@ -253,11 +300,13 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
 export async function batchClassify(
   articles: { id: number; title: string }[],
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<{ index: number; category: string }[]> {
   const texts = articles.map((a, idx) => `[${idx}] ${a.title}`).join('\n')
   const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.classification),
+    phaseSignal: signal,
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024 }),
   })
   if (!res?.ok) return []
@@ -271,11 +320,13 @@ export async function generateNarrativeDevelopment(
   articles: { source: string; title: string; summary: string }[],
   label: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const { NARRATIVE_PROMPT } = await import('./prompts.js')
   const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
+    phaseSignal: signal,
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_PROMPT(label) }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
   })
   if (!res?.ok) return null
@@ -288,11 +339,13 @@ export async function generateNarrativeSummary(
   articles: { title: string; summary: string }[],
   label: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const { NARRATIVE_SUMMARY_PROMPT } = await import('./prompts.js')
   const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
+    phaseSignal: signal,
     body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_SUMMARY_PROMPT(label) }, { role: 'user', content: articles.slice(0,20).map(a => `${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
   })
   if (!res?.ok) return null
@@ -305,6 +358,7 @@ export async function generateResearchReport(
   question: string,
   candidates: { id: number; title: string; titleZh?: string | null; summary: string; summaryZh?: string | null; source: string; publishedAt?: string | null }[],
   apiKey: string | undefined,
+  signal?: AbortSignal,
 ): Promise<{ title: string; summary: string; sections: { heading: string; body: string; refs: number[] }[]; outlook: string } | null> {
   if (!apiKey || !candidates.length) return null
   const { RESEARCH_PROMPT } = await import('./prompts.js')
@@ -312,6 +366,7 @@ export async function generateResearchReport(
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
+      phaseSignal: signal,
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [

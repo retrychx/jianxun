@@ -26,7 +26,11 @@ export async function linkEntities(env: Env) {
     if (canonical.has(norm)) continue
     let found = false
     for (const [existing, mapped] of canonical) {
-      if (norm.includes(existing) || existing.includes(norm)) { canonical.set(norm, { canonical: mapped.canonical, type: mapped.type }); found = true; break }
+      // 子串合并的短名守卫：短名 ≥3 字符、或含 CJK（'苹果' ⊂ '苹果公司' 是合法归一；
+      // 而 'AI' ⊂ 'OpenAI'、'Go' ⊂ 'Google' 这类纯拉丁短缩写是误并，不走子串）。
+      const short = norm.length <= existing.length ? norm : existing
+      const legitShort = short.length >= 3 || /[㐀-鿿]/.test(short)
+      if (legitShort && (norm.includes(existing) || existing.includes(norm))) { canonical.set(norm, { canonical: mapped.canonical, type: mapped.type }); found = true; break }
       const tA = new Set(norm.split(/[\s_-]+/)), tB = new Set(existing.split(/[\s_-]+/))
       let inter = 0; for (const t of tA) if (tB.has(t)) inter++
       if (inter / Math.max(tA.size+tB.size-inter,1) >= 0.6 && tA.size > 0 && tB.size > 0) { canonical.set(norm, { canonical: mapped.canonical, type: mapped.type }); found = true; break }

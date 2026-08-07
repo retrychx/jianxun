@@ -3,7 +3,7 @@
 import { translateBatch } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 
-export async function translateMissing(env: Env) {
+export async function translateMissing(env: Env, signal?: AbortSignal) {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return { translated: 0 }
   const rows = await env.DB.prepare(
@@ -11,7 +11,7 @@ export async function translateMissing(env: Env) {
   ).all<any>()
   if (!rows.results?.length) return { translated: 0 }
   const translated = await translateBatch(
-    (rows.results as any[]).map(r => ({ id: r.id, title: r.title, summary: r.summary || r.description || '' })), apiKey
+    (rows.results as any[]).map(r => ({ id: r.id, title: r.title, summary: r.summary || r.description || '' })), apiKey, signal
   )
   if (!translated) return { translated: 0 }
   let n = 0

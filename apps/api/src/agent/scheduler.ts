@@ -10,19 +10,28 @@ import { phaseTimeout } from './config.js'
 import { checkBudget, isBudgetExhausted } from './state.js'
 
 /** Success/failure from a single phase run with timing. */
-async function runOne(name: string, fn: () => Promise<any>, timeoutMs: number): Promise<PhaseResult> {
+async function runOne(name: string, fn: (signal: AbortSignal) => Promise<any>, timeoutMs: number): Promise<PhaseResult> {
   const start = Date.now()
+  // 阶段级 AbortController：超时即 abort，让 in-flight 的 DeepSeek/fetch 请求真正停下来
+  // （此前只用 Promise.race + setTimeout，超时后底层工作仍在后台跑，白耗 CPU 与配额）。
+  const ac = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const result = await Promise.race([
-      fn(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs)
-      ),
+      fn(ac.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          ac.abort()
+          reject(new Error(`Timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+      }),
     ])
+    if (timer) clearTimeout(timer)
     const ms = Date.now() - start
     console.log(`[agent] ${name} ok ${ms}ms`)
     return { ok: true, result, ms }
   } catch (err: any) {
+    if (timer) clearTimeout(timer)
     const ms = Date.now() - start
     const msg = err?.message || err?.toString() || 'unknown error'
     console.error(`[agent] ${name} FAIL ${ms}ms: ${msg.slice(0, 200)}`)
@@ -61,7 +70,7 @@ export async function runPhases(phases: PhaseDef[], env: Env): Promise<Record<st
       batch.map(p =>
         p.shouldSkip
           ? Promise.resolve({ ok: true, result: undefined, ms: 0 } as PhaseResult)
-          : runOne(p.name, () => p.run(env), p.timeout ?? phaseTimeout(p.name))
+          : runOne(p.name, (signal) => p.run(env, signal), p.timeout ?? phaseTimeout(p.name))
       )
     )
 

@@ -11,6 +11,9 @@ import { ingestSignals } from '../src/agent/memory.js'
 import { tuneSourceWeights } from '../src/agent/health.js'
 import { detectBreakingNews } from '../src/agent/breaking.js'
 import { acquireAgentLock, releaseAgentLock } from '../src/agent/state.js'
+import { runAgent } from '../src/agent/index.js'
+import { runPhases } from '../src/agent/scheduler.js'
+import { META, metaGet } from '../src/db.js'
 
 const ANALYSIS_JSON = JSON.stringify({
   summary: '英伟达发布新一代GPU芯片，性能大幅提升。',
@@ -158,6 +161,20 @@ describe('tuneSourceWeights', () => {
     expect(row.weight).toBeLessThan(1.0)
     expect(row.weight).toBeGreaterThan(0)
   })
+
+  it('M1: 低点击率来源不被恢复分支抬高（单次计算防双调整）', async () => {
+    env.DB.exec("INSERT INTO source_stats (source, fail_count) VALUES ('S1', 0)")
+    env.DB.exec("INSERT INTO source_weights (source, weight) VALUES ('S1', 0.8)")
+    env.DB.exec(`INSERT INTO news (title, url, source, lang, click_count, created_at, title_norm) VALUES
+      ('a', 'https://e.com/1', 'S1', 'zh', 0, datetime('now'), 'n1'),
+      ('b', 'https://e.com/2', 'S1', 'zh', 0, datetime('now'), 'n2')`)
+    const r = await tuneSourceWeights(env)
+    expect(r.tuned).toBe(1)
+    const row = env.DB._db.prepare("SELECT weight FROM source_weights WHERE source = 'S1'").get()
+    // 低 CTR（0%）→ 降 0.1 → 0.9。旧逻辑的"恢复分支"会把权重再抬回 1.0（覆盖降权），
+    // 此处断言 0.9 即拒绝该回归。
+    expect(row.weight).toBe(0.9)
+  })
 })
 
 describe('detectBreakingNews', () => {
@@ -190,6 +207,58 @@ describe('updateNarratives', () => {
     // 至少能跑完并返回计数（具体数值取决于语义匹配，不锁死）
     expect(typeof result.matched).toBe('number')
     expect(typeof result.created).toBe('number')
+  })
+
+  it('M3: 无可匹配内容时不再写 last_run（last_run 与运行锁解耦）', async () => {
+    // 空库 → updateNarratives 提前返回；内部不应触碰 last_run
+    // （旧逻辑在 updateNarratives 里写 last_run，会让并发守卫误以为"刚跑过"）
+    await updateNarratives(env)
+    expect(await metaGet(env, META.lastRun)).toBeNull()
+  })
+})
+
+describe('breaking 关键词 LIKE 转义（M5 回归）', () => {
+  it('转义下划线后只匹配 __breaking__ 前缀，误写的 xxbreakingXX 不再被选中', async () => {
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats) VALUES
+       ('__breaking__真事件', 'K1', 'active', date('now'), datetime('now'), '[]', '[]', '{}'),
+       ('xxbreakingYY', 'K2', 'active', date('now'), datetime('now'), '[]', '[]', '{}')`,
+    )
+    // 反证：未转义的旧写法（_ 是单字符通配符）会把 xxbreakingYY 也选中
+    const old = await env.DB.prepare("SELECT keyword FROM narratives WHERE keyword LIKE '__breaking__%' ORDER BY keyword").all()
+    expect(old.results?.map((r: any) => r.keyword)).toHaveLength(2)
+    // 修复后的查询（curate.ts 现用此 SQL）：只命中真正的 __breaking__ 前缀
+    const rows = await env.DB.prepare("SELECT keyword FROM narratives WHERE keyword LIKE '\\_\\_breaking\\_\\_%' ESCAPE '\\' ORDER BY keyword").all()
+    expect(rows.results?.map((r: any) => r.keyword)).toEqual(['__breaking__真事件'])
+  })
+})
+
+describe('runAgent 异常路径（M2）', () => {
+  it('中途抛异常仍释放运行锁，后续可立即重新获取', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
+    // 让 checkSystemState 抛错：删掉 signals 表（M4 后 checkSystemState 只查 signals + last_run）
+    env.DB.exec('DROP TABLE signals')
+    await expect(runAgent(env)).rejects.toThrow()
+    // finally 释放了 running 锁 → 立即可重新获取（旧逻辑异常时锁残留卡 30 分钟）
+    expect(await acquireAgentLock(env)).toBe(true)
+    await releaseAgentLock(env)
+  })
+})
+
+describe('runPhases 阶段中止（M6）', () => {
+  it('超时时 abort 传入的 signal，底层工作真正停止', async () => {
+    let aborted = false
+    const results = await runPhases([{
+      name: 'AbortMe', timeout: 30,
+      // 模拟真实 AI 阶段：不监听 abort 就永不返回（fetchWithRetry 中止后短路返回 null）
+      run: (_env: any, signal: any) => new Promise(() => {
+        signal.addEventListener('abort', () => { aborted = true })
+      }),
+    }] as any, env)
+    expect(results.AbortMe.ok).toBe(false)
+    expect(results.AbortMe.error).toContain('Timed out')
+    // 关键断言：超时不再是"Promise.race 假中止"，而是真的 abort 了底层 signal
+    expect(aborted).toBe(true)
   })
 })
 

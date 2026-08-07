@@ -37,7 +37,11 @@ export async function acquireAgentLock(env: Env): Promise<boolean> {
     }
     await metaSet(env, META.running, String(Date.now()))
     return true
-  } catch { return true }
+  } catch (e: any) {
+    // fail-open：DB 抖动时放行，但必须留下日志，否则并发 run 悄悄叠着跑
+    console.error('[agent] acquireAgentLock failed (fail-open, allowing run):', e?.message || e)
+    return true
+  }
 }
 
 /** 释放运行锁。 */

@@ -81,10 +81,11 @@ const API_COST_PER_CALL = 0.002 // $0.002 per DeepSeek API call
 
 export function estimateAPICost(calls: number, totalTokens = 0): number {
   if (totalTokens > 0) {
-    // 有真实 token 用量时按 token 估（deepseek 输入输出均价约 $0.5/M）
-    return Math.round(totalTokens * 0.0005 * 100) / 100
+    // 有真实 token 用量时按 token 估（deepseek 均价约 $0.5/M = $0.0000005/token）。
+    // 此前误写成 0.0005（即 $500/M），把成本夸大了 1000 倍（1000 token 报 $0.5）。
+    return Math.round(totalTokens * 0.0000005 * 10000) / 10000
   }
-  return Math.round(calls * API_COST_PER_CALL * 100) / 100 // 返回 cents
+  return Math.round(calls * API_COST_PER_CALL * 100) / 100 // 返回美元（2 位小数）
 }
 
 // ═══ 3. 向用户汇报 ═══

@@ -36,8 +36,7 @@ afterEach(() => {
 
 function state(over: any = {}) {
   return {
-    pendingArticles: 5, pendingSignals: 0, activeNarratives: 2,
-    secondsSinceLastRun: 99999, apiOk: true, remainingBudget: 10_000, ...over,
+    pendingSignals: 0, secondsSinceLastRun: 99999, apiOk: true, ...over,
   }
 }
 
@@ -117,8 +116,8 @@ describe('planPhases', () => {
     expect(names).not.toContain('generateProductIdeas')
   })
 
-  it('完整周期覆盖全部阶段（有信号 + 预算充足），防"加了阶段但忘了调度"', () => {
-    const names = planPhases(state({ pendingSignals: 2, remainingBudget: 60_000, secondsSinceLastRun: 7200 }), ALL_PHASES).map(p => p.name)
+  it('完整周期覆盖全部阶段（有信号），防"加了阶段但忘了调度"', () => {
+    const names = planPhases(state({ pendingSignals: 2, secondsSinceLastRun: 7200 }), ALL_PHASES).map(p => p.name)
     for (const p of ALL_PHASES) expect(names).toContain(p.name)
   })
 
@@ -129,35 +128,43 @@ describe('planPhases', () => {
     expect(names).not.toContain('tuneSourceWeights')
   })
 
-  it('预算不足 → 不含 budget 阶段（generateResearchBriefs）', () => {
-    const names = planPhases(state({ remainingBudget: 10_000 }), ALL_PHASES).map(p => p.name)
-    expect(names).not.toContain('generateResearchBriefs')
+  it('budget 阶段（generateResearchBriefs）一律纳入完整周期并标记 low 优先级', () => {
+    // M4：不再用假的 remainingBudget 门槛（恒 60s 从未生效），统一纳入、
+    // 标记 low，真正是否跑由 scheduler 的 checkBudget 在运行时逐阶段跳过。
+    const p = planPhases(state({ pendingSignals: 0, secondsSinceLastRun: 600 }), ALL_PHASES).find(p => p.name === 'generateResearchBriefs')
+    expect(p?.priority).toBe('low')
   })
 
-  it('预算充足 → 纳入 generateResearchBriefs 并标记 low 优先级', () => {
-    const p = planPhases(state({ remainingBudget: 60_000 }), ALL_PHASES).find(p => p.name === 'generateResearchBriefs')
-    expect(p?.priority).toBe('low')
+  it('2 分钟内刚跑过 → 不含 budget 阶段（快周期不跑研究简报）', () => {
+    const names = planPhases(state({ secondsSinceLastRun: 60 }), ALL_PHASES).map(p => p.name)
+    expect(names).not.toContain('generateResearchBriefs')
+    expect(names).not.toContain('generateProductIdeas')
+  })
+})
+
+describe('ALL_PHASES 依赖图（H1 防回归）', () => {
+  it('读数据的 AI 阶段都 dependsOn analyzeNewArticles，避免与分析并发读到空数据', () => {
+    for (const name of ['updateNarratives', 'generateDailyDigest', 'refineCategories', 'translateMissing']) {
+      const p = ALL_PHASES.find(p => p.name === name)!
+      expect(p.dependsOn).toContain('analyzeNewArticles')
+    }
+  })
+
+  it('低优先级 AI 阶段都有显式 phaseTimeout（不再落到 30s 默认值被掐断）', () => {
+    for (const name of ['generateResearchBriefs', 'generateNarrativeOutlooks', 'extractTopEntityEvents', 'detectControversy', 'generateProductIdeas']) {
+      const p = ALL_PHASES.find(p => p.name === name)!
+      expect(p.timeout, `${name} 缺 timeout`).toBeGreaterThan(0)
+    }
   })
 })
 
 describe('checkSystemState', () => {
-  it('统计待分析文章/信号/活跃叙事，并按 last_run 计算间隔', async () => {
-    env.DB.exec(
-      `INSERT INTO news (title, url, source, lang, published_at, title_norm) VALUES
-       ('a', 'https://e.com/1', 'S1', 'zh', datetime('now','-1 hour'), 'na'),
-       ('b', 'https://e.com/2', 'S1', 'zh', datetime('now','-1 hour'), 'nb')`,
-    )
+  it('统计待处理信号，并按 last_run 计算间隔', async () => {
     env.DB.exec("INSERT INTO signals (target_type, target_id) VALUES ('article', '1')")
-    env.DB.exec(
-      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats)
-       VALUES ('k', 'K', 'active', date('now'), datetime('now'), '[]', '[]', '{}')`,
-    )
     await metaSet(env, META.lastRun, new Date(Date.now() - 3600_000).toISOString())
 
     const s = await checkSystemState(env)
-    expect(s.pendingArticles).toBe(2)
     expect(s.pendingSignals).toBe(1)
-    expect(s.activeNarratives).toBe(1)
     expect(s.secondsSinceLastRun).toBeGreaterThan(3500)
     expect(s.secondsSinceLastRun).toBeLessThan(3700)
   })

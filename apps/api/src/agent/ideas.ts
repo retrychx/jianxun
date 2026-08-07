@@ -4,11 +4,12 @@
  * 存进 agent_meta，前端"灵感"视图展示。
  */
 
-import { fetchWithRetry, DEEPSEEK_MODEL } from '../analysis/deepseek.js'
+import { callDeepSeekJSON } from '../analysis/deepseek.js'
 import type { Env } from '../helpers.js'
 import { META, metaGet, metaSet, metaSetJSON } from '../db.js'
+import { CONFIG } from './config.js'
 
-export async function generateProductIdeas(env: Env): Promise<number> {
+export async function generateProductIdeas(env: Env, signal?: AbortSignal): Promise<number> {
   const apiKey = env.DEEPSEEK_API_KEY
   if (!apiKey) return 0
 
@@ -56,22 +57,11 @@ export async function generateProductIdeas(env: Env): Promise<number> {
 ${hotList.join('\n')}`
 
   try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [{ role: 'system', content: '你只输出合法 JSON，不要任何其他文字。' }, { role: 'user', content: prompt }],
-        temperature: 0.8,
-        max_tokens: 1200,
-      }),
-    })
-    if (!res?.ok) return 0
-    const raw = (await res.json() as any).choices?.[0]?.message?.content
-      ?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    if (!raw) return 0
-    const parsed = JSON.parse(raw)
+    const parsed = await callDeepSeekJSON<{ ideas: any[] }>(
+      apiKey, '你只输出合法 JSON，不要任何其他文字。', prompt,
+      { maxTokens: 1200, temperature: 0.8, timeoutMs: CONFIG.deepseek.timeouts.ideas, signal },
+    )
+    if (!parsed) return 0
     const ideas = Array.isArray(parsed.ideas) ? parsed.ideas.slice(0, 3).filter((i: any) => i?.title && i?.concept) : []
     if (!ideas.length) return 0
 
