@@ -39,9 +39,9 @@ export async function analyzeNewArticles(env: Env, limit = 10): Promise<number> 
   const rows = await env.DB.prepare(query).bind(...params).all<any>()
   const pending = rows.results || []
 
-  // 限并发分析：40 篇顺序分析最坏会撞上阶段超时，6 篇并行降到可接受区间。
+  // 限并发分析：60 篇并行 8 路，配合 300s 阶段超时。
   // 并发 DeepSeek 调用由 fetchWithRetry 的 429 重试兜底。
-  const CONCURRENCY = 6
+  const CONCURRENCY = 8
   let done = 0
   const queue = [...pending]
   await Promise.all(
