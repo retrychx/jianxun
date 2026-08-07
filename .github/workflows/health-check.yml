@@ -41,8 +41,10 @@ jobs:
             process.exit(2)
           }
           const now = new Date()
-          // 日报按北京时间（+8h）标注日期
-          const today = new Date(now.getTime() + 8 * 3600e3).toISOString().slice(0, 10)
+          // 日报按北京时间（+8h）标注日期；beijingNow.getUTCHours() = 北京时间的小时
+          const beijingNow = new Date(now.getTime() + 8 * 3600e3)
+          const today = beijingNow.toISOString().slice(0, 10)
+          const beijingHour = beijingNow.getUTCHours()
           const issues = []
           if (!status.lastFetch?.ts || since(status.lastFetch.ts) > 2 * 3600e3) {
             issues.push(`RSS 抓取停更：lastFetch=${status.lastFetch?.ts || '无'}`)
@@ -50,7 +52,8 @@ jobs:
           if (!status.lastAgentRun || since(status.lastAgentRun) > 3 * 3600e3) {
             issues.push(`Agent 停更：lastRun=${status.lastAgentRun || '无'}`)
           }
-          if (!digests?.dates?.includes(today)) {
+          // 日报由零点后首个 agent 运行生成（约 00:23/01:05 北京时间），凌晨 0-3 点缺失属正常
+          if (beijingHour >= 3 && !digests?.dates?.includes(today)) {
             issues.push(`今日日报缺失：${today}（现有：${digests?.dates?.slice(0, 3).join(', ') || '无'}）`)
           }
           if (issues.length) {
