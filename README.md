@@ -211,25 +211,21 @@ VentureBeat AI、Phoronix、LWN、动点科技、ZDNet、MarketWatch、Fortune�
 ## 项目结构
 
 ```
-jianxun/
-├── functions/
-│   └── api/                 # Cloudflare Pages Functions API（含 _middleware 统一鉴权）
-├── src/                     # Functions 共享代码
-│   ├── agent/               # Agent 管线（阶段化调度、叙事、灵感、反馈闭环、记忆）
-│   ├── api/                 # 读/写业务逻辑（listNews、digest、write 等）
-│   ├── analysis/            # DeepSeek 集成 + prompts
-│   ├── sources.ts           # RSS 源列表
-│   ├── rss.ts / parse-rss.ts # 抓取与解析（含 HTML 实体解码）
-│   ├── topics.ts            # 话题聚类
-│   └── helpers.ts / handler.ts / cache.ts
-├── packages/
+jianxun/                     # pnpm workspace 根
+├── apps/
+│   ├── api/                 # 后端 Pages 应用
+│   │   ├── functions/       # Pages Functions API（含 _middleware 统一鉴权）
+│   │   ├── src/             # 共享代码：agent/（管线）、api/（读写）、analysis/、rss/ 等
+│   │   ├── migrations/      # D1 迁移（0014 索引/限流、0015 FTS trigram）
+│   │   ├── tests/           # vitest（真实 SQLite + 路由冒烟测试）
+│   │   ├── wrangler.toml    # Cloudflare Pages 配置
+│   │   └── vitest.config.ts / tsconfig.check.json
 │   └── frontend/            # React 前端（views + hooks + components）
-├── migrations/              # D1 数据库迁移（0014 索引/限流、0015 FTS trigram）
 ├── workers/                 # cron-fetch / cron-analyze Workers
-├── tests/                   # vitest（真实 SQLite + 路由冒烟测试）
-├── .github/workflows/       # 部署 / 兜底抓取 / 健康监控 / D1 备份
 ├── scripts/deploy.sh        # 一键部署脚本
-├── wrangler.toml            # Cloudflare 配置
+├── .github/workflows/       # 部署 / 兜底抓取 / 健康监控 / D1 备份
+├── tsconfig.base.json       # 前后端共享的 TS 基础配置
+├── wrangler 相关命令统一用 `-c apps/api/wrangler.toml`
 └── README.md
 ```
 

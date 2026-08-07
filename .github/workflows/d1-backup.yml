@@ -20,7 +20,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           mkdir -p backup
-          npx wrangler d1 export jianxun --remote --output "backup/jianxun-$(date +%F).sql"
+          npx wrangler d1 export jianxun --remote --output "backup/jianxun-$(date +%F).sql" -c apps/api/wrangler.toml
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4

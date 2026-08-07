@@ -1,7 +1,9 @@
 name = "jianxun"
 compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "packages/frontend/dist"
+# 相对本配置文件的目录：../frontend/dist = apps/frontend/dist
+pages_build_output_dir = "../frontend/dist"
+migrations_dir = "migrations"
 
 [[d1_databases]]
 binding = "DB"

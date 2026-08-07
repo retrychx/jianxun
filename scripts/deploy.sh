@@ -14,7 +14,7 @@ if ! npx wrangler whoami &>/dev/null; then
 fi
 
 # ─── D1 database ───
-DB_ID=$(grep 'database_id' wrangler.toml | head -1 | sed 's/.*= "//;s/"//')
+DB_ID=$(grep 'database_id' apps/api/wrangler.toml | head -1 | sed 's/.*= "//;s/"//')
 
 if [ -z "$DB_ID" ] || [ "$DB_ID" = "YOUR_DATABASE_ID" ]; then
   echo "📦 创建 D1 数据库..."
@@ -28,16 +28,16 @@ if [ -z "$DB_ID" ] || [ "$DB_ID" = "YOUR_DATABASE_ID" ]; then
 
   if [ -n "$DB_ID" ]; then
     echo "✅ D1 数据库 ID: $DB_ID"
-    # Update wrangler.toml
+    # Update apps/api/wrangler.toml
     if [[ "$OSTYPE" == "darwin"* ]]; then
-      sed -i '' "s/database_id = \"\"/database_id = \"$DB_ID\"/" wrangler.toml
+      sed -i '' "s/database_id = \"\"/database_id = \"$DB_ID\"/" apps/api/wrangler.toml
     else
-      sed -i "s/database_id = \"\"/database_id = \"$DB_ID\"/" wrangler.toml
+      sed -i "s/database_id = \"\"/database_id = \"$DB_ID\"/" apps/api/wrangler.toml
     fi
   else
     echo "❌ 无法获取 D1 数据库 ID，请手动创建："
     echo "   npx wrangler d1 create jianxun"
-    echo "   然后把 database_id 填到 wrangler.toml"
+    echo "   然后把 database_id 填到 apps/api/wrangler.toml"
     exit 1
   fi
 else
@@ -47,7 +47,7 @@ fi
 # ─── Migrate ───
 echo ""
 echo "🗄️  运行数据库迁移（--remote 迁移生产库，不加则只迁移本地）..."
-npx wrangler d1 migrations apply jianxun --remote
+npx wrangler d1 migrations apply jianxun --remote -c apps/api/wrangler.toml
 
 # ─── DeepSeek API Key ───
 echo ""
@@ -90,7 +90,7 @@ pnpm build
 # ─── Deploy ───
 echo ""
 echo "🚀 部署到 Cloudflare Pages（config 式部署，确保 functions/ 一起发布）..."
-npx wrangler pages deploy --branch main
+npx wrangler pages deploy --branch main -c apps/api/wrangler.toml
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"

@@ -25,21 +25,21 @@ jobs:
       # 部署前把关：后端（src+functions+tests）类型检查 + 单元/路由冒烟测试。
       # 曾因 tryCatch 二次序列化把多个端点变成 {} 上线——这里提前拦住。
       - name: Typecheck backend
-        run: npx tsc -p tsconfig.check.json
+        run: npx tsc -p apps/api/tsconfig.check.json
 
       - name: Run tests
-        run: npx vitest run
+        run: npx vitest run -c apps/api/vitest.config.ts
 
       - name: Build frontend
         run: pnpm build
 
       # 先迁移再部署：新代码上线时 schema 已就绪，避免短暂报错
       - name: Run D1 migrations
-        run: npx wrangler d1 migrations apply jianxun --remote
+        run: npx wrangler d1 migrations apply jianxun --remote -c apps/api/wrangler.toml
 
-      # config 式部署（读取 wrangler.toml pages_build_output_dir），确保 functions/ 一起发布
+      # config 式部署（读取 apps/api/wrangler.toml，含 pages_build_output_dir 与 functions/）
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy --project-name jianxun --branch main
+        run: npx wrangler pages deploy --project-name jianxun --branch main -c apps/api/wrangler.toml
 
       # printf（而非 echo）避免把末尾换行符写进 secret
       - name: Set DeepSeek API Key

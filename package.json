@@ -3,12 +3,12 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @ts7/frontend dev",
-    "dev:api": "wrangler pages dev",
+    "dev:api": "wrangler pages dev -c apps/api/wrangler.toml",
     "build": "pnpm --filter @ts7/frontend build",
-    "deploy": "pnpm build && wrangler pages deploy",
-    "db:migrate": "wrangler d1 migrations apply jianxun",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "deploy": "pnpm build && wrangler pages deploy -c apps/api/wrangler.toml",
+    "db:migrate": "wrangler d1 migrations apply jianxun -c apps/api/wrangler.toml",
+    "test": "vitest run -c apps/api/vitest.config.ts",
+    "test:watch": "vitest -c apps/api/vitest.config.ts",
     "lint": "pnpm -r run lint"
   },
   "engines": {
