@@ -13,8 +13,9 @@ import {
   generateStoryline, batchClassify, resetTokenCount, getTokenCount, setAgentAbort,
   callDeepSeekText, callDeepSeekJSON,
 } from '../src/analysis/deepseek.js'
+import { initSubrequestBudget } from '../src/agent/state.js'
 
-beforeEach(() => { resetTokenCount(); setAgentAbort(null) })
+beforeEach(() => { resetTokenCount(); setAgentAbort(null); initSubrequestBudget() })
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 /** 让 DeepSeek 返回给定 content（可选 usage 记账） */

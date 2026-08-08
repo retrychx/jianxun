@@ -70,6 +70,45 @@ export async function pingDeepSeek(apiKey: string): Promise<boolean> {
   }
 }
 
+// ─── Subrequest budget tracker ─────────────────────────────────
+// Cloudflare 免费版：单次 Worker 调用最多 50 个"外部 subrequest"（fetch 到 DeepSeek / 文章 URL），
+// 硬上限无法调高（wrangler.toml 的 limits.subrequests 只能调低）。超出后平台直接抛
+// "Too many subrequests by single Worker invocation"，后续所有外部请求失败、各阶段静默返回 null ——
+// 这正是日报/叙事"没更新但不报错"的根因：analyze（60 篇 × 1~2 次）把预算烧光，后面的
+// updateNarratives / generateDailyDigest 拿不到任何 subrequest。
+// 这里把预算压到安全线，并让 fetchWithRetry/extractContent 在预算耗尽时直接跳过请求，
+// 低优先级阶段由 scheduler 跳过，把额度优先让给 critical 阶段（日报/叙事）。
+const SUBREQUESTS_SAFE = 45 // 留 5 个余量，避免恰好顶到 50 被平台硬掐
+
+let _subrequestCount = 0
+let _subrequestExhausted = false
+
+/** 重置 subrequest 预算（runAgent 每轮调用一次，与 CPU 预算一起归零）。 */
+export function initSubrequestBudget(): void {
+  _subrequestCount = 0
+  _subrequestExhausted = false
+}
+
+/** 记录一次外部 subrequest；返回 false 表示预算已耗尽（调用方应跳过本次外部请求）。 */
+export function countSubrequest(): boolean {
+  _subrequestCount++
+  if (_subrequestCount >= SUBREQUESTS_SAFE && !_subrequestExhausted) {
+    _subrequestExhausted = true
+    console.warn(`[agent] 外部 subrequest 预算耗尽（${_subrequestCount}/${SUBREQUESTS_SAFE}）— 停止外部请求`)
+  }
+  return !_subrequestExhausted
+}
+
+/** 本轮已使用的外部 subrequest 数（供 analyze 等阶段自查是否该停手）。 */
+export function subrequestsUsed(): number {
+  return _subrequestCount
+}
+
+/** 外部 subrequest 预算是否已耗尽（耗尽后不再发起外部请求）。 */
+export function subrequestBudgetExhausted(): boolean {
+  return _subrequestExhausted
+}
+
 // ─── CPU budget tracker ────────────────────────────────────────
 
 /**
@@ -103,11 +142,12 @@ function cpuDeltaMs(): number | null {
   return ((now.user + now.system) - (_budgetStartCpu.user + _budgetStartCpu.system)) / 1000
 }
 
-/** Initialize the CPU budget counter. Call at the start of runAgent. */
+/** Initialize the CPU + subrequest budget counters. Call at the start of runAgent. */
 export function initBudget(): void {
   _budgetStartWall = Date.now()
   _budgetStartCpu = readCpu()
   _budgetExhausted = false
+  initSubrequestBudget()
 }
 
 /** Check if we've exceeded our safe CPU budget. */

@@ -10,7 +10,7 @@ import { mergeOverlappingNarratives, flagLowQualityAnalyses } from '../src/agent
 import { ingestSignals } from '../src/agent/memory.js'
 import { tuneSourceWeights } from '../src/agent/health.js'
 import { detectBreakingNews } from '../src/agent/breaking.js'
-import { acquireAgentLock, releaseAgentLock } from '../src/agent/state.js'
+import { acquireAgentLock, releaseAgentLock, initSubrequestBudget } from '../src/agent/state.js'
 import { runAgent } from '../src/agent/index.js'
 import { runPhases } from '../src/agent/scheduler.js'
 import { META, metaGet } from '../src/db.js'
@@ -33,6 +33,7 @@ let env: any
 beforeEach(() => {
   const { d1 } = createTestDB()
   env = makeEnv(d1)
+  initSubrequestBudget()
 })
 
 afterEach(() => {

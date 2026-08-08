@@ -16,7 +16,10 @@ export const CONFIG = {
   agent: { concurrencyGuardMs: 300_000, phaseTimeoutMs: 30_000, pingTimeoutMs: 5_000 },
   // 分析吞吐：60 篇/轮 × ~8 轮/天 ≈ 480/天（摄入 ~950/天，配合 7 天窗口消化积压；
   // 高价值文章（高分/日报/热门/叙事）优先，长尾文章无摘要是可接受的取舍）
-  analyze: { limitPerRun: 60, maxRetries: 3, windowDays: 7, phaseTimeoutMs: 300_000 },
+  // subrequestBudget：免费版 50 外部 subrequest/调用是硬上限，analyze 每篇消耗 1~2 次。
+  // 给它 20 的预算上限（≈10~20 篇/轮），把剩余额度留给 critical 的日报/叙事——
+  // 否则 analyze 独吞预算后 digest/updateNarratives 全部拿不到 subrequest（线上静默失败）。
+  analyze: { limitPerRun: 60, subrequestBudget: 20, maxRetries: 3, windowDays: 7, phaseTimeoutMs: 300_000 },
   refine: { batchSize: 10, maxPerRun: 40, phaseTimeoutMs: 30_000 },
   translate: { maxPerRun: 10, phaseTimeoutMs: 30_000 },
   crossRef: { windowDays: 2, minArticles: 4, maxGroups: 5, phaseTimeoutMs: 30_000 },

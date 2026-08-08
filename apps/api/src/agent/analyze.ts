@@ -4,6 +4,7 @@ import { extractContent, analyzeWithDeepSeek, batchClassify } from '../analysis/
 import { likeEscape, type Env } from '../helpers.js'
 import { loadMemory } from './memory.js'
 import { CONFIG } from './config.js'
+import { subrequestsUsed } from './state.js'
 
 /** Analyze recent high-score articles with enhanced DeepSeek prompt. */
 export async function analyzeNewArticles(env: Env, limit = 10, signal?: AbortSignal): Promise<number> {
@@ -41,12 +42,22 @@ export async function analyzeNewArticles(env: Env, limit = 10, signal?: AbortSig
 
   // 限并发分析：60 篇并行 8 路，配合 300s 阶段超时。
   // 并发 DeepSeek 调用由 fetchWithRetry 的 429 重试兜底。
-  const CONCURRENCY = 8
+  // 限并发分析：60 篇并行 2 路，配合 300s 阶段超时。
+  // CONCURRENCY 从 8 降到 2：并发 worker 会在同一个预算检查点全部放行，8 路时
+  // 在途请求能把 subrequest 预算顶到 cap+16，直接饿死后面的日报/叙事。降到 2 后
+  // 在途 ≤2 篇 × 2 次 ≈ 4 个 subrequest 的超出量，可预测。
+  const CONCURRENCY = 2
   let done = 0
   const queue = [...pending]
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
       while (queue.length) {
+        // 免费版 50 外部 subrequest/调用是硬上限。analyze 是最大消耗方（每篇 1~2 次），
+        // 不能让它独吞预算：超过分析专用预算就停手，把剩余额度留给 critical 的日报/叙事。
+        if (subrequestsUsed() >= CONFIG.analyze.subrequestBudget) {
+          console.log(`[agent] analyze hit subrequest budget (${subrequestsUsed()}) — stop early, deferring ${queue.length} articles`)
+          break
+        }
         const row = queue.shift()!
         if (await analyzeOne(env, row, apiKey, signal)) done++
       }

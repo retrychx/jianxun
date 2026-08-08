@@ -11,12 +11,12 @@ import { translateMissing } from '../src/agent/translate.js'
 import { runPhases } from '../src/agent/scheduler.js'
 import { cleanup } from '../src/agent/cleanup.js'
 import { estimateAPICost, generateReport, saveReport } from '../src/agent/eval.js'
-import { markAgentRun, shouldSkipDueToConcurrency, pingDeepSeek, initBudget, checkBudget } from '../src/agent/state.js'
+import { markAgentRun, shouldSkipDueToConcurrency, pingDeepSeek, initBudget, checkBudget, initSubrequestBudget } from '../src/agent/state.js'
 import { ask, saveAnalysis } from '../src/api/write.js'
 import { META, metaGet, metaGetJSON } from '../src/db.js'
 
 let env: any
-beforeEach(() => { const { d1 } = createTestDB(); env = makeEnv(d1) })
+beforeEach(() => { const { d1 } = createTestDB(); env = makeEnv(d1); initSubrequestBudget() })
 afterEach(() => { vi.unstubAllGlobals() })
 
 function insertNews(id: number, title: string, source: string, over: any = {}) {

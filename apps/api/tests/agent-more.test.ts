@@ -22,12 +22,14 @@ import { statusCheck } from '../src/helpers.js'
 import { extractTopEntityEvents, generateNarrativeOutlooks } from '../src/agent/intel.js'
 import { detectControversy } from '../src/agent/debate.js'
 import { META, metaGet, metaSet, metaGetJSON, metaSetJSON } from '../src/db.js'
+import { initSubrequestBudget } from '../src/agent/state.js'
 
 let env: any
 
 beforeEach(() => {
   const { d1 } = createTestDB()
   env = makeEnv(d1)
+  initSubrequestBudget()
 })
 
 afterEach(() => {

@@ -11,6 +11,7 @@
  */
 
 import { CONFIG } from '../agent/config.js'
+import { countSubrequest } from '../agent/state.js'
 import {
   ANALYSIS_PROMPT, TOPIC_LABELS_PROMPT, DIGEST_PROMPT, TRANSLATION_PROMPT,
   STORYLINE_PROMPT, ANSWER_PROMPT, CROSSREF_PROMPT, CLASSIFY_PROMPT,
@@ -63,6 +64,10 @@ export async function fetchWithRetry(url: string, options: FetchOptions, retries
     options.signal = signals[0]
   }
   for (let i = 0; i <= retries; i++) {
+    // 免费版 50 外部 subrequest/调用是硬上限：预算耗尽后所有 fetch 都会被平台拒绝。
+    // 在这里统一计数并短路，各阶段（analyze/日报/叙事/翻译…）无需各自处理——
+    // 后续阶段自然拿到 null 而非"假成功"。这比"跑到一半被平台掐断"强得多。
+    if (!countSubrequest()) return null
     try {
       const res = await fetch(url, options)
       if (res.ok || i === retries) return res
@@ -172,6 +177,8 @@ function isSafeFetchUrl(url: string): boolean {
 export async function extractContent(url: string): Promise<{ content: string | null; image: string | null; title: string | null }> {
   try {
     if (!isSafeFetchUrl(url)) return { content: null, image: null, title: null }
+    // 文章正文抓取也是外部 subrequest，同样受 50/调用硬上限约束
+    if (!countSubrequest()) return { content: null, image: null, title: null }
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
       signal: AbortSignal.timeout(6_000),
