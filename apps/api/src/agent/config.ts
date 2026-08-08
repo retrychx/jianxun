@@ -24,11 +24,14 @@ export const CONFIG = {
   //（此前 jaccard 会被摘要/进展的千级 token 集稀释到不可达，叙事 developments 永远为空）。
   // semanticSampleRate：语义兜底采样比例（15%）；semanticCandidateThreshold：进候选池的最低覆盖度。
   // semanticMatch 是采样里的单次 true/false 判断：给足但不至于拖慢叙事匹配。
-  narrative: { matchThreshold: 0.35, minClusterSize: 3, staleDays: 7, archiveDays: 14, maxArticles: 100, phaseTimeoutMs: 90_000, semanticMatchTimeoutMs: 10_000, semanticSampleRate: 0.15, semanticCandidateThreshold: 0.2 },
+  // phaseTimeoutMs=240s：覆盖度匹配修复后一轮可能命中 ~20 个故事，每个进展一次 DeepSeek 串行调用
+  //（~6s/个 ≈ 120s），90s 会在途中被阶段超时掐断，只追加一半且每轮报错刷屏。
+  narrative: { matchThreshold: 0.35, minClusterSize: 3, staleDays: 7, archiveDays: 14, maxArticles: 100, phaseTimeoutMs: 240_000, semanticMatchTimeoutMs: 10_000, semanticSampleRate: 0.15, semanticCandidateThreshold: 0.2 },
   breaking: { windowHours: 6, maxArticles: 30, minSources: 2, minGroupSize: 2, phaseTimeoutMs: 15_000 },
   entity: { maxArticles: 100, windowHours: 12, similarityThreshold: 0.6, phaseTimeoutMs: 15_000 },
   health: { maxImages: 3, weightDecay: 0.1, weightFloor: 0.1, recoveryStep: 0.15, phaseTimeoutMs: 20_000 },
-  digest: { maxCandidates: 30, minArticles: 10, minNewArticles: 3, phaseTimeoutMs: 90_000 },
+  // phaseTimeoutMs=200s：给空响应重试留足预算（3 次 ×60s 单次超时 + 退避），否则最坏情况重试没跑完就被掐断
+  digest: { maxCandidates: 30, minArticles: 10, minNewArticles: 3, phaseTimeoutMs: 200_000 },
   briefing: { phaseTimeoutMs: 30_000 },
   // 低优先级 AI 阶段的超时要给足（单次调用 30~60s，多处顺序调用），否则被默认 30s 掐断：
   // generateResearchBriefs 最多 5 次 ×60s；前瞻最多 5 次 ×20s；实体事件最多 3 次 ×25s；争议每组 ×30s
