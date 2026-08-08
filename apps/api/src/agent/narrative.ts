@@ -15,6 +15,8 @@ const MATCH_THRESHOLD = CONFIG.narrative.matchThreshold
 const MIN_CLUSTER_SIZE = CONFIG.narrative.minClusterSize
 const STALE_DAYS = CONFIG.narrative.staleDays
 const ARCHIVE_DAYS = CONFIG.narrative.archiveDays
+const SEMANTIC_SAMPLE_RATE = CONFIG.narrative.semanticSampleRate
+const SEMANTIC_CANDIDATE_THRESHOLD = CONFIG.narrative.semanticCandidateThreshold
 
 export interface Narrative {
   id: number
@@ -99,12 +101,13 @@ function narrTokens(narrative: Narrative): Set<string> {
   return tokens
 }
 
-function jaccard(a: Set<string>, b: Set<string>): number {
+/** 覆盖度：a（文章标题，token 少）里有多少 token 出现在 b（叙事，token 集大）中。
+ *  jaccard 用并集做分母，叙事集上千 token 时永远≈0，阈值不可达；覆盖度只用文章侧做分母，可比较。 */
+function sharedTokens(a: Set<string>, b: Set<string>): number {
   if (!a.size || !b.size) return 0
-  let intersection = 0
-  for (const t of a) if (b.has(t)) intersection++
-  const union = a.size + b.size - intersection
-  return union > 0 ? intersection / union : 0
+  let shared = 0
+  for (const t of a) if (b.has(t)) shared++
+  return shared
 }
 
 /** AI 语义匹配：用 DeepSeek 判断未匹配文章是否属于某个叙事 */
@@ -128,18 +131,21 @@ async function matchArticles(articles: any[], narratives: Narrative[], apiKey?: 
     const artTokens = new Set(tokenize(article.title || ''))
     if (!artTokens.size) { unmatched.push(article); continue }
     let found = false
-    // Pass 1: 快速词法匹配
+    // Pass 1: 快速词法匹配（覆盖度 ≥ 阈值 且 共享 ≥3 token，避免太短/太泛的标题误配）
     for (const narrative of narratives) {
       const tokens = narrTokenCache.get(narrative.id)
       if (!tokens || !tokens.size) continue
-      if (jaccard(artTokens, tokens) >= MATCH_THRESHOLD) {
+      const shared = sharedTokens(artTokens, tokens)
+      if (shared >= 3 && shared / artTokens.size >= MATCH_THRESHOLD) {
         if (!matched[narrative.id]) matched[narrative.id] = []
         matched[narrative.id].push(article); found = true; break
       }
     }
-    // Pass 2: 词法匹配未通过的，用 AI 语义判断（5% 采样控制成本）
-    if (!found && apiKey && Math.random() < 0.05) {
-      const candidates = narratives.filter(n => jaccard(artTokens, narrTokenCache.get(n.id) || new Set()) >= MATCH_THRESHOLD * 0.5).slice(0, 2)
+    // Pass 2: 词法匹配未通过的，用 AI 语义判断（15% 采样控制成本）
+    if (!found && apiKey && Math.random() < SEMANTIC_SAMPLE_RATE) {
+      const candidates = narratives.filter(n =>
+        sharedTokens(artTokens, narrTokenCache.get(n.id) || new Set()) / artTokens.size >= SEMANTIC_CANDIDATE_THRESHOLD
+      ).slice(0, 2)
       for (const narrative of candidates) {
         if (await semanticMatch(article, narrative, apiKey, signal)) {
           if (!matched[narrative.id]) matched[narrative.id] = []

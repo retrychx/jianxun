@@ -111,11 +111,39 @@ describe('callDeepSeekText / callDeepSeekJSON（通用助手）', () => {
     expect(getTokenCount()).toBe(7)
   })
 
-  it('callDeepSeekText 非 2xx / 空内容返回 null', async () => {
-    stubAI('', 400) // 非重试 4xx → 立即失败
-    expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
-    stubAI('')
-    expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
+  it('callDeepSeekText 非 2xx 立即返回 null（不重试）；空内容重试耗尽后返回 null', async () => {
+    vi.useFakeTimers()
+    try {
+      // 非重试 4xx → 立即失败，只请求 1 次（fetchWithRetry 不重试 400）
+      const bad400 = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 400 }))
+      vi.stubGlobal('fetch', bad400)
+      expect(await callDeepSeekText('key', 'sys', 'user')).toBeNull()
+      expect(bad400).toHaveBeenCalledTimes(1)
+
+      // HTTP 200 空内容 → 空响应重试 3 次后仍 null
+      // 注意：Response 体只能读一次，每次 fetch 必须返回全新实例
+      const empty = vi.fn().mockImplementation(() =>
+        new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }))
+      vi.stubGlobal('fetch', empty)
+      const p = callDeepSeekText('key', 'sys', 'user')
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(await p).toBeNull()
+      expect(empty).toHaveBeenCalledTimes(3)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('callDeepSeekText 空内容后重试成功（HTTP 200 空 content → 第 2 次拿到结果）', async () => {
+    vi.useFakeTimers()
+    const mock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: '正常文本' } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', mock)
+    try {
+      const p = callDeepSeekText('key', 'sys', 'user')
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(await p).toBe('正常文本')
+      expect(mock).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
   })
 
   it('callDeepSeekJSON 解析合法 JSON；坏 JSON 返回 null', async () => {
@@ -123,6 +151,20 @@ describe('callDeepSeekText / callDeepSeekJSON（通用助手）', () => {
     expect(await callDeepSeekJSON<{ ideas: number[] }>('key', 'sys', 'user')).toEqual({ ideas: [1, 2] })
     stubAI('not json')
     expect(await callDeepSeekJSON('key', 'sys', 'user')).toBeNull()
+  })
+
+  it('callDeepSeekJSON 坏 JSON 重试后成功', async () => {
+    vi.useFakeTimers()
+    const mock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: 'not json' } }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":1}' } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', mock)
+    try {
+      const p = callDeepSeekJSON('key', 'sys', 'user')
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(await p).toEqual({ ok: 1 })
+      expect(mock).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
   })
 
   it('无 apiKey 时返回 null 且不调 fetch', async () => {
@@ -243,6 +285,36 @@ describe('generateDigest', () => {
     stubAI(JSON.stringify({ intro: 'x', items: [{ news_id: 99, why: 'w' }], extra: null }))
     expect(await generateDigest([{ id: 1, title: 'a' }], 'key')).toBeNull()
     expect(await generateDigest([{ id: 1, title: 'a' }], undefined)).toBeNull()
+  })
+
+  it('空 content 重试后成功（根因回归：HTTP 200 空响应曾致日报 failed）', async () => {
+    vi.useFakeTimers()
+    const empty = new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 })
+    const ok = new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ intro: '今日', items: [{ news_id: 1, why: 'w', category: 'AI' }], extra: null }) } }] }), { status: 200 })
+    const mock = vi.fn().mockResolvedValueOnce(empty).mockResolvedValueOnce(ok)
+    vi.stubGlobal('fetch', mock)
+    try {
+      const p = generateDigest([{ id: 1, title: 'a' }], 'key')
+      await vi.advanceTimersByTimeAsync(5_000)
+      const r = await p
+      expect(r?.intro).toBe('今日')
+      expect(r?.items).toEqual([{ news_id: 1, why: 'w', category: 'AI' }])
+      expect(mock).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('坏 JSON 重试后成功', async () => {
+    vi.useFakeTimers()
+    const bad = new Response(JSON.stringify({ choices: [{ message: { content: 'not json' } }] }), { status: 200 })
+    const ok = new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ intro: 'i', items: [{ news_id: 1, why: 'w', category: 'AI' }], extra: null }) } }] }), { status: 200 })
+    const mock = vi.fn().mockResolvedValueOnce(bad).mockResolvedValueOnce(ok)
+    vi.stubGlobal('fetch', mock)
+    try {
+      const p = generateDigest([{ id: 1, title: 'a' }], 'key')
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect((await p)?.intro).toBe('i')
+      expect(mock).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
   })
 })
 

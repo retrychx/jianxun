@@ -1,16 +1,23 @@
 import { cacheGet, cacheSet, cacheDelete, CACHE_TTL } from '../cache.js'
 import { generateDigest } from '../analysis/deepseek.js'
 import { type Env } from '../helpers.js'
+import { recordError } from '../agent/cleanup.js'
 
 // Incremental daily digest: first generation creates a full digest from the
 // day's top candidates; subsequent calls only process articles not yet in it,
 // appending new picks.  This saves API cost and keeps selections stable.
 export async function generateTodayDigest(env: Env, signal?: AbortSignal): Promise<'exists' | 'insufficient' | 'failed' | 'generated'> {
   const apiKey = env.DEEPSEEK_API_KEY
-  if (!apiKey) return 'failed'
+  if (!apiKey) {
+    await recordError(env, 'generateDailyDigest', 'DEEPSEEK_API_KEY 未配置')
+    return 'failed'
+  }
   const dateRow = await env.DB.prepare("SELECT date('now', '+8 hours') as d").first<{ d: string }>()
   const date = dateRow?.d
-  if (!date) return 'failed'
+  if (!date) {
+    await recordError(env, 'generateDailyDigest', '无法解析北京日期')
+    return 'failed'
+  }
 
   // Check whether today already has a digest (for incremental merge)
   const existing = await env.DB.prepare('SELECT * FROM digests WHERE date = ?').bind(date).first<any>()
@@ -55,7 +62,10 @@ export async function generateTodayDigest(env: Env, signal?: AbortSignal): Promi
   if (!existing) {
     if (totalCount < 5) return 'insufficient'
     const digest = await generateDigest(all, apiKey, signal)
-    if (!digest) return 'failed'
+    if (!digest) {
+      await recordError(env, 'generateDailyDigest', `AI 三次重试后仍无有效日报（候选 ${all.length} 条）`)
+      return 'failed'
+    }
     await env.DB.prepare('INSERT INTO digests (date, intro, items, extra) VALUES (?, ?, ?, ?)')
       .bind(date, digest.intro, JSON.stringify(digest.items), digest.extra ? JSON.stringify(digest.extra) : null).run()
     await Promise.allSettled([cacheDelete('digest'), cacheDelete('digests')])
@@ -67,7 +77,10 @@ export async function generateTodayDigest(env: Env, signal?: AbortSignal): Promi
   if (newArticles.length < 3) return 'exists'
 
   const digest = await generateDigest(newArticles, apiKey, signal)
-  if (!digest) return 'failed'
+  if (!digest) {
+    await recordError(env, 'generateDailyDigest', `AI 三次重试后仍无有效增量日报（新增 ${newArticles.length} 条）`)
+    return 'failed'
+  }
 
   // Merge: keep existing items, append new ones (dedup by news_id)
   const seen = new Set(existingItems.map((it: any) => it.news_id))

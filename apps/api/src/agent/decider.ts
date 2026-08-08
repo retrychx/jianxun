@@ -66,7 +66,7 @@ export function planPhases(state: SystemState, basePhases: PhaseDef[]): PhaseDef
   }
 
   // 低优先级研究简报等（schedule='budget'）：完整周期一律纳入并标记 low 优先级，
-  // 真正是否跑由 scheduler 的 checkBudget（25s 安全值）在运行时逐阶段跳过——
+  // 真正是否跑由 scheduler 的 checkBudget（真实 CPU 25s 上限）在运行时逐阶段跳过——
   // 不再用假的 remainingBudget 门槛（此前恒 60s 导致门槛从未真正生效）。
   // 注意：schedule 组互斥，always 组已含简报/日报，绝不重复加入。
   planned.push(...bySchedule(basePhases, 'budget').map(p => ({ ...p, priority: 'low' as const })))

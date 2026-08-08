@@ -20,8 +20,11 @@ export const CONFIG = {
   refine: { batchSize: 10, maxPerRun: 40, phaseTimeoutMs: 30_000 },
   translate: { maxPerRun: 10, phaseTimeoutMs: 30_000 },
   crossRef: { windowDays: 2, minArticles: 4, maxGroups: 5, phaseTimeoutMs: 30_000 },
-  // semanticMatch 是 5% 采样里的单次 true/false 判断：给足但不至于拖慢叙事匹配
-  narrative: { matchThreshold: 0.35, minClusterSize: 3, staleDays: 7, archiveDays: 14, maxArticles: 100, phaseTimeoutMs: 90_000, semanticMatchTimeoutMs: 10_000 },
+  // matchThreshold 现在按「覆盖度」解释：叙事 token 集覆盖文章 token 集 ≥0.35 即匹配
+  //（此前 jaccard 会被摘要/进展的千级 token 集稀释到不可达，叙事 developments 永远为空）。
+  // semanticSampleRate：语义兜底采样比例（15%）；semanticCandidateThreshold：进候选池的最低覆盖度。
+  // semanticMatch 是采样里的单次 true/false 判断：给足但不至于拖慢叙事匹配。
+  narrative: { matchThreshold: 0.35, minClusterSize: 3, staleDays: 7, archiveDays: 14, maxArticles: 100, phaseTimeoutMs: 90_000, semanticMatchTimeoutMs: 10_000, semanticSampleRate: 0.15, semanticCandidateThreshold: 0.2 },
   breaking: { windowHours: 6, maxArticles: 30, minSources: 2, minGroupSize: 2, phaseTimeoutMs: 15_000 },
   entity: { maxArticles: 100, windowHours: 12, similarityThreshold: 0.6, phaseTimeoutMs: 15_000 },
   health: { maxImages: 3, weightDecay: 0.1, weightFloor: 0.1, recoveryStep: 0.15, phaseTimeoutMs: 20_000 },

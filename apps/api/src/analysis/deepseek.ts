@@ -81,29 +81,73 @@ export interface CallDeepSeekOpts {
   signal?: AbortSignal
 }
 
-/** 通用 DeepSeek 文本调用：走 parseJson 累计 token、统一剥代码围栏，失败返回 null。 */
-export async function callDeepSeekText(apiKey: string, system: string, user: string, opts: CallDeepSeekOpts = {}): Promise<string | null> {
-  if (!apiKey) return null
-  const { maxTokens = 1024, temperature = 0.2, timeoutMs = CONFIG.deepseek.timeouts.default, signal } = opts
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(timeoutMs),
-      phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature, max_tokens: maxTokens }),
-    })
-    if (!res?.ok) return null
-    const raw = (await parseJson(res))?.choices?.[0]?.message?.content || ''
-    return raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim() || null
-  } catch { return null }
+// ─── 空响应重试 ──────────────────────────────────────────────
+// 实测 DeepSeek 对摘要/日报这类大请求偶发 HTTP 200 但 content 为空（约 1/5）。
+// 空 content 不是"成功"，须退避重试后再判失败；HTTP 错误则直接放弃（fetchWithRetry 已内部重试）。
+const EMPTY_RETRY_ATTEMPTS = 2           // 额外重试次数（共 3 次尝试）
+const EMPTY_RETRY_BACKOFF_MS = [1_000, 2_000]
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+function aborted(signal?: AbortSignal): boolean {
+  return !!signal?.aborted || !!_agentAbort?.signal?.aborted
 }
 
-/** 通用 DeepSeek JSON 调用：文本解析为 JSON；坏 JSON / 失败返回 null。 */
+/** 单次请求结果：text=成功；empty=HTTP 200 但 content 为空（可重试）；httpError=HTTP 失败（已重试，直接放弃）。 */
+type ChatOutcome = { kind: 'text'; text: string } | { kind: 'empty' } | { kind: 'httpError' }
+
+async function chatOnce(apiKey: string, body: Record<string, unknown>, opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<ChatOutcome> {
+  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(opts.timeoutMs ?? CONFIG.deepseek.timeouts.default),
+    phaseSignal: opts.signal,
+    body: JSON.stringify(body),
+  })
+  if (!res?.ok) return { kind: 'httpError' }
+  const raw = (await parseJson(res)).choices?.[0]?.message?.content || ''
+  const text = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return text ? { kind: 'text', text } : { kind: 'empty' }
+}
+
+/** 带空内容重试的 DeepSeek 文本调用（最多 3 次，1s/2s 退避；仅"200 空内容"触发重试）。 */
+async function chatWithRetry(apiKey: string, body: Record<string, unknown>, opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<string | null> {
+  if (!apiKey) return null
+  for (let attempt = 0; attempt <= EMPTY_RETRY_ATTEMPTS; attempt++) {
+    const out = await chatOnce(apiKey, body, opts)
+    if (out.kind === 'text') return out.text
+    if (out.kind === 'httpError' || aborted(opts.signal) || attempt >= EMPTY_RETRY_ATTEMPTS) return null
+    await sleep(EMPTY_RETRY_BACKOFF_MS[attempt])
+  }
+  return null
+}
+
+/** 通用 DeepSeek 文本调用：走 parseJson 累计 token、统一剥代码围栏，失败返回 null。 */
+export async function callDeepSeekText(apiKey: string, system: string, user: string, opts: CallDeepSeekOpts = {}): Promise<string | null> {
+  const { maxTokens = 1024, temperature = 0.2, timeoutMs = CONFIG.deepseek.timeouts.default, signal } = opts
+  return chatWithRetry(apiKey, {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    temperature, max_tokens: maxTokens,
+  }, { timeoutMs, signal })
+}
+
+/** 通用 DeepSeek JSON 调用：空响应/坏 JSON 都重试，仍失败才返回 null。 */
 export async function callDeepSeekJSON<T = any>(apiKey: string, system: string, user: string, opts: CallDeepSeekOpts = {}): Promise<T | null> {
-  const text = await callDeepSeekText(apiKey, system, user, opts)
-  if (!text) return null
-  try { return JSON.parse(text) as T } catch { return null }
+  if (!apiKey) return null
+  const { maxTokens = 1024, temperature = 0.2, timeoutMs = CONFIG.deepseek.timeouts.default, signal } = opts
+  const body = {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    temperature, max_tokens: maxTokens,
+  }
+  for (let attempt = 0; attempt <= EMPTY_RETRY_ATTEMPTS; attempt++) {
+    const out = await chatOnce(apiKey, body, { timeoutMs, signal })
+    if (out.kind === 'text') {
+      try { return JSON.parse(out.text) as T } catch { /* 坏 JSON：重试 */ }
+    }
+    if (out.kind === 'httpError' || aborted(signal) || attempt >= EMPTY_RETRY_ATTEMPTS) return null
+    await sleep(EMPTY_RETRY_BACKOFF_MS[attempt])
+  }
+  return null
 }
 
 /** 阻止 SSRF：只允许公开 http(s)，拒绝内网/环回地址（url 来自第三方 RSS，不可信） */
@@ -204,22 +248,29 @@ export interface DigestResult { intro: string; items: { news_id: number; why: st
 
 export async function generateDigest(candidates: DigestCandidate[], apiKey: string | undefined, signal?: AbortSignal): Promise<DigestResult | null> {
   if (!apiKey || !candidates.length) return null
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(60_000),
-      phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: DIGEST_PROMPT }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }], temperature: 0.2, max_tokens: 4096 }),
-    })
-    if (!res || !res.ok) return null
-    const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
-    const parsed = JSON.parse(raw); const validIds = new Set(candidates.map(c => c.id)); const seen = new Set<number>(); const items: DigestResult['items'] = []
-    for (const it of (Array.isArray(parsed.items) ? parsed.items : [])) { const id = Number(it?.news_id); if (!validIds.has(id) || seen.has(id)) continue; seen.add(id); items.push({ news_id: id, why: String(it.why||'').slice(0,60), category: String(it.category||'科技') }); if (items.length >= 20) break }
-    if (!items.length) return null
-    let extra: DigestResult['extra'] = null; const extraId = Number(parsed.extra?.news_id)
-    if (parsed.extra && validIds.has(extraId) && !seen.has(extraId)) extra = { news_id: extraId, why: String(parsed.extra.why||'').slice(0,60) }
-    return { intro: String(parsed.intro||'').slice(0,200), items, extra }
-  } catch { return null }
+  const body = {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: DIGEST_PROMPT }, { role: 'user', content: candidates.slice(0,30).map(c => { let d = `[${c.id}] ${c.title}（${c.source||'未知来源'}/${c.category||'科技'}/热度${c.heat||1}`; if (c._significance) d += `｜${c._significance}`; if (c._controversy) d += '｜有争议'; d += `）\n${(c.summary||'').slice(0,200)}`; return d }).join('\n\n') }],
+    temperature: 0.2, max_tokens: 4096,
+  }
+  // 空 content / 坏 JSON / 无有效条目都算失败，退避重试后再放弃（实测 ~1/5 返回空）。
+  for (let attempt = 0; attempt <= EMPTY_RETRY_ATTEMPTS; attempt++) {
+    const out = await chatOnce(apiKey, body, { timeoutMs: 60_000, signal })
+    if (out.kind === 'text') {
+      try {
+        const parsed = JSON.parse(out.text); const validIds = new Set(candidates.map(c => c.id)); const seen = new Set<number>(); const items: DigestResult['items'] = []
+        for (const it of (Array.isArray(parsed.items) ? parsed.items : [])) { const id = Number(it?.news_id); if (!validIds.has(id) || seen.has(id)) continue; seen.add(id); items.push({ news_id: id, why: String(it.why||'').slice(0,60), category: String(it.category||'科技') }); if (items.length >= 20) break }
+        if (items.length) {
+          let extra: DigestResult['extra'] = null; const extraId = Number(parsed.extra?.news_id)
+          if (parsed.extra && validIds.has(extraId) && !seen.has(extraId)) extra = { news_id: extraId, why: String(parsed.extra.why||'').slice(0,60) }
+          return { intro: String(parsed.intro||'').slice(0,200), items, extra }
+        }
+      } catch { /* 坏 JSON：重试 */ }
+    }
+    if (out.kind === 'httpError' || aborted(signal) || attempt >= EMPTY_RETRY_ATTEMPTS) return null
+    await sleep(EMPTY_RETRY_BACKOFF_MS[attempt])
+  }
+  return null
 }
 
 export async function translateBatch(articles: { id: number; title: string; summary: string }[], apiKey: string | undefined, signal?: AbortSignal): Promise<{ id: number; title_zh: string; summary_zh: string }[] | null> {
@@ -322,16 +373,15 @@ export async function generateNarrativeDevelopment(
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
+  if (!apiKey) return null
   const { NARRATIVE_PROMPT } = await import('./prompts.js')
-  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
-    phaseSignal: signal,
-    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_PROMPT(label) }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
-  })
-  if (!res?.ok) return null
-  const raw = (await parseJson(res)).choices?.[0]?.message?.content?.trim()
-  return raw?.replace(/```[a-z]*\n?/g,'').replace(/^["\u201c]|["\u201d]$/g,'').trim().slice(0,200) || null
+  const raw = await chatWithRetry(apiKey, {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: NARRATIVE_PROMPT(label) }, { role: 'user', content: articles.map(a => `[${a.source}] ${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }],
+    temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256,
+  }, { timeoutMs: CONFIG.deepseek.timeouts.narrative, signal })
+  if (!raw) return null
+  return raw.replace(/```[a-z]*\n?/g,'').replace(/^["\u201c]|["\u201d]$/g,'').trim().slice(0,200) || null
 }
 
 /** Generate or refresh a narrative summary from all associated articles. */
@@ -341,15 +391,14 @@ export async function generateNarrativeSummary(
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
+  if (!apiKey) return null
   const { NARRATIVE_SUMMARY_PROMPT } = await import('./prompts.js')
-  const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.narrative),
-    phaseSignal: signal,
-    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: NARRATIVE_SUMMARY_PROMPT(label) }, { role: 'user', content: articles.slice(0,20).map(a => `${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }], temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256 }),
-  })
-  if (!res?.ok) return null
-  return (await parseJson(res)).choices?.[0]?.message?.content?.trim()?.slice(0,300) || null
+  const raw = await chatWithRetry(apiKey, {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: NARRATIVE_SUMMARY_PROMPT(label) }, { role: 'user', content: articles.slice(0,20).map(a => `${a.title}\n${a.summary.slice(0,200)}`).join('\n\n') }],
+    temperature: CONFIG.deepseek.temperature.narrative, max_tokens: 256,
+  }, { timeoutMs: CONFIG.deepseek.timeouts.narrative, signal })
+  return raw?.slice(0,300) || null
 }
 
 

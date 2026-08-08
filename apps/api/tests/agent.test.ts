@@ -215,6 +215,41 @@ describe('updateNarratives', () => {
     await updateNarratives(env)
     expect(await metaGet(env, META.lastRun)).toBeNull()
   })
+
+  it('覆盖度匹配：文章与叙事共享 ≥3 token 且覆盖 ≥35% 时追加进展', async () => {
+    // 根因回归：旧 jaccard 匹配被叙事千级 token 集稀释到阈值不可达，developments 永不积累。
+    // 覆盖度用文章侧做分母：标题 10 token 中 8 个命中叙事集 → ratio 0.8 ≥ 0.35、shared 8 ≥ 3 → 匹配。
+    mockFetch()
+    env.DB.exec(
+      `INSERT INTO news (id, title, url, source, lang, description, score, published_at, created_at, title_norm)
+       VALUES (1, '英伟达发布新一代GPU芯片', 'https://e.com/1', 'S1', 'zh', '一篇关于英伟达新产品的报道内容', 90,
+               datetime('now','-1 hour'), datetime('now'), 'n1')`,
+    )
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats, summary)
+       VALUES ('英伟达', '英伟达新动向', 'active', date('now'), datetime('now'), '[]', '[]', '{}', '英伟达正在发布新一代GPU芯片，性能大幅提升')`,
+    )
+    const result = await updateNarratives(env)
+    expect(result.matched).toBe(1)
+    const narr = env.DB._db.prepare("SELECT developments FROM narratives WHERE keyword = '英伟达'").get()
+    expect(JSON.parse(narr.developments).length).toBe(1)
+  })
+
+  it('覆盖度不足时不匹配（文章与叙事共享 token 太少）', async () => {
+    mockFetch()
+    env.DB.exec(
+      `INSERT INTO news (id, title, url, source, lang, description, score, published_at, created_at, title_norm)
+       VALUES (1, '英伟达发布新一代GPU芯片', 'https://e.com/1', 'S1', 'zh', '一篇关于英伟达新产品的报道内容', 90,
+               datetime('now','-1 hour'), datetime('now'), 'n1')`,
+    )
+    // 无关叙事：token 集与文章几乎没有交集（无 summary，仅标签"天气"）
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats)
+       VALUES ('天气', '天气变化', 'active', date('now'), datetime('now'), '[]', '[]', '{}')`,
+    )
+    const result = await updateNarratives(env)
+    expect(result.matched).toBe(0)
+  })
 })
 
 describe('breaking 关键词 LIKE 转义（M5 回归）', () => {

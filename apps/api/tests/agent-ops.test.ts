@@ -192,10 +192,14 @@ describe('runPhases（调度器）', () => {
   })
 
   it('预算耗尽时跳过 low 优先级阶段', async () => {
-    vi.useFakeTimers()
+    // 预算依据真实 CPU（process.cpuUsage）；mock 一个每次读数 +26s CPU 的单调读数，
+    // initBudget 基线 0 → checkBudget 读到 26s ≥ 25s 上限 → 耗尽。
+    // Worker 类型不含 process，经 globalThis 访问（运行时 nodejs_compat / vitest 下都有）。
+    const cpuSpy = vi.spyOn((globalThis as any).process, 'cpuUsage')
+    let cpuUs = 0
+    cpuSpy.mockImplementation(() => { cpuUs += 26_000_000; return { user: cpuUs, system: 0 } })
     try {
       initBudget()
-      vi.advanceTimersByTime(26_000)
       checkBudget() // 触发 _budgetExhausted = true
       const run = vi.fn(async () => 1)
       const results = await runPhases([{ name: 'Low', priority: 'low', run }] as any, env)
@@ -203,7 +207,7 @@ describe('runPhases（调度器）', () => {
       expect(results.Low.ok).toBe(true)
       expect(results.Low.result).toBeUndefined()
     } finally {
-      vi.useRealTimers()
+      cpuSpy.mockRestore()
     }
   })
 })
