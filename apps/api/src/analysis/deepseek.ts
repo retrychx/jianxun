@@ -18,6 +18,12 @@ import {
 
 export const DEEPSEEK_MODEL = CONFIG.deepseek.model
 
+// deepseek-v4-flash 默认开启思考模式：复杂提示词（如 30 候选的日报）会把整个
+// max_tokens 预算耗在 reasoning_content 上，content 为空（finish_reason=length），
+// 空响应重试 3 次全失败。本项目调用都是结构化提取/总结，统一禁用思考 →
+// content 稳定 + 请求 5~10x 提速（整轮运行不再被拖到平台时长/CPU 限制）。
+export const DISABLE_THINKING = { thinking: { type: 'disabled' } } as const
+
 // ─── 每轮运行的 token 用量统计（可观测性） ───
 let _runTokens = 0
 export function resetTokenCount(): void { _runTokens = 0 }
@@ -100,7 +106,7 @@ async function chatOnce(apiKey: string, body: Record<string, unknown>, opts: { t
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(opts.timeoutMs ?? CONFIG.deepseek.timeouts.default),
     phaseSignal: opts.signal,
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...DISABLE_THINKING }),
   })
   if (!res?.ok) return { kind: 'httpError' }
   const raw = (await parseJson(res)).choices?.[0]?.message?.content || ''
@@ -213,7 +219,7 @@ export async function analyzeWithDeepSeek(title: string, content: string, apiKey
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }], temperature: 0.3, max_tokens: 1024 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }], temperature: 0.3, max_tokens: 1024, ...DISABLE_THINKING }),
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content; if (!raw) return null
@@ -232,7 +238,7 @@ export async function generateTopicLabels(titleGroups: string[][], apiKey: strin
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TOPIC_LABELS_PROMPT }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TOPIC_LABELS_PROMPT }, { role: 'user', content: titleGroups.map((titles, i) => `[${i}]\n${titles.join('\n')}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024, ...DISABLE_THINKING }),
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -280,7 +286,7 @@ export async function translateBatch(articles: { id: number; title: string; summ
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
       phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TRANSLATION_PROMPT }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: TRANSLATION_PROMPT }, { role: 'user', content: articles.map(a => `[${a.id}] ${a.title}\n${(a.summary||'').slice(0,300)}`).join('\n\n') }], temperature: 0.1, max_tokens: 2048, ...DISABLE_THINKING }),
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -296,7 +302,7 @@ export async function generateStoryline(articles: { title: string; summary: stri
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: STORYLINE_PROMPT }, { role: 'user', content: articles.map(a => `${a.title}\n${(a.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: STORYLINE_PROMPT }, { role: 'user', content: articles.map(a => `${a.title}\n${(a.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512, ...DISABLE_THINKING }),
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content?.trim(); if (!raw) return null
@@ -313,7 +319,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
     const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: ANSWER_PROMPT }, { role: 'user', content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0,30).map((c,i) => `[${i}] ${c.titleZh||c.title}（${c.source||'未知来源'}${c.publishedAt ? '/'+c.publishedAt.slice(0,10) : ''}）\n${((c.summaryZh||c.summary)||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024 }),
+      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: ANSWER_PROMPT }, { role: 'user', content: `问题：${question}\n\n候选新闻：\n` + candidates.slice(0,30).map((c,i) => `[${i}] ${c.titleZh||c.title}（${c.source||'未知来源'}${c.publishedAt ? '/'+c.publishedAt.slice(0,10) : ''}）\n${((c.summaryZh||c.summary)||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 1024, ...DISABLE_THINKING }),
     })
     if (!res || !res.ok) return null
     const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) return null
@@ -336,7 +342,7 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(30_000),
         phaseSignal: signal,
-        body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CROSSREF_PROMPT }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512 }),
+        body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CROSSREF_PROMPT }, { role: 'user', content: group.map(g => `[${g.source}]\n标题：${g.title}\n摘要：${(g.summary||'').slice(0,200)}`).join('\n\n') }], temperature: 0.2, max_tokens: 512, ...DISABLE_THINKING }),
       })
       if (!res?.ok) continue
       const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
@@ -358,7 +364,7 @@ export async function batchClassify(
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(CONFIG.deepseek.timeouts.classification),
     phaseSignal: signal,
-    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024 }),
+    body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: CLASSIFY_PROMPT }, { role: 'user', content: texts }], temperature: CONFIG.deepseek.temperature.classification, max_tokens: 1024, ...DISABLE_THINKING }),
   })
   if (!res?.ok) return []
   const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()
@@ -426,6 +432,7 @@ export async function generateResearchReport(
         ],
         temperature: 0.2,
         max_tokens: 2048,
+        ...DISABLE_THINKING,
       }),
     })
     if (!res?.ok) return null

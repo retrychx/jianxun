@@ -250,6 +250,29 @@ describe('updateNarratives', () => {
     const result = await updateNarratives(env)
     expect(result.matched).toBe(0)
   })
+
+  it('种子叙事（article_ids 已有文章但 developments 为空）重新匹配时也落库首条进展', async () => {
+    // 回归：appendDevelopment 旧守卫 `if (!newIds.length) return` 在文章已在 article_ids 时
+    // 直接丢弃进展，导致种子叙事 / 被重播的叙事 developments 永远为空、故事永不更新。
+    // 种子叙事的文章在 24h 窗口内会被重新匹配，此时 newIds 为空但 existing 为空，
+    // 必须把这条进展写入，否则故事永远没有进展。
+    mockFetch()
+    env.DB.exec(
+      `INSERT INTO news (id, title, url, source, lang, description, score, published_at, created_at, title_norm)
+       VALUES (1, '英伟达发布新一代GPU芯片', 'https://e.com/1', 'S1', 'zh', '一篇关于英伟达新产品的报道内容', 90,
+               datetime('now','-1 hour'), datetime('now'), 'n1')`,
+    )
+    env.DB.exec(
+      `INSERT INTO narratives (keyword, label, status, first_seen, last_updated, article_ids, developments, source_stats, summary)
+       VALUES ('英伟达', '英伟达新动向', 'active', date('now'), datetime('now'), '[1]', '[]', '{}', '英伟达正在发布新一代GPU芯片，性能大幅提升')`,
+    )
+    const result = await updateNarratives(env)
+    expect(result.matched).toBe(1)
+    const narr = env.DB._db.prepare("SELECT developments FROM narratives WHERE keyword = '英伟达'").get()
+    const devs = JSON.parse(narr.developments)
+    expect(devs.length).toBe(1)
+    expect(devs[0].text).toContain('关键进展')
+  })
 })
 
 describe('breaking 关键词 LIKE 转义（M5 回归）', () => {

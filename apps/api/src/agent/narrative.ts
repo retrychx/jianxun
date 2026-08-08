@@ -171,7 +171,10 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
   const existing: any[] = JSON.parse(narrative.developments || '[]')
   const ids: number[] = JSON.parse(narrative.article_ids || '[]')
   const newIds = articles.map(a => Number(a.id)).filter(id => !ids.includes(id))
-  if (!newIds.length) return
+  // 叙事已有进展且本轮没有新文章 → 无新增量，丢弃。
+  // 但 existing 为空时（种子叙事 / 叙事被重播），即使文章已在 article_ids 里，
+  // 这批匹配文章本身就是"首个进展"，必须落库，否则叙事永远没有进展。
+  if (!newIds.length && existing.length > 0) return
   const sources: Record<string, number> = {}
   for (const a of articles) { const s = a.source || 'unknown'; sources[s] = (sources[s] || 0) + 1 }
   const existingSources: Record<string, number> = JSON.parse(narrative.source_stats || '{}')
@@ -180,14 +183,16 @@ async function appendDevelopment(env: Env, narrative: Narrative, text: string, a
   if (existing.length === 0 || existing.length % 3 === 0) {
     summary = await narrSummary(env, narrative, ids, articles, signal)
   }
-  existing.push({ date: new Date().toISOString().slice(0,10), text: decodeHtml(text), articleCount: newIds.length, sources: Object.keys(sources) })
+  // articleCount 首条进展时统计全部匹配文章；后续进展统计真正新增文章
+  const articleCount = newIds.length || articles.length
+  existing.push({ date: new Date().toISOString().slice(0,10), text: decodeHtml(text), articleCount, sources: Object.keys(sources) })
   ids.push(...newIds)
   await env.DB.prepare(
     `UPDATE narratives SET last_updated=datetime('now'), developments=?, article_ids=?,
      source_stats=?, summary=COALESCE(?,summary) WHERE id=?`
   ).bind(JSON.stringify(existing), JSON.stringify(ids), JSON.stringify(existingSources), summary, narrative.id).run()
   cacheDelete(`narrative:${encodeURIComponent(narrative.keyword)}`).catch(() => {})
-  signalEvent('narrative', { keyword: narrative.keyword, label: narrative.label || narrative.keyword, text, articleCount: newIds.length }).catch(() => {})
+  signalEvent('narrative', { keyword: narrative.keyword, label: narrative.label || narrative.keyword, text, articleCount }).catch(() => {})
 }
 
 async function narrSummary(env: Env, narrative: Narrative, existingIds: number[], newBatch: any[], signal?: AbortSignal): Promise<string | null> {
