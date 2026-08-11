@@ -28,6 +28,9 @@ export async function runCrossRefAnalysis(env: Env, signal?: AbortSignal) {
 
   let stored = 0
   for (const ref of results) {
+    // 空文章列表的「多源对比」没有可读内容，跳过不建——否则生成 0 篇假叙事，
+    // 且 web 端按分类把 cross 置顶，会让假叙事占据故事列表前几名（实测全是某单一主题）。
+    if (!Array.isArray(ref.articleIds) || ref.articleIds.length === 0) continue
     const keyword = `__cross__${ref.keyword.slice(0,40)}`
     try {
       await env.DB.prepare(
