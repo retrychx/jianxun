@@ -3,11 +3,12 @@ compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
 # 相对本配置文件的目录：../frontend/dist = apps/frontend/dist
 pages_build_output_dir = "../frontend/dist"
-migrations_dir = "migrations"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "jianxun"
 database_id = "70d6ee60-fd6a-4f85-a3ab-a525ec53a2e5"
+# 需放在 [[d1_databases]] 内，否则 wrangler 报 Unexpected fields 并忽略（默认目录碰巧同名才没翻车）
+migrations_dir = "migrations"
 
 # DEEPSEEK_API_KEY is set via `npx wrangler pages secret put DEEPSEEK_API_KEY`
