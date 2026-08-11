@@ -1,0 +1,18 @@
+# 缓存策略：应用壳必须重新校验，否则旧 index.html 引用旧哈希资源，
+# 配合 Service Worker 缓存会表现为「刷新不更新、必须强制刷新」。
+# 哈希资源（/assets/*）内容寻址，可长期缓存，新部署换新文件名，无陈旧风险。
+
+# 页面 / 应用壳：每次重新校验
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/*.html
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+
+# Service Worker：永不缓存，保证更新检查拿到最新 sw.js
+/sw.js
+  Cache-Control: no-cache
+
+# 构建产物（带内容哈希）：长缓存 + immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

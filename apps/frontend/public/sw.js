@@ -1,11 +1,11 @@
-// 简讯 Service Worker v6 — 移动端兼容性优化 + 修复 SW_UPDATE 刷新反馈环
-var STATIC_CACHE = 'jianxun-static-v6'
-var API_CACHE = 'jianxun-api-v6'
+// 简讯 Service Worker v7 — 应用壳强制直连网络（修复「刷新不更新、需强制刷新」）+ 移动端兼容性优化
+var STATIC_CACHE = 'jianxun-static-v7'
+var API_CACHE = 'jianxun-api-v7'
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg']
 
 var MAX_API_CACHE = 100
 var MAX_STATIC_CACHE = 30
-var VERSION = '5.1.0'
+var VERSION = '5.2.0'
 
 // ═══ P0: AbortSignal.timeout() 兼容 iOS（手写超时） ═══
 function fetchWithTimeout(url, opts, ms) {
@@ -122,10 +122,13 @@ async function apiWithCache(req) {
   }
 }
 
-// ═══ 页面：先网络，离线用缓存 ═══
+// ═══ 页面：先网络（绕过 HTTP 缓存），离线用缓存 ═══
 async function networkWithFallback(req) {
   try {
-    var res = await fetchWithTimeout(req, null, 8000)
+    // cache: 'no-store' —— 应用壳（index.html）永远直连网络，绕过浏览器/中间层 HTTP 缓存。
+    // 否则 max-age=0 的 index.html 在部分浏览器 + SW 组合下仍会拿到旧壳，
+    // 表现为「刷新不更新，必须强制刷新」。离线时才回退到下面缓存的 HTML。
+    var res = await fetchWithTimeout(req, { cache: 'no-store' }, 8000)
     if (res && res.ok) { var clone = res.clone(); caches.open(STATIC_CACHE).then(function(c) { c.put(req, clone) }) }
     return res
   } catch(e) {

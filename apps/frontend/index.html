@@ -28,10 +28,10 @@
         // PWA安装提示：在 React 加载前捕获 beforeinstallprompt
         window.__pwaPrompt = null
         window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); window.__pwaPrompt = e })
-        // Service Worker 注册
+        // Service Worker 注册：updateViaCache 'none' 保证更新检查时 sw.js 不被 HTTP 缓存挡住
         if ('serviceWorker' in navigator) {
           setTimeout(function() {
-            navigator.serviceWorker.register('/sw.js').catch(function(){})
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function(){})
           }, 1000)
         }
       })()
