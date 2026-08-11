@@ -7,3 +7,9 @@ dist
 .wrangler
 dev-vars
 .dev.vars
+
+# iOS
+apps/ios/.build*/
+*.xcuserstate
+xcuserdata/
+.DS_Store
