@@ -207,6 +207,32 @@ async function narrSummary(env: Env, narrative: Narrative, existingIds: number[]
 }
 
 
+/** 主题标签归一化：折叠空白、统一弯引号、转小写，用于"同主题合并"去重 */
+function normalizeLabel(s: string): string {
+  return s
+    .trim()
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+}
+
+/** 仅合并文章（开发进展生成失败时的兜底）：把新文章并入已有叙事的 article_ids / source_stats */
+async function mergeArticlesOnly(env: Env, narrative: Narrative, articles: any[]): Promise<void> {
+  const ids: number[] = JSON.parse(narrative.article_ids || '[]')
+  const newIds = articles.map(a => Number(a.id)).filter(id => !ids.includes(id))
+  if (!newIds.length) return
+  const sources: Record<string, number> = {}
+  for (const a of articles) { const s = a.source || 'unknown'; sources[s] = (sources[s] || 0) + 1 }
+  const existingSources: Record<string, number> = JSON.parse(narrative.source_stats || '{}')
+  for (const [s, c] of Object.entries(sources)) existingSources[s] = (existingSources[s] || 0) + (c as number)
+  ids.push(...newIds)
+  await env.DB.prepare(
+    `UPDATE narratives SET last_updated=datetime('now'), article_ids=?, source_stats=? WHERE id=?`
+  ).bind(JSON.stringify(ids), JSON.stringify(existingSources), narrative.id).run()
+  cacheDelete(`narrative:${encodeURIComponent(narrative.keyword)}`).catch(() => {})
+}
+
 async function seedNarratives(env: Env, articles: any[], existing: Narrative[], apiKey: string, signal?: AbortSignal): Promise<number> {
   // Index existing narratives by their article_ids for overlap dedup
   const existingArticleIds = new Map<number, Set<number>>()
@@ -217,6 +243,12 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
     } catch {}
   }
   const existingKeywords = new Set(existing.map(n => n.keyword))
+  // 按归一化标签索引已有叙事：同一主题（label）的 cluster 合并，而不是新建一行
+  const existingByLabel = new Map<string, Narrative>()
+  for (const n of existing) {
+    const norm = normalizeLabel(n.label || n.keyword)
+    if (norm) existingByLabel.set(norm, n)
+  }
   let created = 0
 
   const clusters = clusterNews(articles.map(a => ({ id: a.id, title: a.title || '' })))
@@ -248,6 +280,20 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
     const lbl = await generateTopicLabels([ca.slice(0,3).map((a:any)=>a.title)], apiKey, signal).then(l=>l?.[0]||null)
     // 存库前解码 HTML 实体（AI 可能把源标题里的 &#8217; 抄进标签）
     const nlbl = decodeHtml(lbl || ca[0]?.title?.slice(0, 30) || fallbackLabel(cleanWords))
+    const norm = normalizeLabel(nlbl)
+
+    // 标签去重：同一主题标签 → 合并进已有叙事，而不是新建一行。
+    // 同一份新闻简报/摘要里多组 cluster 会被 AI 标成同一个标签，若只按 keyword 去重会生成多条同主题叙事。
+    const dupByLabel = norm ? existingByLabel.get(norm) : undefined
+    if (dupByLabel) {
+      const dev = await generateDevelopment(dupByLabel, ca, apiKey, signal)
+      if (dev) await appendDevelopment(env, dupByLabel, dev, ca, signal)
+      else await mergeArticlesOnly(env, dupByLabel, ca)
+      // 刷新内存中的叙事对象，避免本轮后续 cluster 合并读到过期的 article_ids / developments
+      const fresh = await env.DB.prepare('SELECT * FROM narratives WHERE id=?').bind(dupByLabel.id).first<any>()
+      if (fresh) existingByLabel.set(norm, fresh as Narrative)
+      continue
+    }
 
     const srcs: Record<string,number> = {}; for (const a of ca) { const s=a.source||'unknown'; srcs[s]=(srcs[s]||0)+1 }
 
@@ -255,7 +301,12 @@ async function seedNarratives(env: Env, articles: any[], existing: Narrative[], 
       `INSERT OR IGNORE INTO narratives (keyword,label,first_seen,last_updated,status,summary,developments,article_ids,source_stats)
        VALUES (?,?,date('now'),datetime('now'),'active',?,'[]',?,?)`
     ).bind(keyword, nlbl, decodeHtml((ca[0]?.summary||ca[0]?.description||'').slice(0,300)), JSON.stringify(ids), JSON.stringify(srcs)).run()
-    if (r.meta.changes > 0) created++
+    if (r.meta.changes > 0) {
+      created++
+      // 记录新叙事，供本轮后续 cluster 的标签去重
+      const fresh = await env.DB.prepare('SELECT * FROM narratives WHERE keyword=?').bind(keyword).first<any>()
+      if (fresh) existingByLabel.set(norm, fresh as Narrative)
+    }
   }
   return created
 }
