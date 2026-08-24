@@ -347,18 +347,19 @@ describe('crossRefAnalysis', () => {
   it('单对象解析；少于 2 篇的组跳过', async () => {
     stubAI(JSON.stringify({ keyword: '英伟达事件', comparison: '两家媒体角度不同' }))
     const r = await crossRefAnalysis([
-      [{ source: 'S1', title: 'a', summary: 's' }, { source: 'S2', title: 'b', summary: 't' }],
-      [{ source: 'S3', title: 'c', summary: 'u' }], // 单篇 → 跳过
+      [{ id: 1, source: 'S1', title: 'a', summary: 's' }, { id: 2, source: 'S2', title: 'b', summary: 't' }],
+      [{ id: 3, source: 'S3', title: 'c', summary: 'u' }], // 单篇 → 跳过
     ], 'key')
     expect(r?.length).toBe(1)
     expect(r![0].keyword).toBe('英伟达事件')
     expect(r![0].sources.map((s: any) => s.name)).toEqual(['S1', 'S2'])
     expect(r![0].comparison).toContain('角度不同')
+    expect(r![0].articleIds).toEqual([1, 2]) // 回归：articleIds 必须由分组真实 id 推导，否则 crossref 守卫全跳过
   })
 
   it('无合法组返回 null', async () => {
     stubAI(JSON.stringify({ comparison: 'x' }))
-    expect(await crossRefAnalysis([[{ source: 'S1', title: 'a', summary: 's' }]], 'key')).toBeNull()
+    expect(await crossRefAnalysis([[{ id: 1, source: 'S1', title: 'a', summary: 's' }]], 'key')).toBeNull()
   })
 })
 

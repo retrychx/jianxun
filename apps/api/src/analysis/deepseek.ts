@@ -338,7 +338,7 @@ export async function generateAnswer(question: string, candidates: AskCandidate[
 
 export interface CrossRefResult { keyword: string; sources: { name: string; angle: string }[]; comparison: string; articleIds: number[] }
 
-export async function crossRefAnalysis(groups: { source: string; title: string; summary: string }[][], apiKey: string | undefined, signal?: AbortSignal): Promise<CrossRefResult[] | null> {
+export async function crossRefAnalysis(groups: { id: number; source: string; title: string; summary: string }[][], apiKey: string | undefined, signal?: AbortSignal): Promise<CrossRefResult[] | null> {
   if (!apiKey || !groups.length) return null
   const results: CrossRefResult[] = []
   for (const group of groups) {
@@ -354,7 +354,9 @@ export async function crossRefAnalysis(groups: { source: string; title: string; 
       if (!res?.ok) continue
       const raw = (await parseJson(res)).choices?.[0]?.message?.content?.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim(); if (!raw) continue
       const parsed = JSON.parse(raw)
-      if (parsed.comparison) results.push({ keyword: parsed.keyword || group.map(g => g.title).join(' | ').slice(0,60), sources: sources.map(s => ({ name: s, angle: '' })), comparison: parsed.comparison.slice(0,200), articleIds: [] })
+      // articleIds 由分组里的真实文章 id 推导（CROSSREF_PROMPT 只返回 keyword/comparison）。
+      // 用空数组会让 crossref.ts 的"空列表不建叙事"守卫把所有跨源叙事全跳过（回归）。
+      if (parsed.comparison) results.push({ keyword: parsed.keyword || group.map(g => g.title).join(' | ').slice(0,60), sources: sources.map(s => ({ name: s, angle: '' })), comparison: parsed.comparison.slice(0,200), articleIds: group.map(g => g.id) })
     } catch {}
   }
   return results.length ? results : null

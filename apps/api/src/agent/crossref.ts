@@ -16,10 +16,10 @@ export async function runCrossRefAnalysis(env: Env, signal?: AbortSignal) {
   const groups = new Map<string, any[]>()
   for (const a of articles) { const key = a.title_norm || a.title; if (!groups.has(key)) groups.set(key, []); groups.get(key)!.push(a) }
 
-  const multi: { source: string; title: string; summary: string }[][] = []
+  const multi: { id: number; source: string; title: string; summary: string }[][] = []
   for (const [, group] of groups) {
     const us = [...new Set(group.map((a: any) => a.source))]
-    if (us.length >= 2) multi.push(group.map((a: any) => ({ source: a.source, title: a.title, summary: a.summary || '' })))
+    if (us.length >= 2) multi.push(group.map((a: any) => ({ id: a.id, source: a.source, title: a.title, summary: a.summary || '' })))
   }
   if (!multi.length) return { crossRefs: 0 }
 
