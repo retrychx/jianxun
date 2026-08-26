@@ -113,8 +113,21 @@ async function chatOnce(apiKey: string, body: Record<string, unknown>, opts: { t
     phaseSignal: opts.signal,
     body: JSON.stringify({ ...body, ...DISABLE_THINKING }),
   })
-  if (!res?.ok) return { kind: 'httpError' }
-  const raw = (await parseJson(res)).choices?.[0]?.message?.content || ''
+  // 阶段标识：取 system 提示词开头（ANALYSIS/DIGEST/TRANSLATION…），便于从日志定位是哪个 AI 阶段
+  const tag = String((body as any).messages?.[0]?.content || '').slice(0, 20)
+  if (!res) return { kind: 'httpError' }
+  if (!res.ok) {
+    console.warn(`[ai] HTTP ${res.status} 阶段=${tag}`)
+    return { kind: 'httpError' }
+  }
+  const data = await parseJson(res)
+  const raw = data?.choices?.[0]?.message?.content || ''
+  if (!raw) {
+    // 记录响应形状（message 字段 keys / error 体），诊断生产高比例空响应
+    const msg = data?.choices?.[0]?.message
+    const shape = msg ? Object.keys(msg).join(',') : (data?.error ? `error:${JSON.stringify(data.error).slice(0, 80)}` : 'no-message')
+    console.warn(`[ai] 空响应 status=${res.status} shape=${shape} 阶段=${tag}`)
+  }
   const text = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   return text ? { kind: 'text', text } : { kind: 'empty' }
 }
@@ -221,21 +234,52 @@ export interface AnalysisDetail {
 
 export async function analyzeWithDeepSeek(title: string, content: string, apiKey: string, pageTitle?: string | null, signal?: AbortSignal): Promise<{ base: DeepSeekResult; detail: AnalysisDetail } | null> {
   const prompt = ANALYSIS_PROMPT
-  try {
-    const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(30_000),
-      phaseSignal: signal,
-      body: JSON.stringify({ model: DEEPSEEK_MODEL, messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }], temperature: 0.3, max_tokens: 1024, ...DISABLE_THINKING }),
-    })
-    if (!res || !res.ok) return null
-    const raw = (await parseJson(res)).choices?.[0]?.message?.content; if (!raw) return null
-    const parsed = JSON.parse(raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim())
-    return {
-      base: { summary: parsed.summary || '无法生成摘要', category: parsed.category || '科技', entities: (parsed.entities || []).slice(0,6).map((e: any) => ({ name: e.name, type: e.type, weight: e.weight || 0.5, role: e.role })), sentiment: parsed.sentiment || { label:'neutral', scores:{ positive:0.3, negative:0.3, neutral:0.4 }, perspective:'' } },
-      detail: { keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0,5) : [], significance: typeof parsed.significance === 'string' ? parsed.significance.slice(0,60) : '', controversy: !!parsed.controversy, impact: ['short','medium','high'].includes(parsed.impact) ? parsed.impact : 'medium' },
+  const body = {
+    model: DEEPSEEK_MODEL,
+    messages: [{ role: 'system', content: prompt }, { role: 'user', content: `标题: ${title}${pageTitle && pageTitle !== title ? `\n页面标题: ${pageTitle}` : ''}\n\n正文:\n${content.slice(0, 8000)}` }],
+    temperature: 0.3, max_tokens: 1024, ...DISABLE_THINKING,
+  }
+  // 与 generateDigest/callDeepSeekJSON 对齐：HTTP 错误由 fetchWithRetry 内部重试后直接放弃；
+  // 空 content / 坏 JSON 属"可重试"（生产实测偶发 200 空响应，此前 analyze 是唯一没重试的调用方，
+  // 赶上空响应就全灭，导致 0 篇分析 → 日报候选无摘要 → 日报 failed）。
+  for (let attempt = 0; attempt <= EMPTY_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(30_000),
+        phaseSignal: signal,
+        body: JSON.stringify(body),
+      })
+      if (!res) return null
+      if (!res.ok) {
+        console.warn(`[analyze] DeepSeek HTTP ${res.status} 放弃（${title.slice(0, 30)}）`)
+        return null
+      }
+      const data = await parseJson(res)
+      const raw = data?.choices?.[0]?.message?.content
+      if (!raw) {
+        // 记录响应形状（message 字段 keys / error 体），诊断生产高比例空响应
+        const msg = data?.choices?.[0]?.message
+        const shape = msg ? Object.keys(msg).join(',') : (data?.error ? `error:${JSON.stringify(data.error).slice(0, 80)}` : 'no-message')
+        console.warn(`[analyze] 空响应 attempt=${attempt} shape=${shape}（${title.slice(0, 30)}）`)
+        if (attempt >= EMPTY_RETRY_ATTEMPTS || aborted(signal)) return null
+        await sleep(EMPTY_RETRY_BACKOFF_MS[attempt])
+        continue
+      }
+      const parsed = JSON.parse(raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim())
+      return {
+        base: { summary: parsed.summary || '无法生成摘要', category: parsed.category || '科技', entities: (parsed.entities || []).slice(0,6).map((e: any) => ({ name: e.name, type: e.type, weight: e.weight || 0.5, role: e.role })), sentiment: parsed.sentiment || { label:'neutral', scores:{ positive:0.3, negative:0.3, neutral:0.4 }, perspective:'' } },
+        detail: { keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints.slice(0,5) : [], significance: typeof parsed.significance === 'string' ? parsed.significance.slice(0,60) : '', controversy: !!parsed.controversy, impact: ['short','medium','high'].includes(parsed.impact) ? parsed.impact : 'medium' },
+      }
+    } catch (e: any) {
+      // 坏 JSON / 解析异常：退避重试；中止则放弃
+      if (aborted(signal)) return null
+      console.warn(`[analyze] 解析失败 attempt=${attempt} ${e?.message?.slice(0, 80)}（${title.slice(0, 30)}）`)
+      if (attempt >= EMPTY_RETRY_ATTEMPTS) return null
+      await sleep(EMPTY_RETRY_BACKOFF_MS[attempt])
     }
-  } catch { return null }
+  }
+  return null
 }
 
 export async function generateTopicLabels(titleGroups: string[][], apiKey: string | undefined, signal?: AbortSignal): Promise<string[] | null> {

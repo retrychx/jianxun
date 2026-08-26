@@ -236,14 +236,16 @@ describe('analyzeWithDeepSeek', () => {
     expect(r2?.detail.controversy).toBe(false)
   })
 
-  it('非 2xx / 空 content 返回 null', async () => {
+  it('非 2xx / 空 content 返回 null（空 content 重试 3 次后仍 null）', async () => {
     vi.useFakeTimers()
     stubAI('{}', 500)
     const p = analyzeWithDeepSeek('t', 'c', 'key')
     await vi.advanceTimersByTimeAsync(5_000)
     expect(await p).toBeNull()
     stubAI('')
-    expect(await analyzeWithDeepSeek('t', 'c', 'key')).toBeNull()
+    const p2 = analyzeWithDeepSeek('t', 'c', 'key')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await p2).toBeNull()
   })
 })
 
